@@ -1,5 +1,5 @@
 {
-  "name": "mobile",
+  "name": "aronno-mobile",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
@@ -11,6 +11,8 @@
     "lint": "expo lint"
   },
   "dependencies": {
+    "@expo-google-fonts/noto-sans": "^0.4.2",
+    "@expo-google-fonts/noto-sans-bengali": "^0.4.4",
     "@expo/vector-icons": "^15.0.3",
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
@@ -21,6 +23,7 @@
     "expo-font": "~14.0.12",
     "expo-haptics": "~15.0.8",
     "expo-image": "~3.0.11",
+    "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.12",
     "expo-router": "~6.0.24",
     "expo-splash-screen": "~31.0.13",

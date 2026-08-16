@@ -3,12 +3,13 @@ import { Image, Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { PrimaryButton, RetryCard, SecondaryButton } from "@/components/ui";
 import { colors } from "@/constants/theme";
 
 export default function PhotoCaptureScreen() {
   const router = useRouter();
+  const { flow } = useLocalSearchParams<{ flow?: string }>();
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export default function PhotoCaptureScreen() {
     if (!photoUri) return;
     router.push({
       pathname: "/(root)/(tabs)/scan/analyzing",
-      params: { imageUri: photoUri, source: "photo" },
+      params: { imageUri: photoUri, source: "photo", flow },
     });
   };
 

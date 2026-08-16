@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentProps } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,16 +9,17 @@ import {
   SecondaryButton,
   StructuredCard,
 } from "@/components/ui";
+import { WeatherAdvisoryCard } from "@/components/treatment/WeatherAdvisoryCard";
 import { colors } from "@/constants/theme";
-import type { SprayAdvisoryLevel, TreatmentPlan } from "@/types/treatment";
-
-type IconName = ComponentProps<typeof Ionicons>["name"];
+import type { TreatmentPlan } from "@/types/treatment";
+import type { SeverityLevel } from "@/types/diagnosis";
 
 // TODO(nestjs): replace with a real GET /treatment-plan?diagnosisId=... call
 // once the backend is wired. The disease name arriving via route params from
 // DiagnosisResultScreen is already the right shape to key that request.
-function getMockTreatmentPlan(diseaseNameBn?: string): TreatmentPlan {
+export function getMockTreatmentPlan(diseaseNameBn?: string): TreatmentPlan {
   return {
+    cropNameBn: "ধান",
     diseaseNameBn: diseaseNameBn || "বাদামি দাগ রোগ",
     pesticideNameBn: "প্রোপিকোনাজল ২৫% ইসি",
     dosagePerBigha: "৫০ মিলি/বিঘা",
@@ -40,59 +41,6 @@ function getMockTreatmentPlan(diseaseNameBn?: string): TreatmentPlan {
       reasonBn: "আজ বিকেলে হালকা বৃষ্টির সম্ভাবনা আছে, সকালে স্প্রে করুন।",
     },
   };
-}
-
-const ADVISORY_STYLES: Record<
-  SprayAdvisoryLevel,
-  { bg: string; text: string; icon: IconName; color: string; label: string }
-> = {
-  safe: {
-    bg: "bg-severity-low-bg",
-    text: "text-severity-low",
-    icon: "checkmark-circle",
-    color: "#047857",
-    label: "স্প্রে করা নিরাপদ",
-  },
-  caution: {
-    bg: "bg-severity-medium-bg",
-    text: "text-severity-medium",
-    icon: "alert-circle",
-    color: "#B54708",
-    label: "সতর্কতার সাথে স্প্রে করুন",
-  },
-  wait: {
-    bg: "bg-severity-high-bg",
-    text: "text-severity-high",
-    icon: "close-circle",
-    color: "#B42318",
-    label: "অপেক্ষা করুন",
-  },
-};
-
-function WeatherAdvisoryCard({
-  level,
-  reasonBn,
-}: {
-  level: SprayAdvisoryLevel;
-  reasonBn: string;
-}) {
-  const style = ADVISORY_STYLES[level];
-
-  return (
-    <View
-      className={`flex-row items-center gap-3 rounded-3xl px-5 py-4 ${style.bg}`}
-    >
-      <Ionicons name={style.icon} size={26} color={style.color} />
-      <View className="flex-1">
-        <AppText variant="bodyLg" className={`font-bengali-bold ${style.text}`}>
-          {style.label}
-        </AppText>
-        <AppText variant="body" className="mt-1 text-ink">
-          {reasonBn}
-        </AppText>
-      </View>
-    </View>
-  );
 }
 
 function SafetyChecklistRow({
@@ -126,7 +74,10 @@ function SafetyChecklistRow({
 
 export default function TreatmentPlanScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ diseaseNameBn?: string }>();
+  const params = useLocalSearchParams<{
+    diseaseNameBn?: string;
+    severity?: SeverityLevel;
+  }>();
   const plan = useMemo(
     () => getMockTreatmentPlan(params.diseaseNameBn),
     [params.diseaseNameBn],
@@ -227,6 +178,26 @@ export default function TreatmentPlanScreen() {
             </View>
           </View>
         </StructuredCard>
+
+        <SecondaryButton
+          label="সম্পূর্ণ রিপোর্ট দেখুন"
+          onPress={() =>
+            router.push({
+              pathname: "/(root)/(tabs)/scan/report",
+              params: {
+                diseaseNameBn: plan.diseaseNameBn,
+                severity: params.severity,
+              },
+            })
+          }
+          icon={
+            <Ionicons
+              name="document-text-outline"
+              size={20}
+              color={colors.ink}
+            />
+          }
+        />
 
         <SecondaryButton
           label="খরচের হিসাব দেখুন"

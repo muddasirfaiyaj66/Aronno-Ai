@@ -16,6 +16,7 @@ export type SafetyChecklistItem = {
 };
 
 export type TreatmentPlan = {
+  cropNameBn: string;
   diseaseNameBn: string;
   pesticideNameBn: string;
   /** e.g. "৫০ মিলি/বিঘা" */

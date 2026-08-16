@@ -1,14 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { AppText, PrimaryButton, VoiceInputWidget } from "@/components/ui";
 
-const MOCK_TRANSCRIPT =
-  "আমার ধানের পাতায় বাদামি দাগ দেখা যাচ্ছে, পাতাগুলো ধীরে ধীরে শুকিয়ে যাচ্ছে।";
+const FLOW_CONTENT: Record<
+  string,
+  { subtitle: string; mockTranscript: string }
+> = {
+  disease: {
+    subtitle: "ফসলের সমস্যাটি বাংলায় বলুন",
+    mockTranscript:
+      "আমার ধানের পাতায় বাদামি দাগ দেখা যাচ্ছে, পাতাগুলো ধীরে ধীরে শুকিয়ে যাচ্ছে।",
+  },
+  tool: {
+    subtitle: "আপনার কাজটি বাংলায় বলুন",
+    mockTranscript:
+      "আমার জমিতে ঘাস কাটার জন্য একটা যন্ত্র দরকার, হাত দিয়ে কাটতে অনেক কষ্ট হচ্ছে।",
+  },
+};
 
 export default function VoiceCaptureScreen() {
   const router = useRouter();
+  const { flow } = useLocalSearchParams<{ flow?: string }>();
+  const content = FLOW_CONTENT[flow ?? "disease"] ?? FLOW_CONTENT.disease;
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState("");
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -28,7 +43,7 @@ export default function VoiceCaptureScreen() {
 
     setIsRecording(true);
     timeoutRef.current = setTimeout(() => {
-      setTranscript((prev) => (prev.trim() ? prev : MOCK_TRANSCRIPT));
+      setTranscript((prev) => (prev.trim() ? prev : content.mockTranscript));
       setIsRecording(false);
     }, 1600);
   };
@@ -37,7 +52,7 @@ export default function VoiceCaptureScreen() {
     if (!transcript.trim()) return;
     router.push({
       pathname: "/(root)/(tabs)/scan/analyzing",
-      params: { transcript: transcript.trim(), source: "voice" },
+      params: { transcript: transcript.trim(), source: "voice", flow },
     });
   };
 
@@ -46,7 +61,7 @@ export default function VoiceCaptureScreen() {
       <View className="border-b border-neutral-200 bg-white px-5 py-4">
         <AppText variant="title">কথা বলুন</AppText>
         <AppText variant="caption" className="mt-1">
-          ফসলের সমস্যাটি বাংলায় বলুন
+          {content.subtitle}
         </AppText>
       </View>
 

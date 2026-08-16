@@ -8,6 +8,7 @@ import {
   AppText,
   ListenButton,
   PrimaryButton,
+  SecondaryButton,
   SeverityBadge,
   StructuredCard,
 } from "@/components/ui";
@@ -63,12 +64,14 @@ export default function DiagnosisResultScreen() {
     confidence: string;
     severity: SeverityLevel;
     imageUrl?: string;
+    readOnly?: string;
   }>();
   const [enlarged, setEnlarged] = useState(false);
 
   const confidence = Number(params.confidence) || 0;
   const imageUrl = params.imageUrl ?? "";
   const severity: SeverityLevel = params.severity ?? "medium";
+  const readOnly = params.readOnly === "1";
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
@@ -90,21 +93,35 @@ export default function DiagnosisResultScreen() {
                 onPause={() => {}}
                 className="bg-neutral"
               />
-              <PrimaryButton
-                label="চিকিৎসা দেখুন"
-                onPress={() =>
-                  router.push({
-                    pathname: "/(root)/(tabs)/scan/treatment-plan",
-                    params: {
-                      diseaseNameBn: params.diseaseNameBn,
-                      severity,
-                    },
-                  })
-                }
-                icon={
-                  <Ionicons name="medkit-outline" size={20} color={colors.white} />
-                }
-              />
+              {readOnly ? (
+                <SecondaryButton
+                  label="ফিরে যান"
+                  onPress={() => router.back()}
+                  icon={
+                    <Ionicons name="arrow-back" size={20} color={colors.ink} />
+                  }
+                />
+              ) : (
+                <PrimaryButton
+                  label="চিকিৎসা দেখুন"
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(root)/(tabs)/scan/treatment-plan",
+                      params: {
+                        diseaseNameBn: params.diseaseNameBn,
+                        severity,
+                      },
+                    })
+                  }
+                  icon={
+                    <Ionicons
+                      name="medkit-outline"
+                      size={20}
+                      color={colors.white}
+                    />
+                  }
+                />
+              )}
             </View>
           }
         >

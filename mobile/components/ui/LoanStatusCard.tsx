@@ -36,6 +36,29 @@ const STATUS_CONFIG: Record<
   },
 };
 
+export type LoanStatusBadgeProps = {
+  status: LoanStatus;
+  className?: string;
+};
+
+export function LoanStatusBadge({ status, className = "" }: LoanStatusBadgeProps) {
+  const config = STATUS_CONFIG[status];
+
+  return (
+    <View
+      className={`flex-row items-center gap-1.5 self-start rounded-full px-3 py-1.5 ${config.badgeBg} ${className}`}
+    >
+      <View className={`h-2 w-2 rounded-full ${config.dot}`} />
+      <AppText
+        variant="caption"
+        className={`font-bengali-semibold ${config.badgeText}`}
+      >
+        {config.label}
+      </AppText>
+    </View>
+  );
+}
+
 export type LoanStatusCardProps = {
   title: string;
   amount: string;
@@ -55,8 +78,6 @@ export function LoanStatusCard({
   onPress,
   className = "",
 }: LoanStatusCardProps) {
-  const config = STATUS_CONFIG[status];
-
   const card = (
     <StructuredCard
       title={title}
@@ -77,17 +98,7 @@ export function LoanStatusCard({
         <AppText variant="hero" style={{ fontSize: 32, lineHeight: 38 }}>
           {amount}
         </AppText>
-        <View
-          className={`flex-row items-center gap-1.5 self-start rounded-full px-3 py-1.5 ${config.badgeBg}`}
-        >
-          <View className={`h-2 w-2 rounded-full ${config.dot}`} />
-          <AppText
-            variant="caption"
-            className={`font-bengali-semibold ${config.badgeText}`}
-          >
-            {config.label}
-          </AppText>
-        </View>
+        <LoanStatusBadge status={status} />
       </View>
     </StructuredCard>
   );

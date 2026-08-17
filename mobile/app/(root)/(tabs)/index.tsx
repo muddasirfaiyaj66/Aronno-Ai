@@ -137,9 +137,10 @@ export default function HomeScreen() {
             <View className="flex-row items-center gap-2">
               <LanguageToggle />
               <Pressable
+                onPress={() => router.push("/(root)/notifications")}
                 accessibilityRole="button"
                 accessibilityLabel={t("বিজ্ঞপ্তি", "Notifications")}
-                className="h-11 w-11 items-center justify-center rounded-full bg-white"
+                className="h-12 w-12 items-center justify-center rounded-full bg-white"
               >
                 <Ionicons
                   name="notifications-outline"

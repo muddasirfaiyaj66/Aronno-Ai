@@ -106,6 +106,7 @@ export default function CostEstimatorScreen() {
               keyboardType="numeric"
               placeholder="যেমনঃ ২"
               placeholderTextColor={colors.muted}
+              accessibilityLabel="জমির পরিমাণ"
               className="min-h-touch-lg flex-1 rounded-2xl bg-white px-4 font-bengali-medium text-body-lg text-ink"
             />
             <SegmentedTabs

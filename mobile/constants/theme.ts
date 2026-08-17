@@ -18,5 +18,6 @@ export const colors = {
 export const tabBar = {
   height: 72,
   iconSize: 28,
-  labelSize: 12,
+  // 14px is the established caption-size floor (Sprint 0 typography scale).
+  labelSize: 14,
 } as const;

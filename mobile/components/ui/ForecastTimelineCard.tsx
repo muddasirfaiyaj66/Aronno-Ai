@@ -67,7 +67,6 @@ export function ForecastTimelineCard({
                 variant="caption"
                 numberOfLines={1}
                 className="font-bengali-semibold text-primary"
-                style={{ fontSize: 11, lineHeight: 14 }}
               >
                 {item.cropLabel}
               </AppText>

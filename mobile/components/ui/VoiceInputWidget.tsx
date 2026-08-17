@@ -118,6 +118,7 @@ export function VoiceInputWidget({
               autoFocus
               placeholder={placeholder}
               placeholderTextColor={colors.muted}
+              accessibilityLabel={editLabel}
               className="font-bengali text-body text-ink"
               style={{ minHeight: 64, textAlignVertical: "top" }}
             />

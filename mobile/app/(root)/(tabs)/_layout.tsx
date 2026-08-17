@@ -1,4 +1,5 @@
 import type { ComponentProps } from "react";
+import { Text } from "react-native";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, tabBar } from "@/constants/theme";
@@ -15,6 +16,30 @@ function tabIcon(name: IconName, focusedName: IconName) {
   );
 }
 
+// Bengali labels (esp. প্রোফাইল, স্ক্যান) can be wider than a 1/5-screen tab
+// column at 14px on narrow phones — shrink-to-fit instead of clipping.
+function tabLabel(title: string) {
+  function TabLabel({ color }: { color: string }) {
+    return (
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+        style={{
+          color,
+          fontFamily: "NotoSansBengali_600SemiBold",
+          fontSize: tabBar.labelSize,
+          marginBottom: 6,
+          textAlign: "center",
+        }}
+      >
+        {title}
+      </Text>
+    );
+  }
+  return TabLabel;
+}
+
 export default function TabLayout() {
   return (
     <Tabs
@@ -22,11 +47,6 @@ export default function TabLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
-        tabBarLabelStyle: {
-          fontFamily: "NotoSansBengali_600SemiBold",
-          fontSize: tabBar.labelSize,
-          marginBottom: 6,
-        },
         tabBarStyle: {
           height: tabBar.height,
           paddingTop: 6,
@@ -36,6 +56,7 @@ export default function TabLayout() {
         },
         tabBarItemStyle: {
           paddingVertical: 4,
+          paddingHorizontal: 2,
         },
       }}
     >
@@ -44,6 +65,7 @@ export default function TabLayout() {
         options={{
           title: "হোম",
           tabBarIcon: tabIcon("home-outline", "home"),
+          tabBarLabel: tabLabel("হোম"),
         }}
       />
       <Tabs.Screen
@@ -51,6 +73,7 @@ export default function TabLayout() {
         options={{
           title: "স্ক্যান",
           tabBarIcon: tabIcon("scan-outline", "scan"),
+          tabBarLabel: tabLabel("স্ক্যান"),
         }}
       />
       <Tabs.Screen
@@ -58,6 +81,7 @@ export default function TabLayout() {
         options={{
           title: "ইতিহাস",
           tabBarIcon: tabIcon("time-outline", "time"),
+          tabBarLabel: tabLabel("ইতিহাস"),
         }}
       />
       <Tabs.Screen
@@ -65,6 +89,7 @@ export default function TabLayout() {
         options={{
           title: "বাজার",
           tabBarIcon: tabIcon("storefront-outline", "storefront"),
+          tabBarLabel: tabLabel("বাজার"),
         }}
       />
       <Tabs.Screen
@@ -72,6 +97,7 @@ export default function TabLayout() {
         options={{
           title: "প্রোফাইল",
           tabBarIcon: tabIcon("person-outline", "person"),
+          tabBarLabel: tabLabel("প্রোফাইল"),
         }}
       />
     </Tabs>

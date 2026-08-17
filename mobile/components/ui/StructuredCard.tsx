@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { View, type ViewProps } from "react-native";
+import { StyleSheet, View, type ViewProps } from "react-native";
 import { AppText } from "./AppText";
 
 export type StructuredCardProps = ViewProps & {
@@ -19,13 +19,15 @@ export function StructuredCard({
   children,
   tone = "plain",
   className = "",
+  style,
   ...props
 }: StructuredCardProps) {
   const surface = tone === "soft" ? "bg-secondary" : "bg-white";
 
   return (
     <View
-      className={`overflow-hidden rounded-3xl ${surface} ${className}`}
+      className={`rounded-3xl ${surface} ${className}`}
+      style={[styles.card, style]}
       {...props}
     >
       <View className="flex-row items-center gap-3 px-5 pt-5">
@@ -45,3 +47,13 @@ export function StructuredCard({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    shadowColor: "#064E3B",
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
+  },
+});

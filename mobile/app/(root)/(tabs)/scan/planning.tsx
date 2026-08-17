@@ -7,6 +7,7 @@ import {
   AppText,
   ForecastTimelineCard,
   ListenButton,
+  RetryCard,
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
@@ -14,11 +15,23 @@ import { MOCK_CROP_PLAN } from "@/types/planning";
 
 export default function CropPlanningScreen() {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
+  // TODO(nestjs): the failure branch below (setError) is unreachable with
+  // the mock timer — wire it to the real Gemini/Gamma call's .catch() once
+  // the backend is wired.
   useEffect(() => {
+    if (error) return;
+    setLoading(true);
     const timer = setTimeout(() => setLoading(false), 1800);
     return () => clearTimeout(timer);
-  }, []);
+  }, [error, attempt]);
+
+  const handleRetry = () => {
+    setError(false);
+    setAttempt((a) => a + 1);
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
@@ -33,7 +46,12 @@ export default function CropPlanningScreen() {
         className="flex-1"
         contentContainerClassName="gap-4 px-5 py-5"
       >
-        {loading ? (
+        {error ? (
+          <RetryCard
+            message="পরিকল্পনা তৈরি করা যায়নি। আবার চেষ্টা করুন।"
+            onRetry={handleRetry}
+          />
+        ) : loading ? (
           <AIGeneratingShimmer
             label="পরিকল্পনা তৈরি হচ্ছে"
             lines={4}

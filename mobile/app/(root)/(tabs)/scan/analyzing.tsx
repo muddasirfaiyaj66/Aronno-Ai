@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { AIGeneratingShimmer, AppText } from "@/components/ui";
+import { AIGeneratingShimmer, AppText, RetryCard } from "@/components/ui";
 import type { DiagnosisResult } from "@/types/diagnosis";
 import { MOCK_TOOL_RESULTS } from "@/types/tools";
 import { MOCK_RECEIPT_SUMMARIES } from "@/types/receipt";
@@ -58,16 +58,23 @@ export default function AnalyzingScreen() {
       ? params.flow
       : "disease";
   const [statusIndex, setStatusIndex] = useState(0);
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const statusLines = STATUS_LINES[flow];
 
   useEffect(() => {
+    if (error) return;
     const id = setInterval(() => {
       setStatusIndex((prev) => (prev + 1) % statusLines.length);
     }, 1100);
     return () => clearInterval(id);
-  }, [statusLines.length]);
+  }, [statusLines.length, error]);
 
+  // TODO(nestjs): the failure branch below (setError) is unreachable with
+  // the mock timer — wire it to the real analysis call's .catch() once the
+  // backend is wired.
   useEffect(() => {
+    if (error) return;
     const timer = setTimeout(() => {
       if (flow === "tool") {
         const mock =
@@ -111,21 +118,35 @@ export default function AnalyzingScreen() {
     }, 2400);
 
     return () => clearTimeout(timer);
-  }, [flow, params.imageUri, router]);
+  }, [flow, params.imageUri, router, error, attempt]);
+
+  const handleRetry = () => {
+    setError(false);
+    setAttempt((a) => a + 1);
+  };
 
   return (
     <SafeAreaView className="flex-1 items-center justify-center bg-neutral px-6">
-      <AIGeneratingShimmer
-        label="AI বিশ্লেষণ করছে"
-        lines={4}
-        className="w-full"
-      />
-      <AppText
-        variant="body"
-        className="mt-6 text-center font-bengali-semibold text-primary"
-      >
-        {statusLines[statusIndex]}
-      </AppText>
+      {error ? (
+        <RetryCard
+          message="বিশ্লেষণ করা যায়নি। আবার চেষ্টা করুন।"
+          onRetry={handleRetry}
+        />
+      ) : (
+        <>
+          <AIGeneratingShimmer
+            label="AI বিশ্লেষণ করছে"
+            lines={4}
+            className="w-full"
+          />
+          <AppText
+            variant="body"
+            className="mt-6 text-center font-bengali-semibold text-primary"
+          >
+            {statusLines[statusIndex]}
+          </AppText>
+        </>
+      )}
     </SafeAreaView>
   );
 }

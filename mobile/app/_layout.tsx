@@ -11,6 +11,7 @@ import {
   NotoSansBengali_600SemiBold,
   NotoSansBengali_700Bold,
 } from "@expo-google-fonts/noto-sans-bengali";
+import { OfflineBanner } from "@/components/ui";
 import { LocaleProvider } from "@/context/locale";
 
 SplashScreen.preventAutoHideAsync();
@@ -37,6 +38,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <LocaleProvider>
         <StatusBar style="dark" />
+        <OfflineBanner />
         <Stack screenOptions={{ headerShown: false }} />
       </LocaleProvider>
     </SafeAreaProvider>

@@ -4,7 +4,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { PrimaryButton, RetryCard, SecondaryButton } from "@/components/ui";
+import {
+  AIGeneratingShimmer,
+  PrimaryButton,
+  RetryCard,
+  SecondaryButton,
+} from "@/components/ui";
 import { colors } from "@/constants/theme";
 
 export default function PhotoCaptureScreen() {
@@ -28,6 +33,18 @@ export default function PhotoCaptureScreen() {
 
   const handleConfirm = () => {
     if (!photoUri) return;
+
+    // Direct Sell listings don't need AI analysis — return the captured
+    // photo straight to the Market tab's Direct Sell form instead of
+    // routing through the analyzing screen.
+    if (flow === "listing") {
+      router.replace({
+        pathname: "/(root)/(tabs)/market",
+        params: { tab: "direct", photoUri },
+      });
+      return;
+    }
+
     router.push({
       pathname: "/(root)/(tabs)/scan/analyzing",
       params: { imageUri: photoUri, source: "photo", flow },
@@ -61,7 +78,14 @@ export default function PhotoCaptureScreen() {
   }
 
   if (!permission) {
-    return <SafeAreaView className="flex-1 bg-neutral" edges={["top"]} />;
+    return (
+      <SafeAreaView
+        className="flex-1 justify-center bg-neutral px-6"
+        edges={["top"]}
+      >
+        <AIGeneratingShimmer label="ক্যামেরা প্রস্তুত হচ্ছে…" lines={2} />
+      </SafeAreaView>
+    );
   }
 
   if (!permission.granted) {

@@ -2,12 +2,18 @@ import { useMemo } from "react";
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
-import { AppText, ListenButton, StructuredCard } from "@/components/ui";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import {
+  AppText,
+  EmptyState,
+  ListenButton,
+  StructuredCard,
+} from "@/components/ui";
 import { colors } from "@/constants/theme";
 import { getReceiptSummaryById } from "@/types/receipt";
 
 export default function ReceiptResultScreen() {
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const summary = useMemo(() => getReceiptSummaryById(id), [id]);
 
@@ -17,9 +23,14 @@ export default function ReceiptResultScreen() {
         className="flex-1 items-center justify-center bg-neutral px-6"
         edges={["top"]}
       >
-        <AppText variant="body" className="text-center text-muted">
-          এই তথ্য পাওয়া যায়নি।
-        </AppText>
+        <EmptyState
+          icon={
+            <Ionicons name="alert-circle-outline" size={32} color={colors.primary} />
+          }
+          message="এই তথ্য পাওয়া যায়নি।"
+          ctaLabel="ফিরে যান"
+          onCta={() => router.back()}
+        />
       </SafeAreaView>
     );
   }

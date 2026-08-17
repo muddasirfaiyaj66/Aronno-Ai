@@ -70,11 +70,10 @@ export function BentoTile({
         >
           {locked ? (
             <View className="absolute right-3 top-3 flex-row items-center gap-1 rounded-full bg-neutral-200 px-2 py-1">
-              <Ionicons name="lock-closed" size={10} color={colors.muted} />
+              <Ionicons name="lock-closed" size={12} color={colors.muted} />
               <AppText
                 variant="caption"
                 className="font-bengali-semibold text-muted"
-                style={{ fontSize: 10, lineHeight: 12 }}
               >
                 {lockedLabel}
               </AppText>

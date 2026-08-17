@@ -40,3 +40,4 @@ export { SensorPlaceholderCard } from "./SensorPlaceholderCard";
 export type { SensorPlaceholderCardProps } from "./SensorPlaceholderCard";
 export { ListingCard } from "./ListingCard";
 export type { ListingCardProps } from "./ListingCard";
+export { OfflineBanner } from "./OfflineBanner";

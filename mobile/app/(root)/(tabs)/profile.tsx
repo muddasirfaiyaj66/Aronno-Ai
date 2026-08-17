@@ -1,6 +1,7 @@
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import {
   AppText,
   LoanStatusCard,
@@ -10,6 +11,8 @@ import {
 import { colors } from "@/constants/theme";
 
 export default function ProfileScreen() {
+  const router = useRouter();
+
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       <View className="border-b border-neutral-200 bg-white px-5 py-4">
@@ -44,7 +47,7 @@ export default function ProfileScreen() {
           />
           <SecondaryButton
             label="নতুন আবেদন"
-            onPress={() => {}}
+            onPress={() => router.push("/(root)/loan/overview")}
             icon={
               <Ionicons
                 name="add-circle-outline"

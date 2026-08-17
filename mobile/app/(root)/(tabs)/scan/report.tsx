@@ -5,9 +5,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import {
+  AIGeneratingShimmer,
   AppText,
   ListenButton,
   PrimaryButton,
+  RetryCard,
   SeverityBadge,
   StructuredCard,
 } from "@/components/ui";
@@ -29,6 +31,7 @@ export default function ReportPreviewScreen() {
   );
 
   const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
 
   const dateLabel = useMemo(
@@ -42,8 +45,11 @@ export default function ReportPreviewScreen() {
   );
 
   // TODO(nestjs): replace with a real PDF generation + upload call
-  // (e.g. POST /reports/:diagnosisId/pdf) once the backend is wired.
+  // (e.g. POST /reports/:diagnosisId/pdf) once the backend is wired. The
+  // failure branch below (setDownloadError) is unreachable with the mock
+  // timer — wire it to the real call's .catch() when that lands.
   const handleDownload = () => {
+    setDownloadError(false);
     setDownloading(true);
     setTimeout(() => {
       setDownloading(false);
@@ -133,14 +139,23 @@ export default function ReportPreviewScreen() {
           onPlay={() => {}}
           onPause={() => {}}
         />
-        <PrimaryButton
-          label="PDF ডাউনলোড করুন"
-          onPress={handleDownload}
-          loading={downloading}
-          icon={
-            <Ionicons name="download-outline" size={20} color={colors.white} />
-          }
-        />
+
+        {downloading ? (
+          <AIGeneratingShimmer label="PDF তৈরি হচ্ছে…" lines={2} />
+        ) : downloadError ? (
+          <RetryCard
+            message="PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।"
+            onRetry={handleDownload}
+          />
+        ) : (
+          <PrimaryButton
+            label="PDF ডাউনলোড করুন"
+            onPress={handleDownload}
+            icon={
+              <Ionicons name="download-outline" size={20} color={colors.white} />
+            }
+          />
+        )}
       </View>
 
       {toastVisible ? (

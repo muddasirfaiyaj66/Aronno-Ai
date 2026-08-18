@@ -3,6 +3,7 @@
 /node_modules
 /build
 
+sprints.md
 # logs
 logs
 *.log
@@ -38,6 +39,9 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# local uploads (dev object storage)
+/uploads
 
 # misc
 *.tsbuildinfo

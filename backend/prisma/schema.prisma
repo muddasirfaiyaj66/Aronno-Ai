@@ -1,0 +1,471 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// --- Lookups (3NF) ---
+
+model Role {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  slug   String @unique
+  nameBn String
+  nameEn String
+  users  User[]
+}
+
+model Profession {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  slug   String @unique
+  nameBn String
+  nameEn String
+  users  User[]
+}
+
+model District {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  slug   String @unique
+  nameBn String
+  users           User[]
+  markets         Market[]
+  listings        Listing[]
+  heatMapStats    HeatMapStat[]
+}
+
+model Crop {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  slug   String @unique
+  nameBn String
+  nameEn String
+  diagnoses         Diagnosis[]
+  costEstimates     CostEstimate[]
+  fertilizerAdvice  FertilizerAdvice[]
+  yieldEstimates    YieldEstimate[]
+  marketPrices      MarketPrice[]
+  listings          Listing[]
+}
+
+model LoanPurpose {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  slug   String @unique
+  nameBn String
+  applications LoanApplication[]
+}
+
+// --- Identity ---
+
+model User {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  email            String    @unique
+  passwordHash     String?
+  googleSub        String?   @unique
+  displayName      String
+  phone            String?
+  roleId           String    @db.ObjectId
+  professionId     String?   @db.ObjectId
+  districtId       String?   @db.ObjectId
+  isActive         Boolean   @default(true)
+  emailVerifiedAt  DateTime?
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  role        Role         @relation(fields: [roleId], references: [id])
+  profession  Profession?  @relation(fields: [professionId], references: [id])
+  district    District?    @relation(fields: [districtId], references: [id])
+
+  oauthAccounts     OAuthAccount[]
+  refreshTokens     RefreshToken[]
+  auditLogs         AuditLog[]
+  diagnoses         Diagnosis[]
+  treatmentPlans    TreatmentPlan[]
+  costEstimates     CostEstimate[]
+  historyEvents     HistoryEvent[]
+  reports           Report[]
+  toolIdentifications ToolIdentification[]
+  receipts          Receipt[]
+  fertilizerAdvice  FertilizerAdvice[]
+  yieldEstimates    YieldEstimate[]
+  cropPlans         CropPlan[]
+  listings          Listing[]
+  loanApplications  LoanApplication[]
+}
+
+model OAuthAccount {
+  id                String @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String @db.ObjectId
+  provider          String
+  providerAccountId String
+  createdAt         DateTime @default(now())
+  user              User   @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerAccountId])
+}
+
+model RefreshToken {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String    @db.ObjectId
+  familyId  String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+  ip        String?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, familyId])
+}
+
+model AuditLog {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  actorUserId String   @db.ObjectId
+  action      String
+  target      String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  actor       User     @relation(fields: [actorUserId], references: [id])
+}
+
+// --- Sprint 1: diagnosis ---
+
+enum DiagnosisSource {
+  photo
+  voice
+}
+
+enum Severity {
+  low
+  medium
+  high
+}
+
+model Diagnosis {
+  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String          @db.ObjectId
+  cropId          String?         @db.ObjectId
+  source          DiagnosisSource
+  imageObjectKey  String?
+  transcriptBn    String?
+  diseaseNameBn   String
+  diseaseNameEn   String
+  confidence      Int
+  severity        Severity
+  createdAt       DateTime        @default(now())
+
+  user           User            @relation(fields: [userId], references: [id])
+  crop           Crop?           @relation(fields: [cropId], references: [id])
+  treatmentPlan  TreatmentPlan?
+  reports        Report[]
+}
+
+enum HistoryKind {
+  disease
+  yield
+  loan
+}
+
+model HistoryEvent {
+  id         String      @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String      @db.ObjectId
+  kind       HistoryKind
+  sourceId   String
+  occurredAt DateTime    @default(now())
+  user       User        @relation(fields: [userId], references: [id])
+
+  @@index([userId, occurredAt])
+}
+
+// --- Sprint 2: treatment + cost ---
+
+enum SprayLevel {
+  safe
+  caution
+  wait
+}
+
+enum LandUnit {
+  bigha
+  acre
+}
+
+model TreatmentPlan {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  diagnosisId     String   @unique @db.ObjectId
+  userId          String   @db.ObjectId
+  pesticideNameBn String
+  dosagePerBigha  String
+  followUpLabelBn String
+  createdAt       DateTime @default(now())
+
+  diagnosis Diagnosis        @relation(fields: [diagnosisId], references: [id])
+  user      User             @relation(fields: [userId], references: [id])
+  weather   WeatherAdvisory?
+  steps     TreatmentStep[]
+  safety    SafetyItem[]
+  reports   Report[]
+}
+
+model WeatherAdvisory {
+  id              String     @id @default(auto()) @map("_id") @db.ObjectId
+  treatmentPlanId String     @unique @db.ObjectId
+  level           SprayLevel
+  reasonBn        String
+  treatmentPlan   TreatmentPlan @relation(fields: [treatmentPlanId], references: [id])
+}
+
+model TreatmentStep {
+  id              String @id @default(auto()) @map("_id") @db.ObjectId
+  treatmentPlanId String @db.ObjectId
+  step            Int
+  instructionBn   String
+  treatmentPlan   TreatmentPlan @relation(fields: [treatmentPlanId], references: [id])
+
+  @@unique([treatmentPlanId, step])
+}
+
+model SafetyItem {
+  id              String @id @default(auto()) @map("_id") @db.ObjectId
+  treatmentPlanId String @db.ObjectId
+  labelBn         String
+  sortOrder       Int
+  treatmentPlan   TreatmentPlan @relation(fields: [treatmentPlanId], references: [id])
+}
+
+model CostEstimate {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId             String   @db.ObjectId
+  cropId             String   @db.ObjectId
+  landSize           Float
+  landUnit           LandUnit
+  pesticideQuantity  String
+  totalCostBdt       Int
+  spraySessions      Int
+  createdAt          DateTime @default(now())
+  user               User     @relation(fields: [userId], references: [id])
+  crop               Crop     @relation(fields: [cropId], references: [id])
+}
+
+// --- Sprint 3: reports ---
+
+model Report {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String   @db.ObjectId
+  diagnosisId     String   @db.ObjectId
+  treatmentPlanId String?  @db.ObjectId
+  pdfObjectKey    String?
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id])
+  diagnosis       Diagnosis @relation(fields: [diagnosisId], references: [id])
+  treatmentPlan   TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id])
+}
+
+// --- Sprint 4: tools + receipts ---
+
+enum CaptureSource {
+  photo
+  voice
+}
+
+model ToolIdentification {
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String        @db.ObjectId
+  source         CaptureSource
+  imageObjectKey String?
+  transcriptBn   String?
+  toolNameBn     String
+  toolNameEn     String
+  reasonBn       String
+  createdAt      DateTime      @default(now())
+  user           User          @relation(fields: [userId], references: [id])
+  listings       ToolListing[]
+}
+
+model ToolListing {
+  id                   String @id @default(auto()) @map("_id") @db.ObjectId
+  toolIdentificationId String @db.ObjectId
+  sourceName           String
+  thumbnailUrl         String @default("")
+  priceBn              String?
+  externalUrl          String
+  identification       ToolIdentification @relation(fields: [toolIdentificationId], references: [id])
+}
+
+model Receipt {
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String        @db.ObjectId
+  imageObjectKey String
+  totalBdt       Int
+  summaryBn      String
+  createdAt      DateTime      @default(now())
+  user           User          @relation(fields: [userId], references: [id])
+  items          ReceiptItem[]
+}
+
+model ReceiptItem {
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
+  receiptId  String @db.ObjectId
+  nameBn     String
+  quantity   String
+  priceBn    String
+  sortOrder  Int
+  receipt    Receipt @relation(fields: [receiptId], references: [id])
+}
+
+// --- Sprint 5: fertilizer / yield / planning ---
+
+enum GrowthStage {
+  seedling
+  vegetative
+  flowering
+  maturity
+}
+
+enum SoilColor {
+  dark
+  medium
+  light
+}
+
+enum SoilMoisture {
+  wet
+  moist
+  dry
+}
+
+enum YieldTrend {
+  up
+  down
+  flat
+}
+
+model FertilizerAdvice {
+  id                   String       @id @default(auto()) @map("_id") @db.ObjectId
+  userId               String       @db.ObjectId
+  cropId               String       @db.ObjectId
+  growthStage          GrowthStage
+  soilColor            SoilColor
+  soilMoisture         SoilMoisture
+  fertilizerNameBn     String
+  dosagePerBigha       String
+  applicationMethodBn  String
+  timingBn             String
+  warningBn            String?
+  createdAt            DateTime     @default(now())
+  user                 User         @relation(fields: [userId], references: [id])
+  crop                 Crop         @relation(fields: [cropId], references: [id])
+}
+
+model YieldEstimate {
+  id               String     @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String     @db.ObjectId
+  cropId           String     @db.ObjectId
+  landSizeBn       String
+  weatherSummaryBn String
+  estimatedMinMon  Float
+  estimatedMaxMon  Float
+  lastSeasonMon    Float
+  trend            YieldTrend
+  changePercent    Float
+  createdAt        DateTime   @default(now())
+  user             User       @relation(fields: [userId], references: [id])
+  crop             Crop       @relation(fields: [cropId], references: [id])
+}
+
+model CropPlan {
+  id               String          @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String          @db.ObjectId
+  recommendationBn String
+  createdAt        DateTime        @default(now())
+  user             User            @relation(fields: [userId], references: [id])
+  months           MonthForecast[]
+}
+
+model MonthForecast {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  cropPlanId        String   @db.ObjectId
+  monthBn           String
+  weatherIcon       String
+  recommendedCropBn String
+  sortOrder         Int
+  cropPlan          CropPlan @relation(fields: [cropPlanId], references: [id])
+
+  @@unique([cropPlanId, sortOrder])
+}
+
+// --- Sprint 6: market + loan ---
+
+model Market {
+  id         String        @id @default(auto()) @map("_id") @db.ObjectId
+  nameBn     String
+  districtId String        @db.ObjectId
+  district   District      @relation(fields: [districtId], references: [id])
+  prices     MarketPrice[]
+}
+
+model MarketPrice {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  marketId    String   @db.ObjectId
+  cropId      String   @db.ObjectId
+  pricePerMon Int
+  capturedAt  DateTime @default(now())
+  market      Market   @relation(fields: [marketId], references: [id])
+  crop        Crop     @relation(fields: [cropId], references: [id])
+
+  @@index([marketId, cropId, capturedAt])
+}
+
+model Listing {
+  id                  String   @id @default(auto()) @map("_id") @db.ObjectId
+  sellerUserId        String   @db.ObjectId
+  cropId              String   @db.ObjectId
+  quantityBn          String
+  quantityKg          Int?
+  askingPricePerKg    Int
+  districtId          String   @db.ObjectId
+  thumbnailObjectKey  String?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  seller              User     @relation(fields: [sellerUserId], references: [id])
+  crop                Crop     @relation(fields: [cropId], references: [id])
+  district            District @relation(fields: [districtId], references: [id])
+}
+
+model HeatMapStat {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  districtId        String   @db.ObjectId
+  diseaseIntensity  Float
+  priceIntensity    Float
+  capturedAt        DateTime @default(now())
+  district          District @relation(fields: [districtId], references: [id])
+}
+
+enum LoanStatus {
+  pending
+  approved
+  repaying
+  rejected
+}
+
+enum RepaymentPeriod {
+  THREE_MONTHS
+  SIX_MONTHS
+  TWELVE_MONTHS
+}
+
+model LoanApplication {
+  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String          @db.ObjectId
+  amountBdt       Int
+  purposeId       String          @db.ObjectId
+  repaymentPeriod RepaymentPeriod
+  status          LoanStatus      @default(pending)
+  nextPaymentDue  DateTime?
+  createdAt       DateTime        @default(now())
+  user            User            @relation(fields: [userId], references: [id])
+  purpose         LoanPurpose     @relation(fields: [purposeId], references: [id])
+}

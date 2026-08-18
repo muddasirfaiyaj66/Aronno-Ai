@@ -14,9 +14,15 @@ aronno/
 
 ```bash
 cd mobile
+cp .env.example .env
 npm install
 npm start
 ```
+
+Set `EXPO_PUBLIC_API_URL` (default `http://localhost:3000/api`). On Android emulator use `http://10.0.2.2:3000/api`.
+
+Auth tokens live in httpOnly cookies (web) or the Expo SecureStore cookie jar (native). Redux Toolkit + RTK Query cache server data — JWTs are never stored in Redux.
+
 
 ## Backend
 

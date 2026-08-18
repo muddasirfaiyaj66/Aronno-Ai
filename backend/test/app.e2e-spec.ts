@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './../src/app.module';
 
 describe('AppController (e2e)', () => {
@@ -14,13 +15,7 @@ describe('AppController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api');
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
+    app.use(cookieParser());
     await app.init();
   });
 
@@ -28,10 +23,9 @@ describe('AppController (e2e)', () => {
     return request(app.getHttpServer())
       .get('/api')
       .expect(200)
-      .expect({
-        name: 'Aronno API',
-        version: '0.0.1',
-        status: 'ok',
+      .expect((res) => {
+        expect(res.body.success).toBe(true);
+        expect(res.body.data.name).toBe('Aronno API');
       });
   });
 

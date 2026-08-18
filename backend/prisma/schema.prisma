@@ -93,6 +93,7 @@ model User {
   cropPlans         CropPlan[]
   listings          Listing[]
   loanApplications  LoanApplication[]
+  emailTokens       EmailToken[]
 }
 
 model OAuthAccount {
@@ -119,6 +120,24 @@ model RefreshToken {
   user      User      @relation(fields: [userId], references: [id])
 
   @@index([userId, familyId])
+}
+
+enum EmailTokenPurpose {
+  verification
+  password_reset
+}
+
+model EmailToken {
+  id        String            @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String            @db.ObjectId
+  purpose   EmailTokenPurpose
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime          @default(now())
+  user      User              @relation(fields: [userId], references: [id])
+
+  @@index([userId, purpose])
 }
 
 model AuditLog {

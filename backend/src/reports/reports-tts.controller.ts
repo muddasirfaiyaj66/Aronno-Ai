@@ -105,15 +105,9 @@ export class ReportsTtsController {
     if (!report) throw Errors.notFound();
     if (report.userId !== user.id && user.role === 'USER') throw Errors.forbidden();
     // Stub PDF: minimal header bytes so the client can toast success.
-    const stub = Buffer.from(
-      '%PDF-1.1\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\nAronno report stub\n',
-    );
-    const key = await this.storage.savePdf(stub, 'reports');
-    await this.prisma.report.update({
-      where: { id },
-      data: { pdfObjectKey: key },
-    });
-    return { downloadUrl: this.storage.urlFor(key) };
+    // Vercel has no persistent disk. PDF generation stays a stub until
+    // a hosted renderer (Cloudinary raw / S3) is wired.
+    return { downloadUrl: null as string | null };
   }
 
   @Throttle({ default: { ttl: 60000, limit: 10 } })

@@ -16,4 +16,10 @@ export const PUBLIC_MUTATIONS = new Set([
   '/api/auth/register',
   '/api/auth/login',
   '/api/auth/google',
+  '/api/auth/verify-email',
+  '/api/auth/resend-verification',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
+  '/api/auth/refresh',
+  '/api/auth/logout',
 ]);

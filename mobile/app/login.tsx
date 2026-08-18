@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Link, useRouter } from "expo-router";
+import { Link, useRouter, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText, PrimaryButton } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { useLoginMutation } from "@/services/api";
+import { getApiError, useLoginMutation } from "@/services/api";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -13,20 +13,20 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [login, { isLoading, error }] = useLoginMutation();
 
-  const message =
-    error && "data" in error
-      ? ((error.data as { error?: { message?: string } })?.error?.message ??
-        "লগইন করা যায়নি।")
-      : error
-        ? "লগইন করা যায়নি।"
-        : null;
+  const apiError = getApiError(error);
+  const message = apiError.message;
 
   const handleSubmit = async () => {
     try {
       await login({ email: email.trim(), password }).unwrap();
       router.replace("/(root)/(tabs)");
-    } catch {
-      // error banner from RTK
+    } catch (err) {
+      if (getApiError(err).code === "EMAIL_UNVERIFIED") {
+        router.push({
+          pathname: "/verify-email",
+          params: { email: email.trim() },
+        } as unknown as Href);
+      }
     }
   };
 
@@ -62,7 +62,7 @@ export default function LoginScreen() {
           />
         </View>
 
-        {message ? (
+        {message && apiError.code !== "EMAIL_UNVERIFIED" ? (
           <AppText variant="caption" className="text-severity-high">
             {message}
           </AppText>
@@ -75,6 +75,14 @@ export default function LoginScreen() {
           onPress={handleSubmit}
           icon={<Ionicons name="log-in-outline" size={20} color={colors.white} />}
         />
+
+        <Link href={"/forgot-password" as Href} asChild>
+          <Pressable accessibilityRole="button">
+            <AppText variant="body" className="text-center text-primary">
+              পাসওয়ার্ড ভুলে গেছেন?
+            </AppText>
+          </Pressable>
+        </Link>
 
         <Link href="/register" asChild>
           <Pressable accessibilityRole="button">

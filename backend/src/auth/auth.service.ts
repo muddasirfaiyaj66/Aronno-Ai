@@ -9,7 +9,10 @@ import { Errors } from '../common/errors';
 import { randomToken, sha256 } from '../common/crypto.util';
 import { ACCESS_TTL_SECONDS, LOCKOUT_MINUTES, LOCKOUT_THRESHOLD, REFRESH_TTL_SECONDS } from '../common/constants';
 import { clearAuthCookies, setAuthCookies } from '../common/cookies';
+import { MailService } from '../mail/mail.service';
 import type { AuthUser } from './auth.types';
+import { EmailTokenPurpose } from '@prisma/client';
+import { randomInt } from 'node:crypto';
 
 export type UserDto = {
   id: string;
@@ -38,6 +41,7 @@ export class AuthService {
     private readonly passwords: PasswordService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly mail: MailService,
   ) {
     this.google = new OAuth2Client(this.config.get<string>('GOOGLE_CLIENT_ID'));
   }
@@ -85,8 +89,8 @@ export class AuthService {
       displayName: string;
       professionSlug?: string;
     },
-    res: Response,
-    meta: { userAgent?: string; ip?: string },
+    _res: Response,
+    _meta: { userAgent?: string; ip?: string },
   ) {
     const existing = await this.prisma.user.findUnique({
       where: { email: input.email.toLowerCase() },
@@ -113,8 +117,8 @@ export class AuthService {
       include: userInclude,
     });
 
-    await this.issueSession(user.id, user.role.slug as AuthUser['role'], res, meta);
-    return this.toDto(user);
+    await this.sendOtp(user.id, user.email, 'verification');
+    return { email: user.email, requiresVerification: true as const };
   }
 
   async login(
@@ -128,6 +132,7 @@ export class AuthService {
     });
     if (!user || !user.passwordHash) throw Errors.invalidCredentials();
     if (!user.isActive) throw Errors.forbidden();
+    if (!user.emailVerifiedAt) throw Errors.unverified();
     if (user.lockedUntil && user.lockedUntil > new Date()) throw Errors.locked();
 
     const ok = await this.passwords.verify(user.passwordHash, input.password);
@@ -152,6 +157,125 @@ export class AuthService {
 
     await this.issueSession(user.id, user.role.slug as AuthUser['role'], res, meta);
     return this.toDto(user);
+  }
+
+  async verifyEmail(
+    input: { email: string; code: string },
+    res: Response,
+    meta: { userAgent?: string; ip?: string },
+  ) {
+    const user = await this.consumeOtp(input.email, input.code, 'verification');
+    const updated = await this.prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerifiedAt: new Date() },
+      include: userInclude,
+    });
+    await this.issueSession(
+      updated.id,
+      updated.role.slug as AuthUser['role'],
+      res,
+      meta,
+    );
+    return this.toDto(updated);
+  }
+
+  async resendVerification(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+    if (user && !user.emailVerifiedAt) {
+      await this.sendOtp(user.id, user.email, 'verification');
+    }
+    return { ok: true };
+  }
+
+  async forgotPassword(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+    if (user?.passwordHash) {
+      await this.sendOtp(user.id, user.email, 'password_reset');
+    }
+    return { ok: true };
+  }
+
+  async resetPassword(input: { email: string; code: string; password: string }) {
+    const user = await this.consumeOtp(input.email, input.code, 'password_reset');
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: await this.passwords.hash(input.password),
+        failedLoginCount: 0,
+        lockedUntil: null,
+      },
+    });
+    await this.prisma.refreshToken.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return { ok: true };
+  }
+
+  private async sendOtp(
+    userId: string,
+    email: string,
+    purpose: EmailTokenPurpose,
+  ) {
+    await this.prisma.emailToken.updateMany({
+      where: { userId, purpose, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    const code = String(randomInt(100000, 1000000));
+    await this.prisma.emailToken.create({
+      data: {
+        userId,
+        purpose,
+        tokenHash: sha256(`${userId}:${purpose}:${code}`),
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+    if (purpose === 'verification') {
+      await this.mail.sendOtp(
+        email,
+        'আরণ্য — ইমেইল যাচাই',
+        code,
+        'আপনার ইমেইল যাচাইয়ের কোড:',
+      );
+    } else {
+      await this.mail.sendOtp(
+        email,
+        'আরণ্য — পাসওয়ার্ড রিসেট',
+        code,
+        'পাসওয়ার্ড রিসেটের কোড:',
+      );
+    }
+  }
+
+  private async consumeOtp(
+    email: string,
+    code: string,
+    purpose: EmailTokenPurpose,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      include: { role: true },
+    });
+    if (!user) throw Errors.otpInvalid();
+    const token = await this.prisma.emailToken.findFirst({
+      where: {
+        userId: user.id,
+        purpose,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+        tokenHash: sha256(`${user.id}:${purpose}:${code}`),
+      },
+    });
+    if (!token) throw Errors.otpInvalid();
+    await this.prisma.emailToken.update({
+      where: { id: token.id },
+      data: { usedAt: new Date() },
+    });
+    return user;
   }
 
   async googleLogin(

@@ -30,6 +30,23 @@ export const googleSchema = z
   })
   .strict();
 
+export const otpSchema = z
+  .object({
+    email: z.string().email(),
+    code: z.string().regex(/^\d{6}$/),
+  })
+  .strict();
+
+export const emailOnlySchema = z.object({ email: z.string().email() }).strict();
+
+export const resetPasswordSchema = z
+  .object({
+    email: z.string().email(),
+    code: z.string().regex(/^\d{6}$/),
+    password: passwordSchema,
+  })
+  .strict();
+
 export const patchMeSchema = z
   .object({
     displayName: z.string().min(2).max(80).optional(),

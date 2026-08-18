@@ -38,4 +38,12 @@ export const Errors = {
     new ApiError('CSRF', 'নিরাপত্তা টোকেন মিলছে না।', HttpStatus.FORBIDDEN),
   aiUnavailable: () =>
     new ApiError('AI_UNAVAILABLE', 'AI সেবা এখন কাজ করছে না।', HttpStatus.SERVICE_UNAVAILABLE),
+  unverified: () =>
+    new ApiError(
+      'EMAIL_UNVERIFIED',
+      'আগে ইমেইল যাচাই করুন। আপনার ইনবক্সে কোড পাঠানো হয়েছে।',
+      HttpStatus.FORBIDDEN,
+    ),
+  otpInvalid: () =>
+    new ApiError('OTP_INVALID', 'কোডটি ভুল বা মেয়াদ শেষ।', HttpStatus.BAD_REQUEST),
 };

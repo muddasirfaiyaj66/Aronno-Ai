@@ -36,12 +36,11 @@ export class DiagnosesService {
     };
   }
 
-  async createPhoto(user: AuthUser, file?: Express.Multer.File) {
-    const key = await this.storage.saveImage(file, 'diagnosis');
-    const ai = await this.vision.diagnose({ imageBuffer: file!.buffer });
+  async createPhoto(user: AuthUser, imageUrl: string) {
+    const ai = await this.vision.diagnose({});
     return this.persist(user.id, {
       source: 'photo',
-      imageObjectKey: key,
+      imageObjectKey: imageUrl,
       ...ai,
     });
   }

@@ -6,7 +6,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ZodPipe } from '../common/pipes/zod.pipe';
 import { Body } from '@nestjs/common';
-import { googleSchema, loginSchema, registerSchema } from './auth.dto';
+import { emailOnlySchema, googleSchema, loginSchema, otpSchema, registerSchema, resetPasswordSchema } from './auth.dto';
 import type { AuthUser } from './auth.types';
 import { COOKIE } from '../common/constants';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -51,6 +51,34 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     return this.auth.googleLogin(body.idToken, res, this.meta(req));
+  }
+
+  @Public()
+  @Post('verify-email')
+  verifyEmail(
+    @Body(new ZodPipe(otpSchema)) body: ReturnType<typeof otpSchema.parse>,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.auth.verifyEmail(body, res, this.meta(req));
+  }
+
+  @Public()
+  @Post('resend-verification')
+  resend(@Body(new ZodPipe(emailOnlySchema)) body: ReturnType<typeof emailOnlySchema.parse>) {
+    return this.auth.resendVerification(body.email);
+  }
+
+  @Public()
+  @Post('forgot-password')
+  forgot(@Body(new ZodPipe(emailOnlySchema)) body: ReturnType<typeof emailOnlySchema.parse>) {
+    return this.auth.forgotPassword(body.email);
+  }
+
+  @Public()
+  @Post('reset-password')
+  reset(@Body(new ZodPipe(resetPasswordSchema)) body: ReturnType<typeof resetPasswordSchema.parse>) {
+    return this.auth.resetPassword(body);
   }
 
   @Public()

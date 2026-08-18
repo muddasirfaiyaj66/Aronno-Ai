@@ -21,6 +21,7 @@ import {
   useGetMarketPricesQuery,
   useShareListingMutation,
 } from "@/services/api";
+import { uploadImageToCloudinary } from "@/services/cloudinary";
 import {
   DISTRICT_LABELS,
   type District,
@@ -184,6 +185,7 @@ export default function MarketScreen() {
   const [dsSubmitted, setDsSubmitted] = useState(false);
   const [createListing, { isLoading: creatingListing }] =
     useCreateMarketListingMutation();
+  const [uploadingListing, setUploadingListing] = useState(false);
   const [shareListing] = useShareListingMutation();
 
   const { data: pricePayload } = useGetMarketPricesQuery({
@@ -219,14 +221,24 @@ export default function MarketScreen() {
 
   const handleSubmitListing = async () => {
     if (!canSubmitListing || !dsCrop || !dsDistrict) return;
-    await createListing({
-      cropSlug: dsCrop,
-      quantityBn: dsQuantity.trim(),
-      askingPricePerKg: Number(dsPrice),
-      districtSlug: dsDistrict,
-      uri: dsPhotoUri ?? undefined,
-    }).unwrap();
-    setDsSubmitted(true);
+    setUploadingListing(true);
+    try {
+      const imageUrl = dsPhotoUri
+        ? await uploadImageToCloudinary(dsPhotoUri)
+        : undefined;
+      await createListing({
+        cropSlug: dsCrop,
+        quantityBn: dsQuantity.trim(),
+        askingPricePerKg: Number(dsPrice),
+        districtSlug: dsDistrict,
+        imageUrl,
+      }).unwrap();
+      setDsSubmitted(true);
+    } catch {
+      // keep the form so the farmer can retry
+    } finally {
+      setUploadingListing(false);
+    }
   };
 
   const openCameraForListing = () => {
@@ -626,6 +638,7 @@ export default function MarketScreen() {
                 <PrimaryButton
                   label="তালিকা তৈরি করুন"
                   onPress={handleSubmitListing}
+                  loading={uploadingListing || creatingListing}
                   disabled={!canSubmitListing}
                   icon={
                     <Ionicons name="checkmark" size={20} color={colors.white} />

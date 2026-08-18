@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { AIGeneratingShimmer, AppText, RetryCard } from "@/components/ui";
+import { uploadImageToCloudinary } from "@/services/cloudinary";
 import {
   useCreatePhotoDiagnosisMutation,
   useCreateVoiceDiagnosisMutation,
@@ -70,7 +71,9 @@ export default function AnalyzingScreen() {
         if (flow === "tool") {
           const result = params.transcript
             ? await identifyToolVoice({ transcriptBn: params.transcript }).unwrap()
-            : await identifyToolPhoto({ uri: params.imageUri! }).unwrap();
+            : await identifyToolPhoto({
+                imageUrl: await uploadImageToCloudinary(params.imageUri!),
+              }).unwrap();
           if (cancelled) return;
           router.replace({
             pathname: "/(root)/(tabs)/scan/tool-result",
@@ -80,7 +83,9 @@ export default function AnalyzingScreen() {
         }
 
         if (flow === "receipt") {
-          const result = await scanReceipt({ uri: params.imageUri! }).unwrap();
+          const result = await scanReceipt({
+            imageUrl: await uploadImageToCloudinary(params.imageUri!),
+          }).unwrap();
           if (cancelled) return;
           router.replace({
             pathname: "/(root)/(tabs)/scan/receipt-result",
@@ -93,7 +98,9 @@ export default function AnalyzingScreen() {
           ? await createVoiceDiagnosis({
               transcriptBn: params.transcript,
             }).unwrap()
-          : await createPhotoDiagnosis({ uri: params.imageUri! }).unwrap();
+          : await createPhotoDiagnosis({
+              imageUrl: await uploadImageToCloudinary(params.imageUri!),
+            }).unwrap();
         if (cancelled) return;
         router.replace({
           pathname: "/(root)/(tabs)/scan/result",

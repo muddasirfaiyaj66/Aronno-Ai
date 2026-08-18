@@ -1,24 +1,13 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Inject,
-  Param,
-  Post,
-  UploadedFile,
-  UseInterceptors,
-} from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { Body, Controller, Get, Inject, Param, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { memoryStorage } from 'multer';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
-import { StorageService } from '../storage/storage.service';
 import { AI_TOOLS } from '../ai/ai.tokens';
 import type { AiToolsPort } from '../ai/ports';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ZodPipe } from '../common/pipes/zod.pipe';
 import { Errors } from '../common/errors';
+import { imageUrlSchema } from '../common/schemas';
 import type { AuthUser } from '../auth/auth.types';
 
 const voiceSchema = z.object({ transcriptBn: z.string().min(3) }).strict();
@@ -27,7 +16,6 @@ const voiceSchema = z.object({ transcriptBn: z.string().min(3) }).strict();
 export class ToolsController {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly storage: StorageService,
     @Inject(AI_TOOLS) private readonly ai: AiToolsPort,
   ) {}
 
@@ -61,14 +49,12 @@ export class ToolsController {
 
   @Throttle({ default: { ttl: 60000, limit: 10 } })
   @Post('identify/photo')
-  @UseInterceptors(FileInterceptor('image', { storage: memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } }))
   async photo(
     @CurrentUser() user: AuthUser,
-    @UploadedFile() file?: Express.Multer.File,
+    @Body(new ZodPipe(imageUrlSchema)) body: z.infer<typeof imageUrlSchema>,
   ) {
-    const key = await this.storage.saveImage(file, 'tools');
-    const ai = await this.ai.identify({ imageBuffer: file!.buffer });
-    return this.persist(user.id, 'photo', ai, key);
+    const ai = await this.ai.identify({});
+    return this.persist(user.id, 'photo', ai, body.imageUrl);
   }
 
   @Throttle({ default: { ttl: 60000, limit: 10 } })

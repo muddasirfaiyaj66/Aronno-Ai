@@ -1,22 +1,12 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Query,
-  UploadedFile,
-  UseInterceptors,
-} from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { memoryStorage } from 'multer';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ZodPipe } from '../common/pipes/zod.pipe';
 import { Errors } from '../common/errors';
+import { httpUrl } from '../common/schemas';
 import type { AuthUser } from '../auth/auth.types';
 
 const listingSchema = z
@@ -25,6 +15,7 @@ const listingSchema = z
     quantityBn: z.string().min(1),
     askingPricePerKg: z.coerce.number().positive(),
     districtSlug: z.string().min(1),
+    imageUrl: httpUrl.optional(),
   })
   .strict();
 
@@ -142,18 +133,15 @@ export class MarketController {
 
   @Throttle({ default: { ttl: 60000, limit: 10 } })
   @Post('listings')
-  @UseInterceptors(FileInterceptor('image', { storage: memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } }))
   async createListing(
     @CurrentUser() user: AuthUser,
     @Body(new ZodPipe(listingSchema)) body: z.infer<typeof listingSchema>,
-    @UploadedFile() file?: Express.Multer.File,
   ) {
     const crop = await this.prisma.crop.findUnique({ where: { slug: body.cropSlug } });
     const district = await this.prisma.district.findUnique({
       where: { slug: body.districtSlug },
     });
     if (!crop || !district) throw Errors.notFound();
-    const thumb = file ? await this.storage.saveImage(file, 'listings') : undefined;
     const row = await this.prisma.listing.create({
       data: {
         sellerUserId: user.id,
@@ -161,17 +149,22 @@ export class MarketController {
         districtId: district.id,
         quantityBn: body.quantityBn,
         askingPricePerKg: body.askingPricePerKg,
-        thumbnailObjectKey: thumb,
+        thumbnailObjectKey: body.imageUrl,
       },
       include: { crop: true, district: true, seller: true },
     });
     return {
       id: row.id,
+      cropType: row.crop.slug,
       cropNameBn: row.crop.nameBn,
       quantityBn: row.quantityBn,
       askingPriceBn: `৳ ${row.askingPricePerKg}/কেজি`,
+      askingPricePerKg: row.askingPricePerKg,
       district: row.district.slug,
       sellerNameBn: row.seller.displayName,
+      thumbnailUrl: row.thumbnailObjectKey
+        ? this.storage.urlFor(row.thumbnailObjectKey)
+        : undefined,
     };
   }
 

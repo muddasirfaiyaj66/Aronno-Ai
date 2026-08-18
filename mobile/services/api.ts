@@ -38,6 +38,19 @@ function unwrap<T>(raw: unknown): T {
   return raw as T;
 }
 
+export function getApiError(error: unknown): { code?: string; message?: string } {
+  if (!error || typeof error !== "object") return {};
+  if ("data" in error) {
+    const data = (error as { data?: { error?: { code?: string; message?: string } } })
+      .data;
+    if (data?.error) return data.error;
+  }
+  if ("message" in error && typeof (error as { message: unknown }).message === "string") {
+    return { message: (error as { message: string }).message };
+  }
+  return {};
+}
+
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: API_URL,
   credentials: "include",
@@ -74,6 +87,10 @@ const baseQueryWithReauth: BaseQueryFn<
     "/auth/google",
     "/auth/refresh",
     "/auth/logout",
+    "/auth/verify-email",
+    "/auth/resend-verification",
+    "/auth/forgot-password",
+    "/auth/reset-password",
   ].some((path) => url.includes(path));
   if (result.error?.status === 401 && !skipReauth) {
     if (!refreshPromise) {
@@ -98,17 +115,6 @@ const baseQueryWithReauth: BaseQueryFn<
   }
   return result;
 };
-
-function imageForm(uri: string) {
-  const form = new FormData();
-  const name = uri.split("/").pop() ?? "photo.jpg";
-  form.append("image", {
-    uri,
-    name,
-    type: "image/jpeg",
-  } as unknown as Blob);
-  return form;
-}
 
 export const api = createApi({
   reducerPath: "api",
@@ -139,16 +145,11 @@ export const api = createApi({
       transformResponse: (r) => unwrap(r),
     }),
     register: builder.mutation<
-      AuthUser,
+      { email: string; requiresVerification: true },
       { email: string; password: string; displayName: string; professionSlug?: string }
     >({
       query: (body) => ({ url: "/auth/register", method: "POST", body }),
-      transformResponse: (r) => unwrap<AuthUser>(r),
-      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
-        const { data } = await queryFulfilled;
-        dispatch(setUser(data));
-      },
-      invalidatesTags: ["Auth", "User"],
+      transformResponse: (r) => unwrap<{ email: string; requiresVerification: true }>(r),
     }),
     login: builder.mutation<AuthUser, { email: string; password: string }>({
       query: (body) => ({ url: "/auth/login", method: "POST", body }),
@@ -167,6 +168,30 @@ export const api = createApi({
         dispatch(setUser(data));
       },
       invalidatesTags: ["Auth", "User"],
+    }),
+    verifyEmail: builder.mutation<AuthUser, { email: string; code: string }>({
+      query: (body) => ({ url: "/auth/verify-email", method: "POST", body }),
+      transformResponse: (r) => unwrap<AuthUser>(r),
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        const { data } = await queryFulfilled;
+        dispatch(setUser(data));
+      },
+      invalidatesTags: ["Auth", "User"],
+    }),
+    resendVerification: builder.mutation<{ ok: boolean }, { email: string }>({
+      query: (body) => ({ url: "/auth/resend-verification", method: "POST", body }),
+      transformResponse: (r) => unwrap(r),
+    }),
+    forgotPassword: builder.mutation<{ ok: boolean }, { email: string }>({
+      query: (body) => ({ url: "/auth/forgot-password", method: "POST", body }),
+      transformResponse: (r) => unwrap(r),
+    }),
+    resetPassword: builder.mutation<
+      { ok: boolean },
+      { email: string; code: string; password: string }
+    >({
+      query: (body) => ({ url: "/auth/reset-password", method: "POST", body }),
+      transformResponse: (r) => unwrap(r),
     }),
     logout: builder.mutation<{ ok: boolean }, void>({
       query: () => ({ url: "/auth/logout", method: "POST" }),
@@ -201,8 +226,8 @@ export const api = createApi({
       transformResponse: (r) => unwrap<AuthUser>(r),
       invalidatesTags: ["User"],
     }),
-    createPhotoDiagnosis: builder.mutation<DiagnosisResult & { id: string }, { uri: string }>({
-      query: ({ uri }) => ({ url: "/diagnoses/photo", method: "POST", body: imageForm(uri) }),
+    createPhotoDiagnosis: builder.mutation<DiagnosisResult & { id: string }, { imageUrl: string }>({
+      query: (body) => ({ url: "/diagnoses/photo", method: "POST", body }),
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Diagnosis", "History"],
     }),
@@ -254,7 +279,7 @@ export const api = createApi({
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Report"],
     }),
-    downloadReportPdf: builder.mutation<{ downloadUrl: string }, string>({
+    downloadReportPdf: builder.mutation<{ downloadUrl: string | null }, string>({
       query: (id) => ({ url: `/reports/${id}/pdf`, method: "POST" }),
       transformResponse: (r) => unwrap(r),
     }),
@@ -262,8 +287,8 @@ export const api = createApi({
       query: (body) => ({ url: "/tts", method: "POST", body }),
       transformResponse: (r) => unwrap(r),
     }),
-    identifyToolPhoto: builder.mutation<ToolResult, { uri: string }>({
-      query: ({ uri }) => ({ url: "/tools/identify/photo", method: "POST", body: imageForm(uri) }),
+    identifyToolPhoto: builder.mutation<ToolResult, { imageUrl: string }>({
+      query: (body) => ({ url: "/tools/identify/photo", method: "POST", body }),
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Tool"],
     }),
@@ -276,8 +301,8 @@ export const api = createApi({
       query: (id) => `/tools/${id}`,
       transformResponse: (r) => unwrap(r),
     }),
-    scanReceipt: builder.mutation<ReceiptSummary, { uri: string }>({
-      query: ({ uri }) => ({ url: "/receipts/scan", method: "POST", body: imageForm(uri) }),
+    scanReceipt: builder.mutation<ReceiptSummary, { imageUrl: string }>({
+      query: (body) => ({ url: "/receipts/scan", method: "POST", body }),
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Receipt"],
     }),
@@ -349,18 +374,10 @@ export const api = createApi({
         quantityBn: string;
         askingPricePerKg: number;
         districtSlug: string;
-        uri?: string;
+        imageUrl?: string;
       }
     >({
-      query: ({ uri, ...body }) => {
-        if (!uri) return { url: "/market/listings", method: "POST", body };
-        const form = imageForm(uri);
-        form.append("cropSlug", body.cropSlug);
-        form.append("quantityBn", body.quantityBn);
-        form.append("askingPricePerKg", String(body.askingPricePerKg));
-        form.append("districtSlug", body.districtSlug);
-        return { url: "/market/listings", method: "POST", body: form };
-      },
+      query: (body) => ({ url: "/market/listings", method: "POST", body }),
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Market"],
     }),
@@ -394,6 +411,10 @@ export const {
   useRegisterMutation,
   useLoginMutation,
   useGoogleLoginMutation,
+  useVerifyEmailMutation,
+  useResendVerificationMutation,
+  useForgotPasswordMutation,
+  useResetPasswordMutation,
   useLogoutMutation,
   useGetMeQuery,
   usePatchMeMutation,

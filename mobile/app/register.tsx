@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Link, useRouter } from "expo-router";
+import { Link, useRouter, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText, IconPickerRow, PrimaryButton } from "@/components/ui";
 import { colors } from "@/constants/theme";
@@ -32,7 +32,10 @@ export default function RegisterScreen() {
         displayName: displayName.trim(),
         professionSlug: professionSlug ?? undefined,
       }).unwrap();
-      router.replace("/(root)/(tabs)");
+      router.replace({
+        pathname: "/verify-email",
+        params: { email: email.trim() },
+      } as unknown as Href);
     } catch {
       // error banner
     }

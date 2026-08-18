@@ -39,7 +39,7 @@ export default function OnboardingScreen() {
     // TODO(nestjs): once accounts exist, also sync this flag to the user's
     // profile so onboarding stays skipped across reinstalls/devices.
     await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, "true");
-    router.replace("/(root)/(tabs)");
+    router.replace("/login");
   };
 
   const handleNext = () => {

@@ -11,12 +11,8 @@ import {
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import type { CropType } from "@/types/treatment";
-import {
-  MOCK_FERTILIZER_ADVICE,
-  type GrowthStage,
-  type SoilColor,
-  type SoilMoisture,
-} from "@/types/fertilizer";
+import type { FertilizerAdvice, GrowthStage, SoilColor, SoilMoisture } from "@/types/fertilizer";
+import { useRecommendFertilizerMutation, useSpeakMutation } from "@/services/api";
 
 const CROP_OPTIONS: {
   id: CropType;
@@ -62,6 +58,9 @@ export default function FertilizerRecommendationScreen() {
   const [soilColor, setSoilColor] = useState<SoilColor | null>(null);
   const [soilMoisture, setSoilMoisture] = useState<SoilMoisture | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [advice, setAdvice] = useState<FertilizerAdvice | null>(null);
+  const [recommend, { isLoading }] = useRecommendFertilizerMutation();
+  const [speak] = useSpeakMutation();
 
   const canSubmit = !!crop && !!stage && !!soilColor && !!soilMoisture;
 
@@ -150,19 +149,30 @@ export default function FertilizerRecommendationScreen() {
 
         <PrimaryButton
           label="সুপারিশ দেখুন"
-          onPress={() => setShowResult(true)}
+          onPress={async () => {
+            if (!crop || !stage || !soilColor || !soilMoisture) return;
+            const data = await recommend({
+              cropSlug: crop,
+              growthStage: stage,
+              soilColor,
+              soilMoisture,
+            }).unwrap();
+            setAdvice(data);
+            setShowResult(true);
+          }}
           disabled={!canSubmit}
+          loading={isLoading}
           icon={<Ionicons name="flask-outline" size={20} color={colors.white} />}
         />
 
-        {showResult ? (
+        {showResult && advice ? (
           <StructuredCard
-            title={MOCK_FERTILIZER_ADVICE.fertilizerNameBn}
+            title={advice.fertilizerNameBn}
             icon={<Ionicons name="flask" size={22} color={colors.primary} />}
             footer={
               <ListenButton
                 label="সুপারিশ শুনুন"
-                onPlay={() => {}}
+                onPlay={() => speak({ textBn: advice.fertilizerNameBn })}
                 onPause={() => {}}
               />
             }
@@ -171,27 +181,27 @@ export default function FertilizerRecommendationScreen() {
               <View>
                 <AppText variant="caption">মাত্রা</AppText>
                 <AppText variant="body" className="mt-0.5 text-ink">
-                  {MOCK_FERTILIZER_ADVICE.dosagePerBigha}
+                  {advice.dosagePerBigha}
                 </AppText>
               </View>
               <View>
                 <AppText variant="caption">প্রয়োগ পদ্ধতি</AppText>
                 <AppText variant="body" className="mt-0.5 text-ink">
-                  {MOCK_FERTILIZER_ADVICE.applicationMethodBn}
+                  {advice.applicationMethodBn}
                 </AppText>
               </View>
               <View>
                 <AppText variant="caption">সময়</AppText>
                 <AppText variant="body" className="mt-0.5 text-ink">
-                  {MOCK_FERTILIZER_ADVICE.timingBn}
+                  {advice.timingBn}
                 </AppText>
               </View>
 
-              {MOCK_FERTILIZER_ADVICE.warningBn ? (
+              {advice.warningBn ? (
                 <View className="flex-row items-start gap-3 rounded-2xl bg-severity-medium-bg px-4 py-3">
                   <Ionicons name="warning" size={20} color="#B54708" />
                   <AppText variant="body" className="flex-1 leading-6 text-ink">
-                    {MOCK_FERTILIZER_ADVICE.warningBn}
+                    {advice.warningBn}
                   </AppText>
                 </View>
               ) : null}

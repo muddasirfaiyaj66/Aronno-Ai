@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,27 +11,19 @@ import {
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { MOCK_CROP_PLAN } from "@/types/planning";
+import {
+  useGenerateCropPlanMutation,
+  useSpeakMutation,
+} from "@/services/api";
 
 export default function CropPlanningScreen() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [attempt, setAttempt] = useState(0);
+  const [generate, { data: plan, isLoading, isError }] =
+    useGenerateCropPlanMutation();
+  const [speak] = useSpeakMutation();
 
-  // TODO(nestjs): the failure branch below (setError) is unreachable with
-  // the mock timer — wire it to the real Gemini/Gamma call's .catch() once
-  // the backend is wired.
   useEffect(() => {
-    if (error) return;
-    setLoading(true);
-    const timer = setTimeout(() => setLoading(false), 1800);
-    return () => clearTimeout(timer);
-  }, [error, attempt]);
-
-  const handleRetry = () => {
-    setError(false);
-    setAttempt((a) => a + 1);
-  };
+    generate();
+  }, [generate]);
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
@@ -46,12 +38,12 @@ export default function CropPlanningScreen() {
         className="flex-1"
         contentContainerClassName="gap-4 px-5 py-5"
       >
-        {error ? (
+        {isError ? (
           <RetryCard
             message="পরিকল্পনা তৈরি করা যায়নি। আবার চেষ্টা করুন।"
-            onRetry={handleRetry}
+            onRetry={() => generate()}
           />
-        ) : loading ? (
+        ) : isLoading || !plan ? (
           <AIGeneratingShimmer
             label="পরিকল্পনা তৈরি হচ্ছে"
             lines={4}
@@ -62,7 +54,7 @@ export default function CropPlanningScreen() {
             <ForecastTimelineCard
               title="৬ মাসের পূর্বাভাস"
               subtitle="মাসভিত্তিক আবহাওয়া ও সুপারিশকৃত ফসল"
-              months={MOCK_CROP_PLAN.months.map((month, index) => ({
+              months={plan.months.map((month, index) => ({
                 id: `${month.month}-${index}`,
                 monthLabel: month.month,
                 weatherIcon: month.weatherIcon,
@@ -76,13 +68,12 @@ export default function CropPlanningScreen() {
               footer={
                 <ListenButton
                   label="সুপারিশ শুনুন"
-                  onPlay={() => {}}
-                  onPause={() => {}}
+                  onPlay={() => speak({ textBn: plan.recommendationBn })}
                 />
               }
             >
-              <AppText variant="body" className="leading-7 text-ink">
-                {MOCK_CROP_PLAN.recommendationBn}
+              <AppText variant="body" className="leading-6 text-ink">
+                {plan.recommendationBn}
               </AppText>
             </StructuredCard>
           </>

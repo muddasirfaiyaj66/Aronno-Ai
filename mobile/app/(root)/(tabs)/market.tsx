@@ -14,12 +14,15 @@ import {
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { MOCK_YIELD_ESTIMATE } from "@/types/yield";
+import {
+  useCreateMarketListingMutation,
+  useGetHeatmapQuery,
+  useGetMarketListingsQuery,
+  useGetMarketPricesQuery,
+  useShareListingMutation,
+} from "@/services/api";
 import {
   DISTRICT_LABELS,
-  MOCK_HEATMAP_REGIONS,
-  MOCK_MARKET_LISTINGS,
-  MOCK_MARKET_PRICES,
   type District,
   type HeatMapDimension,
   type MarketCropType,
@@ -179,65 +182,50 @@ export default function MarketScreen() {
   const [dsDistrict, setDsDistrict] = useState<District | null>(null);
   const [dsPhotoUri, setDsPhotoUri] = useState<string | null>(null);
   const [dsSubmitted, setDsSubmitted] = useState(false);
+  const [createListing, { isLoading: creatingListing }] =
+    useCreateMarketListingMutation();
+  const [shareListing] = useShareListingMutation();
+
+  const { data: pricePayload } = useGetMarketPricesQuery({
+    cropSlug: priceCrop === "all" ? undefined : priceCrop,
+    districtSlug: priceDistrict === "all" ? undefined : priceDistrict,
+  });
+  const { data: listings = [] } = useGetMarketListingsQuery({
+    cropSlug: marketCrop === "all" ? undefined : marketCrop,
+    districtSlug: marketDistrict === "all" ? undefined : marketDistrict,
+    sort: sortDesc ? "price_desc" : "price_asc",
+  });
+  const { data: heatmap } = useGetHeatmapQuery();
 
   useEffect(() => {
     if (params.tab === "direct") setTab("direct");
     if (params.photoUri) setDsPhotoUri(params.photoUri);
   }, [params.tab, params.photoUri]);
 
-  const filteredPrices = useMemo(
-    () =>
-      MOCK_MARKET_PRICES.filter(
-        (p) =>
-          (priceCrop === "all" || p.cropType === priceCrop) &&
-          (priceDistrict === "all" || p.district === priceDistrict),
-      ),
-    [priceCrop, priceDistrict],
-  );
+  const filteredPrices = pricePayload?.markets ?? [];
 
   const bestPriceIds = useMemo(() => {
-    const bestByCrop = new Map<MarketCropType, { id: string; price: number }>();
-    filteredPrices.forEach((p) => {
-      const current = bestByCrop.get(p.cropType);
-      if (!current || p.pricePerMon > current.price) {
-        bestByCrop.set(p.cropType, { id: p.id, price: p.pricePerMon });
-      }
-    });
-    return new Set(Array.from(bestByCrop.values()).map((v) => v.id));
+    return new Set(
+      filteredPrices.filter((p) => p.bestPrice).map((p) => p.id),
+    );
   }, [filteredPrices]);
 
-  const estimatedRevenue = useMemo(() => {
-    const bestRicePrice = Math.max(
-      ...MOCK_MARKET_PRICES.filter((p) => p.cropType === "rice").map(
-        (p) => p.pricePerMon,
-      ),
-    );
-    const avgYieldMon =
-      (MOCK_YIELD_ESTIMATE.estimatedMinMon + MOCK_YIELD_ESTIMATE.estimatedMaxMon) /
-      2;
-    return Math.round(avgYieldMon * bestRicePrice);
-  }, []);
+  const estimatedRevenue = pricePayload?.estimatedRevenueHero ?? 0;
 
-  const filteredListings = useMemo(() => {
-    const filtered = MOCK_MARKET_LISTINGS.filter(
-      (l) =>
-        (marketCrop === "all" || l.cropType === marketCrop) &&
-        (marketDistrict === "all" || l.district === marketDistrict),
-    );
-    return [...filtered].sort((a, b) =>
-      sortDesc
-        ? b.askingPricePerKg - a.askingPricePerKg
-        : a.askingPricePerKg - b.askingPricePerKg,
-    );
-  }, [marketCrop, marketDistrict, sortDesc]);
+  const filteredListings = listings;
 
   const canSubmitListing =
     !!dsCrop && dsQuantity.trim().length > 0 && dsPrice.trim().length > 0 && !!dsDistrict;
 
-  // TODO(nestjs): replace with a real POST /market/listings call once the
-  // backend is wired.
-  const handleSubmitListing = () => {
-    if (!canSubmitListing) return;
+  const handleSubmitListing = async () => {
+    if (!canSubmitListing || !dsCrop || !dsDistrict) return;
+    await createListing({
+      cropSlug: dsCrop,
+      quantityBn: dsQuantity.trim(),
+      askingPricePerKg: Number(dsPrice),
+      districtSlug: dsDistrict,
+      uri: dsPhotoUri ?? undefined,
+    }).unwrap();
     setDsSubmitted(true);
   };
 
@@ -369,9 +357,7 @@ export default function MarketScreen() {
               }
               footer={
                 <AppText variant="caption">
-                  {MOCK_YIELD_ESTIMATE.cropNameBn} · আনুমানিক ফলন{" "}
-                  {MOCK_YIELD_ESTIMATE.estimatedMinMon}–
-                  {MOCK_YIELD_ESTIMATE.estimatedMaxMon} মণ, সেরা দামে হিসাব করা
+                  সেরা বাজার দাম থেকে আনুমানিক আয়
                 </AppText>
               }
             >
@@ -459,7 +445,7 @@ export default function MarketScreen() {
             </AppText>
 
             <View className="flex-row flex-wrap gap-3">
-              {MOCK_HEATMAP_REGIONS.map((region) => {
+              {(heatmap?.regions ?? []).map((region) => {
                 const intensity =
                   heatMapDimension === "disease"
                     ? region.diseaseIntensity
@@ -528,7 +514,7 @@ export default function MarketScreen() {
                   // integration once the backend is ready.
                   <SecondaryButton
                     label="শেয়ার করুন"
-                    onPress={() => {}}
+                    onPress={() => shareListing("latest")}
                     icon={
                       <Ionicons
                         name="share-social-outline"

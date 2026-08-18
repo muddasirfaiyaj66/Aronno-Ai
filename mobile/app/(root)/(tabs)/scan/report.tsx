@@ -16,7 +16,12 @@ import {
 import { WeatherAdvisoryCard } from "@/components/treatment/WeatherAdvisoryCard";
 import { colors } from "@/constants/theme";
 import type { SeverityLevel } from "@/types/diagnosis";
-import { getMockTreatmentPlan } from "./treatment-plan";
+import {
+  useCreateReportMutation,
+  useDownloadReportPdfMutation,
+  useGetTreatmentPlanQuery,
+  useSpeakMutation,
+} from "@/services/api";
 
 export default function ReportPreviewScreen() {
   const params = useLocalSearchParams<{
@@ -24,11 +29,15 @@ export default function ReportPreviewScreen() {
     diseaseNameEn?: string;
     confidence?: string;
     severity?: SeverityLevel;
+    diagnosisId?: string;
   }>();
-  const plan = useMemo(
-    () => getMockTreatmentPlan(params.diseaseNameBn),
-    [params.diseaseNameBn],
-  );
+  const { data: plan } = useGetTreatmentPlanQuery(params.diagnosisId ?? "", {
+    skip: !params.diagnosisId,
+  });
+  const [createReport] = useCreateReportMutation();
+  const [downloadPdf] = useDownloadReportPdfMutation();
+  const [speak] = useSpeakMutation();
+  const [reportId, setReportId] = useState<string | null>(null);
 
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState(false);
@@ -44,19 +53,32 @@ export default function ReportPreviewScreen() {
     [],
   );
 
-  // TODO(nestjs): replace with a real PDF generation + upload call
-  // (e.g. POST /reports/:diagnosisId/pdf) once the backend is wired. The
-  // failure branch below (setDownloadError) is unreachable with the mock
-  // timer — wire it to the real call's .catch() when that lands.
-  const handleDownload = () => {
+  const handleDownload = async () => {
+    if (!params.diagnosisId) return;
     setDownloadError(false);
     setDownloading(true);
-    setTimeout(() => {
-      setDownloading(false);
+    try {
+      const created =
+        reportId ??
+        (await createReport({ diagnosisId: params.diagnosisId }).unwrap()).id;
+      setReportId(created);
+      await downloadPdf(created).unwrap();
       setToastVisible(true);
       setTimeout(() => setToastVisible(false), 2200);
-    }, 900);
+    } catch {
+      setDownloadError(true);
+    } finally {
+      setDownloading(false);
+    }
   };
+
+  if (!plan) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-neutral px-6">
+        <AIGeneratingShimmer label="রিপোর্ট তৈরি হচ্ছে" lines={4} className="w-full" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
@@ -136,7 +158,11 @@ export default function ReportPreviewScreen() {
       <View className="gap-3 border-t border-neutral-200 bg-white px-5 py-4">
         <ListenButton
           label="পুরো রিপোর্ট শুনুন"
-          onPlay={() => {}}
+          onPlay={() =>
+            speak({
+              textBn: `${plan.diseaseNameBn}. ${plan.pesticideNameBn}. ${plan.weatherAdvisory.reasonBn}`,
+            })
+          }
           onPause={() => {}}
         />
 

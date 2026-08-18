@@ -1,9 +1,10 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
+  AIGeneratingShimmer,
   AppText,
   EmptyState,
   ListenButton,
@@ -12,29 +13,38 @@ import {
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { getHistoryEntryById } from "@/types/history";
+import { useGetHistoryEntryQuery, useSpeakMutation } from "@/services/api";
 
 export default function HistoryDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const entry = useMemo(() => getHistoryEntryById(id), [id]);
+  const { data: entry, isLoading } = useGetHistoryEntryQuery(id!, { skip: !id });
+  const [speak] = useSpeakMutation();
 
   useEffect(() => {
     if (entry?.kind !== "disease") return;
-    // DiagnosisResultScreen already knows how to render this shape (Sprint 1) —
-    // reuse it in read-only mode instead of duplicating its layout here.
+    const disease = entry;
     router.replace({
       pathname: "/(root)/(tabs)/scan/result",
       params: {
-        diseaseNameBn: entry.diseaseNameBn,
-        diseaseNameEn: entry.diseaseNameEn,
-        confidence: String(entry.confidence),
-        severity: entry.severity,
-        imageUrl: entry.imageUrl,
+        id: "sourceId" in disease ? String((disease as { sourceId?: string }).sourceId ?? "") : "",
+        diseaseNameBn: disease.diseaseNameBn,
+        diseaseNameEn: disease.diseaseNameEn,
+        confidence: String(disease.confidence),
+        severity: disease.severity,
+        imageUrl: disease.imageUrl,
         readOnly: "1",
       },
     });
   }, [entry, router]);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-neutral px-6">
+        <AIGeneratingShimmer label="লোড হচ্ছে" lines={3} className="w-full" />
+      </SafeAreaView>
+    );
+  }
 
   if (!entry) {
     return (
@@ -55,7 +65,6 @@ export default function HistoryDetailScreen() {
   }
 
   if (entry.kind === "disease") {
-    // Redirecting to DiagnosisResultScreen (read-only) — nothing to render here.
     return <SafeAreaView className="flex-1 bg-neutral" edges={["top"]} />;
   }
 
@@ -71,8 +80,14 @@ export default function HistoryDetailScreen() {
       <View className="flex-1 gap-4 px-5 py-5">
         <ListenButton
           label="বিস্তারিত শুনুন"
-          onPlay={() => {}}
-          onPause={() => {}}
+          onPlay={() =>
+            speak({
+              textBn:
+                entry.kind === "yield"
+                  ? `${entry.cropNameBn} ফলন ${entry.yieldValue} ${entry.yieldUnitBn}`
+                  : `${entry.title} ${entry.amount}`,
+            })
+          }
         />
 
         {entry.kind === "yield" ? (
@@ -87,24 +102,6 @@ export default function HistoryDetailScreen() {
               <AppText variant="bodyLg" className="mb-2 text-muted">
                 {entry.yieldUnitBn}
               </AppText>
-              <Ionicons
-                name={
-                  entry.trend === "up"
-                    ? "trending-up"
-                    : entry.trend === "down"
-                      ? "trending-down"
-                      : "remove"
-                }
-                size={22}
-                color={
-                  entry.trend === "up"
-                    ? "#047857"
-                    : entry.trend === "down"
-                      ? "#B42318"
-                      : colors.muted
-                }
-                style={{ marginBottom: 10 }}
-              />
             </View>
           </StructuredCard>
         ) : (

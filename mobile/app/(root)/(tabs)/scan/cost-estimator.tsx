@@ -2,19 +2,16 @@ import { useMemo, useState } from "react";
 import { ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  AppText,
-  IconPickerRow,
-  PrimaryButton,
-  SegmentedTabs,
-  StructuredCard,
-} from "@/components/ui";
+import { AIGeneratingShimmer, AppText, IconPickerRow, PrimaryButton, SegmentedTabs, StructuredCard } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import type {
   CostEstimateResult,
   CropType,
   LandUnit,
 } from "@/types/treatment";
+import {
+  useCreateCostEstimateMutation,
+} from "@/services/api";
 
 const CROP_OPTIONS: { id: CropType; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { id: "rice", label: "ধান", icon: "leaf-outline" },
@@ -28,30 +25,12 @@ const UNIT_OPTIONS: { id: LandUnit; label: string }[] = [
   { id: "acre", label: "একর" },
 ];
 
-const COST_PER_BIGHA_BDT = 220;
-const BIGHA_PER_ACRE = 3;
-const PESTICIDE_ML_PER_BIGHA = 50;
-
-// TODO(nestjs): replace with a real POST /cost-estimate call once the
-// backend is wired. If this becomes an AI-assisted estimate, swap the
-// synchronous return below for an async call and show <AIGeneratingShimmer />
-// while it's in flight — do not use a bare spinner.
-function estimateCost(landSize: number, landUnit: LandUnit): CostEstimateResult {
-  const bighaEquivalent = landUnit === "acre" ? landSize * BIGHA_PER_ACRE : landSize;
-  const spraySessions = bighaEquivalent > 5 ? 3 : bighaEquivalent > 2 ? 2 : 1;
-
-  return {
-    pesticideQuantity: `${Math.round(bighaEquivalent * PESTICIDE_ML_PER_BIGHA)} মিলি`,
-    totalCostBdt: Math.round(bighaEquivalent * COST_PER_BIGHA_BDT * spraySessions),
-    spraySessions,
-  };
-}
-
 export default function CostEstimatorScreen() {
   const [cropType, setCropType] = useState<CropType | null>(null);
   const [landSize, setLandSize] = useState("");
   const [landUnit, setLandUnit] = useState<LandUnit>("bigha");
   const [result, setResult] = useState<CostEstimateResult | null>(null);
+  const [createEstimate, { isLoading }] = useCreateCostEstimateMutation();
 
   const parsedLandSize = Number(landSize);
   const canSubmit = !!cropType && parsedLandSize > 0;
@@ -61,9 +40,14 @@ export default function CostEstimatorScreen() {
     [cropType],
   );
 
-  const handleSubmit = () => {
-    if (!canSubmit) return;
-    setResult(estimateCost(parsedLandSize, landUnit));
+  const handleSubmit = async () => {
+    if (!canSubmit || !cropType) return;
+    const data = await createEstimate({
+      cropSlug: cropType,
+      landSize: parsedLandSize,
+      landUnit,
+    }).unwrap();
+    setResult(data);
   };
 
   return (
@@ -121,10 +105,15 @@ export default function CostEstimatorScreen() {
           label="হিসাব করুন"
           onPress={handleSubmit}
           disabled={!canSubmit}
+          loading={isLoading}
           icon={
             <Ionicons name="calculator-outline" size={20} color={colors.white} />
           }
         />
+
+        {isLoading ? (
+          <AIGeneratingShimmer label="খরচ হিসাব হচ্ছে" lines={3} className="w-full" />
+        ) : null}
 
         {result ? (
           <StructuredCard

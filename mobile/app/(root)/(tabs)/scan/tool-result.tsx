@@ -1,16 +1,15 @@
-import { useMemo } from "react";
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { AppText, EmptyState, ListingCard, StructuredCard } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { getToolResultById } from "@/types/tools";
+import { useGetToolQuery } from "@/services/api";
 
 export default function ToolIdentificationResultScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const result = useMemo(() => getToolResultById(id), [id]);
+  const { data: result } = useGetToolQuery(id!, { skip: !id });
 
   if (!result) {
     return (

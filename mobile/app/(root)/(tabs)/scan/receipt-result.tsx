@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,12 +9,13 @@ import {
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { getReceiptSummaryById } from "@/types/receipt";
+import { useGetReceiptQuery, useSpeakMutation } from "@/services/api";
 
 export default function ReceiptResultScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const summary = useMemo(() => getReceiptSummaryById(id), [id]);
+  const { data: summary } = useGetReceiptQuery(id!, { skip: !id });
+  const [speak] = useSpeakMutation();
 
   if (!summary) {
     return (
@@ -54,7 +54,7 @@ export default function ReceiptResultScreen() {
           footer={
             <ListenButton
               label="সারাংশ শুনুন"
-              onPlay={() => {}}
+              onPlay={() => speak({ textBn: summary.summaryBn })}
               onPause={() => {}}
             />
           }

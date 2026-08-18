@@ -9,9 +9,13 @@ import {
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
+import { useGetCurrentLoanQuery, useGetMeQuery, useLogoutMutation } from "@/services/api";
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { data: me } = useGetMeQuery();
+  const { data: loan } = useGetCurrentLoanQuery();
+  const [logout] = useLogoutMutation();
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
@@ -30,21 +34,27 @@ export default function ProfileScreen() {
           title="কৃষক পরিচয়"
           icon={<Ionicons name="person" size={22} color={colors.primary} />}
         >
-          <AppText variant="bodyLg">করিম মিয়া</AppText>
+          <AppText variant="bodyLg">{me?.displayName ?? "—"}</AppText>
           <AppText variant="body" className="mt-1 text-muted">
-            যশোর · ধান ও সবজি
+            {[me?.district?.nameBn, me?.profession?.nameBn]
+              .filter(Boolean)
+              .join(" · ") || me?.email}
           </AppText>
         </StructuredCard>
 
         <View className="gap-3">
           <AppText variant="title">আর্থিক সেবা</AppText>
-          <LoanStatusCard
-            title="কৃষি ঋণ"
-            amount="৳ ৫০,০০০"
-            status="repaying"
-            nextPaymentLabel="পরবর্তী কিস্তি"
-            nextPaymentDate="১৫ সেপ্টেম্বর, ২০২৬"
-          />
+          {loan ? (
+            <LoanStatusCard
+              title="কৃষি ঋণ"
+              amount={loan.amountBn}
+              status={loan.status}
+              nextPaymentLabel="পরবর্তী কিস্তি"
+              nextPaymentDate={loan.nextPaymentDateBn}
+            />
+          ) : (
+            <AppText variant="caption">এখনো কোনো ঋণ নেই।</AppText>
+          )}
           <SecondaryButton
             label="নতুন আবেদন"
             onPress={() => router.push("/(root)/loan/overview")}
@@ -59,10 +69,13 @@ export default function ProfileScreen() {
         </View>
 
         <SecondaryButton
-          label="সেটিংস"
-          onPress={() => {}}
+          label="লগ আউট"
+          onPress={async () => {
+            await logout();
+            router.replace("/login");
+          }}
           icon={
-            <Ionicons name="settings-outline" size={20} color={colors.ink} />
+            <Ionicons name="log-out-outline" size={20} color={colors.ink} />
           }
         />
       </ScrollView>

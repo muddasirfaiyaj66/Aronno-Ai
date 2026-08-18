@@ -18,6 +18,7 @@ import {
   type LoanPurpose,
   type RepaymentPeriod,
 } from "@/types/loan";
+import { useApplyLoanMutation } from "@/services/api";
 
 const PURPOSE_OPTIONS: {
   id: LoanPurpose;
@@ -53,12 +54,17 @@ export default function LoanApplicationScreen() {
   const [period, setPeriod] = useState<RepaymentPeriod>("6m");
   const [submitted, setSubmitted] = useState(false);
 
+  const [apply, { isLoading }] = useApplyLoanMutation();
+
   const canSubmit = parseAmount(amount) > 0 && !!purpose;
 
-  // TODO(nestjs): replace with a real POST /loan/apply call once the
-  // backend is wired.
-  const handleSubmit = () => {
-    if (!canSubmit) return;
+  const handleSubmit = async () => {
+    if (!canSubmit || !purpose) return;
+    await apply({
+      amountBdt: parseAmount(amount),
+      purposeSlug: purpose,
+      repaymentPeriod: period,
+    }).unwrap();
     setSubmitted(true);
   };
 
@@ -162,6 +168,7 @@ export default function LoanApplicationScreen() {
               label="আবেদন জমা দিন"
               onPress={handleSubmit}
               disabled={!canSubmit}
+              loading={isLoading}
               icon={
                 <Ionicons name="send-outline" size={20} color={colors.white} />
               }

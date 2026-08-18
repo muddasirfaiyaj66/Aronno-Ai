@@ -2,9 +2,13 @@ import { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { AIGeneratingShimmer, AppText, RetryCard } from "@/components/ui";
-import type { DiagnosisResult } from "@/types/diagnosis";
-import { MOCK_TOOL_RESULTS } from "@/types/tools";
-import { MOCK_RECEIPT_SUMMARIES } from "@/types/receipt";
+import {
+  useCreatePhotoDiagnosisMutation,
+  useCreateVoiceDiagnosisMutation,
+  useIdentifyToolPhotoMutation,
+  useIdentifyToolVoiceMutation,
+  useScanReceiptMutation,
+} from "@/services/api";
 
 type Flow = "disease" | "tool" | "receipt";
 
@@ -26,33 +30,14 @@ const STATUS_LINES: Record<Flow, string[]> = {
   ],
 };
 
-const MOCK_DIAGNOSES: DiagnosisResult[] = [
-  {
-    diseaseNameBn: "বাদামি দাগ রোগ",
-    diseaseNameEn: "Brown Spot Disease",
-    confidence: 87,
-    severity: "medium",
-    imageUrl: "",
-  },
-  {
-    diseaseNameBn: "পাতা ঝলসানো রোগ",
-    diseaseNameEn: "Leaf Blight",
-    confidence: 74,
-    severity: "high",
-    imageUrl: "",
-  },
-  {
-    diseaseNameBn: "সুস্থ পাতা",
-    diseaseNameEn: "Healthy Leaf",
-    confidence: 95,
-    severity: "low",
-    imageUrl: "",
-  },
-];
-
 export default function AnalyzingScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ imageUri?: string; flow?: string }>();
+  const params = useLocalSearchParams<{
+    imageUri?: string;
+    flow?: string;
+    source?: string;
+    transcript?: string;
+  }>();
   const flow: Flow =
     params.flow === "tool" || params.flow === "receipt"
       ? params.flow
@@ -62,6 +47,12 @@ export default function AnalyzingScreen() {
   const [attempt, setAttempt] = useState(0);
   const statusLines = STATUS_LINES[flow];
 
+  const [createPhotoDiagnosis] = useCreatePhotoDiagnosisMutation();
+  const [createVoiceDiagnosis] = useCreateVoiceDiagnosisMutation();
+  const [identifyToolPhoto] = useIdentifyToolPhotoMutation();
+  const [identifyToolVoice] = useIdentifyToolVoiceMutation();
+  const [scanReceipt] = useScanReceiptMutation();
+
   useEffect(() => {
     if (error) return;
     const id = setInterval(() => {
@@ -70,55 +61,61 @@ export default function AnalyzingScreen() {
     return () => clearInterval(id);
   }, [statusLines.length, error]);
 
-  // TODO(nestjs): the failure branch below (setError) is unreachable with
-  // the mock timer — wire it to the real analysis call's .catch() once the
-  // backend is wired.
   useEffect(() => {
     if (error) return;
-    const timer = setTimeout(() => {
-      if (flow === "tool") {
-        const mock =
-          MOCK_TOOL_RESULTS[Math.floor(Math.random() * MOCK_TOOL_RESULTS.length)];
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        if (flow === "tool") {
+          const result = params.transcript
+            ? await identifyToolVoice({ transcriptBn: params.transcript }).unwrap()
+            : await identifyToolPhoto({ uri: params.imageUri! }).unwrap();
+          if (cancelled) return;
+          router.replace({
+            pathname: "/(root)/(tabs)/scan/tool-result",
+            params: { id: result.id },
+          });
+          return;
+        }
+
+        if (flow === "receipt") {
+          const result = await scanReceipt({ uri: params.imageUri! }).unwrap();
+          if (cancelled) return;
+          router.replace({
+            pathname: "/(root)/(tabs)/scan/receipt-result",
+            params: { id: result.id },
+          });
+          return;
+        }
+
+        const result = params.transcript
+          ? await createVoiceDiagnosis({
+              transcriptBn: params.transcript,
+            }).unwrap()
+          : await createPhotoDiagnosis({ uri: params.imageUri! }).unwrap();
+        if (cancelled) return;
         router.replace({
-          pathname: "/(root)/(tabs)/scan/tool-result",
-          params: { id: mock.id },
+          pathname: "/(root)/(tabs)/scan/result",
+          params: {
+            id: result.id ?? "",
+            diseaseNameBn: result.diseaseNameBn,
+            diseaseNameEn: result.diseaseNameEn,
+            confidence: String(result.confidence),
+            severity: result.severity,
+            imageUrl: result.imageUrl || params.imageUri || "",
+          },
         });
-        return;
+      } catch {
+        if (!cancelled) setError(true);
       }
+    };
 
-      if (flow === "receipt") {
-        const mock =
-          MOCK_RECEIPT_SUMMARIES[
-            Math.floor(Math.random() * MOCK_RECEIPT_SUMMARIES.length)
-          ];
-        router.replace({
-          pathname: "/(root)/(tabs)/scan/receipt-result",
-          params: { id: mock.id },
-        });
-        return;
-      }
-
-      const mock =
-        MOCK_DIAGNOSES[Math.floor(Math.random() * MOCK_DIAGNOSES.length)];
-      const result: DiagnosisResult = {
-        ...mock,
-        imageUrl: params.imageUri ?? mock.imageUrl,
-      };
-
-      router.replace({
-        pathname: "/(root)/(tabs)/scan/result",
-        params: {
-          diseaseNameBn: result.diseaseNameBn,
-          diseaseNameEn: result.diseaseNameEn,
-          confidence: String(result.confidence),
-          severity: result.severity,
-          imageUrl: result.imageUrl,
-        },
-      });
-    }, 2400);
-
-    return () => clearTimeout(timer);
-  }, [flow, params.imageUri, router, error, attempt]);
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [flow, params.imageUri, params.transcript, router, error, attempt]);
 
   const handleRetry = () => {
     setError(false);

@@ -4,44 +4,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
+  AIGeneratingShimmer,
   AppText,
   ListenButton,
+  RetryCard,
   SecondaryButton,
   StructuredCard,
 } from "@/components/ui";
 import { WeatherAdvisoryCard } from "@/components/treatment/WeatherAdvisoryCard";
 import { colors } from "@/constants/theme";
-import type { TreatmentPlan } from "@/types/treatment";
 import type { SeverityLevel } from "@/types/diagnosis";
-
-// TODO(nestjs): replace with a real GET /treatment-plan?diagnosisId=... call
-// once the backend is wired. The disease name arriving via route params from
-// DiagnosisResultScreen is already the right shape to key that request.
-export function getMockTreatmentPlan(diseaseNameBn?: string): TreatmentPlan {
-  return {
-    cropNameBn: "ধান",
-    diseaseNameBn: diseaseNameBn || "বাদামি দাগ রোগ",
-    pesticideNameBn: "প্রোপিকোনাজল ২৫% ইসি",
-    dosagePerBigha: "৫০ মিলি/বিঘা",
-    steps: [
-      { step: 1, instructionBn: "১৬ লিটার পানির সাথে ৫০ মিলি ওষুধ মেশান।" },
-      { step: 2, instructionBn: "মিশ্রণটি ভালোভাবে ঝাঁকিয়ে নিন।" },
-      { step: 3, instructionBn: "বিকেলে রোদ কম থাকা অবস্থায় পুরো পাতায় স্প্রে করুন।" },
-      { step: 4, instructionBn: "স্প্রে করার পর হাত ও মুখ ভালোভাবে ধুয়ে ফেলুন।" },
-    ],
-    safetyChecklist: [
-      { id: "gloves", labelBn: "হাতে গ্লাভস পরুন" },
-      { id: "mask", labelBn: "মুখে মাস্ক পরুন" },
-      { id: "children", labelBn: "শিশুদের ক্ষেত থেকে দূরে রাখুন" },
-      { id: "wind", labelBn: "বাতাসের বিপরীতে স্প্রে করবেন না" },
-    ],
-    followUpLabelBn: "৭ দিন পর আবার দেখুন",
-    weatherAdvisory: {
-      level: "caution",
-      reasonBn: "আজ বিকেলে হালকা বৃষ্টির সম্ভাবনা আছে, সকালে স্প্রে করুন।",
-    },
-  };
-}
+import { useGetTreatmentPlanQuery, useSpeakMutation } from "@/services/api";
 
 function SafetyChecklistRow({
   label,
@@ -77,19 +50,49 @@ export default function TreatmentPlanScreen() {
   const params = useLocalSearchParams<{
     diseaseNameBn?: string;
     severity?: SeverityLevel;
+    diagnosisId?: string;
   }>();
-  const plan = useMemo(
-    () => getMockTreatmentPlan(params.diseaseNameBn),
-    [params.diseaseNameBn],
+  const { data: plan, isLoading, isError, refetch } = useGetTreatmentPlanQuery(
+    params.diagnosisId ?? "",
+    { skip: !params.diagnosisId },
   );
+  const [speak] = useSpeakMutation();
+  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
 
-  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>(
-    {},
+  const listenText = useMemo(
+    () =>
+      plan
+        ? `${plan.diseaseNameBn}. ${plan.pesticideNameBn}. ${plan.steps.map((s) => s.instructionBn).join(" ")}`
+        : "",
+    [plan],
   );
 
   const toggleItem = (id: string) => {
     setCheckedItems((prev) => ({ ...prev, [id]: !prev[id] }));
   };
+
+  if (!params.diagnosisId) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-neutral px-6">
+        <RetryCard
+          message="রোগ নির্ণয় পাওয়া যায়নি।"
+          onRetry={() => router.back()}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (isLoading || !plan) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-neutral px-6">
+        {isError ? (
+          <RetryCard message="পরিকল্পনা আনা যায়নি।" onRetry={() => refetch()} />
+        ) : (
+          <AIGeneratingShimmer label="পরিকল্পনা তৈরি হচ্ছে" lines={5} className="w-full" />
+        )}
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
@@ -106,7 +109,7 @@ export default function TreatmentPlanScreen() {
       >
         <ListenButton
           label="পুরো পরিকল্পনা শুনুন"
-          onPlay={() => {}}
+          onPlay={() => speak({ textBn: listenText })}
           onPause={() => {}}
         />
 
@@ -185,6 +188,7 @@ export default function TreatmentPlanScreen() {
             router.push({
               pathname: "/(root)/(tabs)/scan/report",
               params: {
+                diagnosisId: params.diagnosisId,
                 diseaseNameBn: plan.diseaseNameBn,
                 severity: params.severity,
               },

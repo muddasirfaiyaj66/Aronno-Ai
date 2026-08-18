@@ -35,6 +35,7 @@ export type MarketPriceEntry = {
   pricePerMon: number;
   trend: PriceTrend;
   changePercent: number;
+  bestPrice?: boolean;
 };
 
 export type MarketListing = {

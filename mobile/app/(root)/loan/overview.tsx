@@ -9,11 +9,11 @@ import {
   SecondaryButton,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { MOCK_LOAN_APPLICATION } from "@/types/loan";
+import { useGetCurrentLoanQuery } from "@/services/api";
 
 export default function LoanOverviewScreen() {
   const router = useRouter();
-  const loan = MOCK_LOAN_APPLICATION;
+  const { data: loan } = useGetCurrentLoanQuery();
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>

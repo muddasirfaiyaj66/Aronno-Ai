@@ -12,12 +12,14 @@ import {
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import {
-  MOCK_HISTORY_ENTRIES,
-  type DiseaseHistoryEntry,
-  type HistoryEntry,
-  type HistoryEntryKind,
-  type LoanHistoryEntry,
-  type YieldHistoryEntry,
+  useGetHistoryQuery,
+} from "@/services/api";
+import type {
+  DiseaseHistoryEntry,
+  HistoryEntry,
+  HistoryEntryKind,
+  LoanHistoryEntry,
+  YieldHistoryEntry,
 } from "@/types/history";
 
 type FilterValue = "all" | HistoryEntryKind;
@@ -167,11 +169,13 @@ function TimelineItem({
 export default function CropHealthHistoryScreen() {
   const router = useRouter();
   const [filter, setFilter] = useState<FilterValue>("all");
+  const { data = [] } = useGetHistoryQuery(
+    filter === "all" ? undefined : { kind: filter },
+  );
 
   const sortedEntries = useMemo(
-    () =>
-      [...MOCK_HISTORY_ENTRIES].sort((a, b) => b.date.localeCompare(a.date)),
-    [],
+    () => [...data].sort((a, b) => b.date.localeCompare(a.date)),
+    [data],
   );
 
   const filteredEntries = useMemo(

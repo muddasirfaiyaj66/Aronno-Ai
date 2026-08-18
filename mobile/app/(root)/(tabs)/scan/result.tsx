@@ -13,7 +13,7 @@ import {
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import type { SeverityLevel } from "@/types/diagnosis";
+import { useSpeakMutation } from "@/services/api";
 
 function ConfidenceRing({ percent }: { percent: number }) {
   const size = 88;
@@ -65,8 +65,10 @@ export default function DiagnosisResultScreen() {
     severity: SeverityLevel;
     imageUrl?: string;
     readOnly?: string;
+    id?: string;
   }>();
   const [enlarged, setEnlarged] = useState(false);
+  const [speak] = useSpeakMutation();
 
   const confidence = Number(params.confidence) || 0;
   const imageUrl = params.imageUrl ?? "";
@@ -89,7 +91,11 @@ export default function DiagnosisResultScreen() {
           footer={
             <View className="gap-3">
               <ListenButton
-                onPlay={() => {}}
+                onPlay={() => {
+                  speak({
+                    textBn: `${params.diseaseNameBn}. ${params.diseaseNameEn}.`,
+                  });
+                }}
                 onPause={() => {}}
                 className="bg-neutral"
               />
@@ -108,6 +114,7 @@ export default function DiagnosisResultScreen() {
                     router.push({
                       pathname: "/(root)/(tabs)/scan/treatment-plan",
                       params: {
+                        diagnosisId: params.id,
                         diseaseNameBn: params.diseaseNameBn,
                         severity,
                       },

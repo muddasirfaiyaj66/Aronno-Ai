@@ -1,9 +1,10 @@
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { AppText, StructuredCard } from "@/components/ui";
+import { AppText, AIGeneratingShimmer, StructuredCard } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { MOCK_YIELD_ESTIMATE } from "@/types/yield";
+import { usePredictYieldMutation } from "@/services/api";
+import { useEffect } from "react";
 
 function ReadOnlyRow({ label, value }: { label: string; value: string }) {
   return (
@@ -17,7 +18,18 @@ function ReadOnlyRow({ label, value }: { label: string; value: string }) {
 }
 
 export default function YieldPredictionScreen() {
-  const estimate = MOCK_YIELD_ESTIMATE;
+  const [predict, { data, isLoading }] = usePredictYieldMutation();
+  useEffect(() => {
+    predict();
+  }, [predict]);
+  const estimate = data;
+  if (isLoading || !estimate) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-neutral px-6">
+        <AIGeneratingShimmer label="ফলন হিসাব হচ্ছে" lines={4} className="w-full" />
+      </SafeAreaView>
+    );
+  }
 
   const trendIcon =
     estimate.trend === "up"

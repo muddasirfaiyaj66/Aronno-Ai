@@ -16,6 +16,7 @@ export type SafetyChecklistItem = {
 };
 
 export type TreatmentPlan = {
+  id?: string;
   cropNameBn: string;
   diseaseNameBn: string;
   pesticideNameBn: string;

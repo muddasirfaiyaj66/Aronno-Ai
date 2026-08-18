@@ -37,6 +37,12 @@
         }
       ],
       [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "আরণ্যকে ফসলের ছবি তুলে রোগ নির্ণয় করতে ক্যামেরা ব্যবহারের অনুমতি দিন।"

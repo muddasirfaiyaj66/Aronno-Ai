@@ -12,6 +12,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "app.aronno.mobile",
       "adaptiveIcon": {
         "backgroundColor": "#D1FAE5",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

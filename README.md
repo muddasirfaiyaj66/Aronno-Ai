@@ -1,44 +1,60 @@
-# Aronno
+# Aronno (আরণ্য)
 
-Monorepo for the Aronno mobile app and API.
+Bangla-first farming assistant: crop photos, treatment, market prices, and loans. This repository is a monorepo.
 
-## Structure
+| Folder | Stack |
+|--------|--------|
+| [`backend/`](backend/) | Nest.js 11 API, Prisma, MongoDB, cookie JWT |
+| [`mobile/`](mobile/) | Expo SDK 54 (React Native), Redux Toolkit + RTK Query |
 
-```
-aronno/
-├── mobile/    # Expo (React Native) app
-└── backend/   # Nest.js API
-```
+**Full clone → run → APK → database ERD guide (written for non-developers too):** **[SETUP.md](SETUP.md)**
 
-## Mobile
+## Quick start
+
+You need [Git](https://git-scm.com), [Node.js LTS](https://nodejs.org), and [MongoDB](https://www.mongodb.com) (local or free Atlas).
 
 ```bash
-cd mobile
-cp .env.example .env
-npm install
-npm start
+git clone https://github.com/muddasirfaiyaj66/Aronno-Ai.git
+cd Aronno-Ai
 ```
 
-Set `EXPO_PUBLIC_API_URL` (default `http://localhost:3000/api`). On Android emulator use `http://10.0.2.2:3000/api`.
-
-Auth tokens live in httpOnly cookies (web) or the Expo SecureStore cookie jar (native). Redux Toolkit + RTK Query cache server data — JWTs are never stored in Redux.
-
-
-## Backend
+**API** (terminal 1):
 
 ```bash
 cd backend
-cp .env.example .env
+copy .env.example .env
 npm install
+npx prisma generate
+npx prisma db push
 npm run start:dev
 ```
 
-API base URL: `http://localhost:3000/api`
+Generate JWT secrets with Node (do not reuse sample strings in production):
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api` | API info |
-| GET | `/api/health` | Health check |
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Paste two different values into `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` in `backend/.env`.
+
+**App** (terminal 2):
+
+```bash
+cd mobile
+copy .env.example .env
+pnpm install
+pnpm start
+```
+
+Set Cloudinary keys in `mobile/.env` before using the camera. Details: [SETUP.md](SETUP.md).
+
+Health check: [http://localhost:3000/api/health](http://localhost:3000/api/health)
+
+Demo login (seeded, already verified): `superadmin@aronno.local` / `ChangeMe_Admin1!`
+
+## What is finished
+
+Screens talk to the real API (auth, OTP email, diagnoses, treatment, market, loans, …). Photos upload to **Cloudinary**; the API stores URLs. Gemini disease detection is still a **mock** so the product can run without a paid AI key.
 
 ## License
 

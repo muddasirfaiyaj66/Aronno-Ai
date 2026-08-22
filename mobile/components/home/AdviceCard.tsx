@@ -90,11 +90,7 @@ export function AdviceCard({
               entering={FadeInRight.delay(delay + 120).duration(360)}
               className="flex-1"
             >
-              <ListenButton
-                onPlay={() => {}}
-                onPause={() => {}}
-                className="bg-white"
-              />
+              <ListenButton textBn={`${headline}. ${body}`} />
             </Animated.View>
             <Animated.View
               entering={FadeInRight.delay(delay + 180).duration(360)}

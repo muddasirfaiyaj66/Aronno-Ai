@@ -53,6 +53,7 @@ export const patchMeSchema = z
     phone: z.string().min(6).max(20).optional(),
     professionSlug: z.string().min(1).optional(),
     districtSlug: z.string().min(1).optional(),
+    avatarUrl: z.string().url().max(800).optional(),
   })
   .strict();
 

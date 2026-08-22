@@ -1,10 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { Diagnosis } from '@prisma/client';
+import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 import { AI_VISION } from '../ai/ai.tokens';
 import type { AiVisionPort } from '../ai/ports';
+import { GeminiClient } from '../ai/gemini.client';
 import { StorageService } from '../storage/storage.service';
 import { Errors } from '../common/errors';
 import type { AuthUser } from '../auth/auth.types';
+
+const transcriptSchema = z.object({ transcriptBn: z.string().trim() });
 
 @Injectable()
 export class DiagnosesService {
@@ -12,6 +17,7 @@ export class DiagnosesService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     @Inject(AI_VISION) private readonly vision: AiVisionPort,
+    private readonly gemini: GeminiClient,
   ) {}
 
   private dto(
@@ -43,6 +49,35 @@ export class DiagnosesService {
       imageObjectKey: imageUrl,
       ...ai,
     });
+  }
+
+  async transcribe(audioBase64: string, mimeType?: string) {
+    const buf = Buffer.from(audioBase64, 'base64');
+    if (buf.length < 80 || buf.length > 4_000_000) throw Errors.validation({ audio: 'invalid' });
+    const prompt = `Transcribe this farmer speaking. Prefer Bangla (bn-BD).
+Return JSON only: {"transcriptBn":"..."}
+If the clip is silent or unintelligible, return {"transcriptBn":""}.`;
+    try {
+      const raw = await this.gemini.generateJson<unknown>(prompt, {
+        audioBuffer: buf,
+        audioMime: mimeType,
+      });
+      return transcriptSchema.parse(raw);
+    } catch (first) {
+      try {
+        const raw = await this.gemini.generateJson<unknown>(prompt, {
+          audioBuffer: buf,
+          audioMime: mimeType,
+          jsonMode: false,
+        });
+        const parsed = transcriptSchema.safeParse(raw);
+        if (parsed.success) return parsed.data;
+        if (typeof raw === 'string') return { transcriptBn: raw.trim() };
+      } catch {
+        // keep original error
+      }
+      throw first;
+    }
   }
 
   async createVoice(user: AuthUser, transcriptBn: string, cropSlug?: string) {
@@ -101,7 +136,7 @@ export class DiagnosesService {
   }
 
   async list(user: AuthUser, cursor?: string, limit = 20) {
-    const rows = await this.prisma.diagnosis.findMany({
+    const rows: Diagnosis[] = await this.prisma.diagnosis.findMany({
       where: user.role === 'USER' ? { userId: user.id } : undefined,
       take: Math.min(limit, 50),
       skip: cursor ? 1 : 0,

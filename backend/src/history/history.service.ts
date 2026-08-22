@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { HistoryKind, RepaymentPeriod } from '@prisma/client';
+import { HistoryKind, RepaymentPeriod, type HistoryEvent } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { Errors } from '../common/errors';
@@ -35,7 +35,7 @@ export class HistoryService {
   ) {
     const ownerId =
       user.role === 'USER' ? user.id : (userId ?? user.id);
-    const events = await this.prisma.historyEvent.findMany({
+    const events: HistoryEvent[] = await this.prisma.historyEvent.findMany({
       where: { userId: ownerId, ...(kind ? { kind } : {}) },
       take: Math.min(limit, 50),
       skip: cursor ? 1 : 0,
@@ -113,7 +113,7 @@ export class HistoryService {
       amount: `৳ ${loan.amountBdt.toLocaleString('bn-BD')}`,
       status: loan.status,
       nextPaymentDate: loan.nextPaymentDue ? dateBn(loan.nextPaymentDue) : undefined,
-      repaymentPeriodBn: PERIOD_BN[loan.repaymentPeriod],
+      repaymentPeriodBn: PERIOD_BN[loan.repaymentPeriod as RepaymentPeriod],
     };
   }
 }

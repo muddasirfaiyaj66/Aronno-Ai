@@ -2,13 +2,28 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Errors } from '../common/errors';
 
-/** Always the free Flash-Lite family — never Pro. */
-const FREE_GEMINI_MODEL = 'gemini-2.5-flash-lite';
+/** Free Flash-Lite family only — never Pro. 2.x ids 404 for new Google AI keys. */
+const FREE_GEMINI_MODELS = [
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-flash-lite-latest',
+] as const;
+
+const DEFAULT_GEMINI_MODEL = FREE_GEMINI_MODELS[0];
+
+export function isRetiredGeminiModel(id: string): boolean {
+  return /gemini-1\.5/i.test(id) || /gemini-2\.(0|5)/i.test(id);
+}
 
 export function resolveFreeGeminiModel(raw?: string | null): string {
   const id = raw?.trim() ?? '';
-  if (id && /flash-lite/i.test(id) && !/pro/i.test(id)) return id;
-  return FREE_GEMINI_MODEL;
+  if (!id || /pro/i.test(id) || isRetiredGeminiModel(id)) return DEFAULT_GEMINI_MODEL;
+  if (/flash/i.test(id)) return id;
+  return DEFAULT_GEMINI_MODEL;
+}
+
+function modelCandidates(preferred: string): string[] {
+  return [...new Set([preferred, ...FREE_GEMINI_MODELS])];
 }
 
 type GeminiPart =
@@ -37,53 +52,83 @@ export class GeminiClient {
 
   async generateJson<T>(
     prompt: string,
-    opts?: { imageUrl?: string; imageBuffer?: Buffer },
+    opts?: {
+      imageUrl?: string;
+      imageBuffer?: Buffer;
+      audioBuffer?: Buffer;
+      audioMime?: string;
+      jsonMode?: boolean;
+    },
   ): Promise<T> {
     if (!this.isEnabled()) throw Errors.aiUnavailable();
 
     const parts: GeminiPart[] = [{ text: prompt }];
-    const image = await this.imagePart(opts?.imageUrl, opts?.imageBuffer);
-    if (image) parts.unshift(image);
-
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': this.apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts }],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 1024,
-          responseMimeType: 'application/json',
+    if (opts?.audioBuffer && opts.audioBuffer.length > 0) {
+      if (opts.audioBuffer.length > 4_000_000) throw Errors.aiUnavailable();
+      parts.unshift({
+        inline_data: {
+          mime_type: opts.audioMime?.startsWith('audio/') ? opts.audioMime : 'audio/mp4',
+          data: opts.audioBuffer.toString('base64'),
         },
-      }),
-    });
-
-    const raw = await res.text();
-    if (!res.ok) {
-      this.logger.warn(`Gemini ${this.model} HTTP ${res.status}`);
-      throw Errors.aiUnavailable();
+      });
+    } else {
+      const image = await this.imagePart(opts?.imageUrl, opts?.imageBuffer);
+      if (image) parts.unshift(image);
     }
 
-    let payload: {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
-    };
-    try {
-      payload = JSON.parse(raw) as typeof payload;
-    } catch {
-      throw Errors.aiUnavailable();
+    const jsonMode = opts?.jsonMode !== false;
+    let lastStatus = 0;
+    for (const model of modelCandidates(this.model)) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts }],
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 2048,
+            ...(jsonMode ? { responseMimeType: 'application/json' } : {}),
+          },
+        }),
+      });
+
+      const raw = await res.text();
+      lastStatus = res.status;
+      if (!res.ok) {
+        this.logger.warn(`Gemini ${model} HTTP ${res.status}: ${this.redact(raw)}`);
+        if (res.status === 404) continue;
+        throw Errors.aiUnavailable();
+      }
+
+      let payload: {
+        candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
+      };
+      try {
+        payload = JSON.parse(raw) as typeof payload;
+      } catch {
+        this.logger.warn(`Gemini ${model} returned non-JSON envelope`);
+        throw Errors.aiUnavailable();
+      }
+
+      const text =
+        payload.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+      try {
+        return extractJson<T>(text);
+      } catch {
+        this.logger.warn(
+          `Gemini ${model} JSON parse failed (finish=${payload.candidates?.[0]?.finishReason ?? '?'})`,
+        );
+        throw Errors.aiUnavailable();
+      }
     }
 
-    const text = payload.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
-    const cleaned = text.replace(/```json|```/g, '').trim();
-    try {
-      return JSON.parse(cleaned) as T;
-    } catch {
-      throw Errors.aiUnavailable();
-    }
+    this.logger.warn(`Gemini all free models failed (last HTTP ${lastStatus})`);
+    throw Errors.aiUnavailable();
+  }
+
+  private redact(text: string) {
+    return text.replaceAll(this.apiKey, '[redacted]').replace(/[A-Za-z0-9_-]{24,}/g, '[id]').slice(0, 220);
   }
 
   private async imagePart(
@@ -115,5 +160,19 @@ export class GeminiClient {
       this.logger.warn(`Gemini image fetch failed: ${String(err)}`);
       return null;
     }
+  }
+}
+
+export function extractJson<T>(text: string): T {
+  const cleaned = text.replace(/```json|```/g, '').trim();
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      return JSON.parse(cleaned.slice(start, end + 1)) as T;
+    }
+    throw new Error('no json');
   }
 }

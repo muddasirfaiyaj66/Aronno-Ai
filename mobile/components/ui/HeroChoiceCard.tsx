@@ -15,9 +15,9 @@ export type HeroChoiceCardProps = {
 };
 
 const TONE = {
-  photo: { bg: colors.harvestSoft, icon: colors.harvest },
-  voice: { bg: colors.secondary, icon: colors.primary },
-  text: { bg: "#EEF2FF", icon: "#4338CA" },
+  photo: { bg: colors.secondary, icon: colors.primary },
+  voice: { bg: colors.secondary, icon: colors.tertiary },
+  text: { bg: "#EEF2F0", icon: colors.ink },
 } as const;
 
 export function HeroChoiceCard({

@@ -42,7 +42,7 @@ This document is written so someone who is **not a developer** can clone the pro
 - Identify a **tool**, scan a **receipt**, get **fertilizer** advice, **yield** and **crop planning**
 - See **market prices**, post a **listing**, apply for a **loan**
 
-**Honest status:** the screens and APIs are connected. Disease, treatment, tools, receipts, fertilizer, and yield call **gemini-2.5-flash-lite** (free). If the key is missing or Gemini fails, the API returns `AI_UNAVAILABLE` — it does **not** invent mock answers. Crop plans use **Open-Meteo** (no key). TTS is still a stub. Photos **are** uploaded for real: the phone sends them to **Cloudinary**, then the API stores the HTTPS URL.
+**Honest status:** the screens and APIs are connected. Disease, treatment, tools, receipts, fertilizer, and yield call **gemini-3.5-flash-lite** (free). If the key is missing or Gemini fails, the API returns `AI_UNAVAILABLE` — it does **not** invent mock answers. Crop plans use **Open-Meteo** (no key). TTS is still a stub. Photos **are** uploaded for real: the phone sends them to **Cloudinary**, then the API stores the HTTPS URL.
 
 ---
 
@@ -169,7 +169,7 @@ Leave `GOOGLE_CLIENT_ID` empty if you only use email/password.
 
 | Variable | Free source | Used today? |
 |----------|-------------|-------------|
-| `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | **Required for AI screens** — disease, treatment, tools, receipts, fertilizer, yield use **gemini-2.5-flash-lite** (free). Failures return `AI_UNAVAILABLE`, not mock data. |
+| `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | **Required for AI screens** — disease, treatment, tools, receipts, fertilizer, yield use **gemini-3.5-flash-lite** (free). Failures return `AI_UNAVAILABLE`, not mock data. |
 | `TTS_PROVIDER_KEY` | Provider of your choice | **No** — mock WAV |
 | `S3_BUCKET` | Cloudflare R2 / AWS | **No** — images go to Cloudinary |
 
@@ -245,7 +245,7 @@ GOOGLE_CLIENT_SECRET=
 THROTTLE_TTL=60
 THROTTLE_LIMIT=60
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash-lite
+GEMINI_MODEL=gemini-3.5-flash-lite
 TTS_PROVIDER_KEY=
 S3_BUCKET=
 SMTP_HOST=

@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { AIGeneratingShimmer, AppText, RetryCard } from "@/components/ui";
 import { uploadImageToCloudinary } from "@/services/cloudinary";
 import {
+  getApiError,
   useCreatePhotoDiagnosisMutation,
   useCreateVoiceDiagnosisMutation,
   useIdentifyToolPhotoMutation,
@@ -45,6 +46,9 @@ export default function AnalyzingScreen() {
       : "disease";
   const [statusIndex, setStatusIndex] = useState(0);
   const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(
+    "বিশ্লেষণ করা যায়নি। আবার চেষ্টা করুন।",
+  );
   const [attempt, setAttempt] = useState(0);
   const statusLines = STATUS_LINES[flow];
 
@@ -113,8 +117,13 @@ export default function AnalyzingScreen() {
             imageUrl: result.imageUrl || params.imageUri || "",
           },
         });
-      } catch {
-        if (!cancelled) setError(true);
+      } catch (err) {
+        if (!cancelled) {
+          setErrorMessage(
+            getApiError(err).message ?? "বিশ্লেষণ করা যায়নি। আবার চেষ্টা করুন।",
+          );
+          setError(true);
+        }
       }
     };
 
@@ -133,7 +142,7 @@ export default function AnalyzingScreen() {
     <SafeAreaView className="flex-1 items-center justify-center bg-neutral px-6">
       {error ? (
         <RetryCard
-          message="বিশ্লেষণ করা যায়নি। আবার চেষ্টা করুন।"
+          message={errorMessage}
           onRetry={handleRetry}
         />
       ) : (

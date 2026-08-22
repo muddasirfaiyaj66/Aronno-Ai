@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
@@ -29,8 +28,10 @@ export default function HomeScreen() {
   const name = useAppSelector((s) => s.auth.user?.displayName);
   const { data: history } = useGetHistoryQuery();
   const { data: loan } = useGetCurrentLoanQuery();
-  const coords = useFarmLocation();
-  const { data: weather } = useGetWeatherQuery(coords ?? {});
+  const location = useFarmLocation();
+  const { data: weather } = useGetWeatherQuery(location.coords ?? {}, {
+    skip: location.status === "loading",
+  });
 
   const insights = useMemo(() => {
     const items: InsightItem[] = [];
@@ -100,65 +101,49 @@ export default function HomeScreen() {
         contentContainerClassName="pb-20"
         showsVerticalScrollIndicator={false}
       >
-        <LinearGradient
-          colors={["#064E3B", "#047857"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 28 }}
-        >
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1 pr-3">
-              <AppText variant="caption" className="font-bengali-semibold text-leaf-300">
-                {t("আরণ্য · ক্ষেতের সহচর", "Aronno · field companion")}
-              </AppText>
-              <AppText
-                variant="title"
-                className="mt-1 text-white"
-                numberOfLines={1}
-              >
-                {t("আসসালামু আলাইকুম", "Welcome")}
-                {name ? `, ${name}` : ""}
-              </AppText>
-              <AppText variant="body" className="mt-1 text-secondary">
-                {t(
-                  "ছবি তুলুন, বাংলায় বলুন, অথবা লিখুন",
-                  "Take a photo, speak Bangla, or type",
-                )}
-              </AppText>
-            </View>
-            <View className="flex-row items-center gap-2">
-              <LanguageToggle light />
-              <Pressable
-                onPress={() => router.push("/(root)/notifications")}
-                accessibilityRole="button"
-                accessibilityLabel={t("বিজ্ঞপ্তি", "Notifications")}
-                className="h-12 w-12 items-center justify-center rounded-full bg-white/15"
-              >
-                <Ionicons name="notifications-outline" size={22} color={colors.white} />
-              </Pressable>
-            </View>
+        <View className="flex-row items-center justify-between px-5 pt-2 pb-4">
+          <View className="flex-1 pr-3">
+            <AppText variant="caption" className="font-bengali-semibold text-primary">
+              {t("আরণ্য", "Aronno")}
+            </AppText>
+            <AppText variant="title" className="mt-1 text-ink" numberOfLines={1}>
+              {t("আসসালামু আলাইকুম", "Welcome")}
+              {name ? `, ${name}` : ""}
+            </AppText>
           </View>
-        </LinearGradient>
+          <View className="flex-row items-center gap-2">
+            <LanguageToggle />
+            <Pressable
+              onPress={() => router.push("/(root)/notifications")}
+              accessibilityRole="button"
+              accessibilityLabel={t("বিজ্ঞপ্তি", "Notifications")}
+              className="h-12 w-12 items-center justify-center rounded-full bg-white"
+            >
+              <Ionicons name="notifications-outline" size={22} color={colors.ink} />
+            </Pressable>
+          </View>
+        </View>
 
-        <View className="-mt-4 gap-5 px-5">
-          <DateWeatherCard weather={weather} />
+        <View className="gap-6 px-5">
+          <DateWeatherCard
+            weather={weather}
+            locationStatus={location.status}
+            locationLabel={location.labelBn}
+            onEnableLocation={() => {
+              void location.refresh(true);
+            }}
+          />
 
           <HomeSection
-            title={t("আজকের কাজ", "Today")}
-            subtitle={t(
-              "এক ট্যাপে রোগ চিনুন — ছবি, কণ্ঠ, বা লেখা",
-              "One tap to identify disease — photo, voice, or text",
-            )}
+            title={t("রোগ চিনুন", "Identify disease")}
+            subtitle={t("ছবি, কণ্ঠ, অথবা লেখা", "Photo, voice, or text")}
           >
             <View className="gap-3">
               <HeroChoiceCard
                 tone="photo"
                 icon="camera"
                 title={t("পাতার ছবি তুলুন", "Photograph a leaf")}
-                subtitle={t(
-                  "রোগ শনাক্ত করুন মুহূর্তে",
-                  "Identify the disease instantly",
-                )}
+                subtitle={t("রোগ শনাক্ত করুন", "Identify the disease")}
                 onPress={() =>
                   router.push({
                     pathname: "/(root)/(tabs)/scan/photo",
@@ -170,10 +155,7 @@ export default function HomeScreen() {
                 tone="voice"
                 icon="mic"
                 title={t("বাংলায় বলুন", "Speak in Bangla")}
-                subtitle={t(
-                  "সমস্যাটি কণ্ঠে বর্ণনা করুন",
-                  "Describe the problem out loud",
-                )}
+                subtitle={t("সমস্যাটি কণ্ঠে বর্ণনা করুন", "Describe the problem")}
                 onPress={() =>
                   router.push({
                     pathname: "/(root)/(tabs)/scan/voice",
@@ -185,10 +167,7 @@ export default function HomeScreen() {
                 tone="text"
                 icon="create-outline"
                 title={t("লিখে জানান", "Type it")}
-                subtitle={t(
-                  "কথা বলতে না পারলে এখানে লিখুন",
-                  "Write if you prefer not to speak",
-                )}
+                subtitle={t("কথা বলতে না পারলে এখানে লিখুন", "Write if you prefer")}
                 onPress={() =>
                   router.push({
                     pathname: "/(root)/(tabs)/scan/voice",

@@ -8,7 +8,8 @@ import {
 } from './constants';
 
 export function cookieBase(config: ConfigService): CookieOptions {
-  const secure = config.get<string>('COOKIE_SECURE', 'false') === 'true';
+  const vercel = process.env.VERCEL === '1';
+  const secure = config.get<string>('COOKIE_SECURE', vercel ? 'true' : 'false') === 'true';
   return {
     httpOnly: true,
     secure,

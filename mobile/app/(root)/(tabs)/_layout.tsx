@@ -52,7 +52,7 @@ function ScanTabButton({ onPress, accessibilityState }: BottomTabBarButtonProps)
       <View
         className="h-[68px] w-[68px] items-center justify-center rounded-full"
         style={{
-          backgroundColor: focused ? colors.harvest : colors.primary,
+          backgroundColor: focused ? colors.primary : colors.tertiary,
           shadowColor: colors.primary,
           shadowOpacity: 0.35,
           shadowRadius: 12,

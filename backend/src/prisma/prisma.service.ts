@@ -8,6 +8,22 @@ export class PrismaService
 {
   async onModuleInit() {
     await this.$connect();
+    await this.dropBrokenGoogleSubUnique();
+  }
+
+  /**
+   * MongoDB unique indexes treat `null` as a value, so only one user without
+   * Google login could exist. Drop the old unique index; lookups use @@index.
+   */
+  private async dropBrokenGoogleSubUnique() {
+    try {
+      await this.$runCommandRaw({
+        dropIndexes: 'User',
+        index: 'User_googleSub_key',
+      });
+    } catch {
+      // collection or index may not exist yet
+    }
   }
 
   async onModuleDestroy() {

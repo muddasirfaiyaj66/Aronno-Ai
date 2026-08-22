@@ -103,7 +103,7 @@ export function PriceHeroCard({
       <Pressable onPress={onPress} accessibilityRole="button">
         <View style={styles.shadow}>
           <LinearGradient
-            colors={["#064E3B", "#047857", "#10B981"]}
+            colors={[colors.forest900, colors.primary, colors.tertiary]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.card}

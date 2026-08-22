@@ -13,13 +13,12 @@ import {
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { useGetHistoryEntryQuery, useSpeakMutation } from "@/services/api";
+import { useGetHistoryEntryQuery } from "@/services/api";
 
 export default function HistoryDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: entry, isLoading } = useGetHistoryEntryQuery(id!, { skip: !id });
-  const [speak] = useSpeakMutation();
 
   useEffect(() => {
     if (entry?.kind !== "disease") return;
@@ -80,13 +79,10 @@ export default function HistoryDetailScreen() {
       <View className="flex-1 gap-4 px-5 py-5">
         <ListenButton
           label="বিস্তারিত শুনুন"
-          onPlay={() =>
-            speak({
-              textBn:
-                entry.kind === "yield"
-                  ? `${entry.cropNameBn} ফলন ${entry.yieldValue} ${entry.yieldUnitBn}`
-                  : `${entry.title} ${entry.amount}`,
-            })
+          textBn={
+            entry.kind === "yield"
+              ? `${entry.cropNameBn} ফলন ${entry.yieldValue} ${entry.yieldUnitBn}`
+              : `${entry.title} ${entry.amount}`
           }
         />
 

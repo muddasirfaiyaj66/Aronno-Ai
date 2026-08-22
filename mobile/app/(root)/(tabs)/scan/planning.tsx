@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,19 +14,29 @@ import {
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import {
+  getApiError,
   useGenerateCropPlanMutation,
   useGetLatestCropPlanQuery,
-  useSpeakMutation,
 } from "@/services/api";
 import { useFarmLocation } from "@/hooks/useFarmLocation";
 
 export default function CropPlanningScreen() {
   const { data: latest, isLoading, isError, refetch } = useGetLatestCropPlanQuery();
   const [generate, { isLoading: generating }] = useGenerateCropPlanMutation();
-  const [speak] = useSpeakMutation();
-  const coords = useFarmLocation();
+  const [planError, setPlanError] = useState<string | null>(null);
+  const location = useFarmLocation();
   const plan = latest;
-  const requestPlan = () => generate(coords ?? {});
+
+  const requestPlan = async () => {
+    setPlanError(null);
+    try {
+      await generate(location.coords ?? {}).unwrap();
+    } catch (err) {
+      setPlanError(
+        getApiError(err).message ?? "পরিকল্পনা তৈরি করা যায়নি। আবার চেষ্টা করুন।",
+      );
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
@@ -40,7 +51,9 @@ export default function CropPlanningScreen() {
         className="flex-1"
         contentContainerClassName="gap-4 px-5 py-5"
       >
-        {isError ? (
+        {planError ? (
+          <RetryCard message={planError} onRetry={requestPlan} />
+        ) : isError ? (
           <RetryCard
             message="পরিকল্পনা তৈরি করা যায়নি। আবার চেষ্টা করুন।"
             onRetry={() => refetch()}
@@ -56,7 +69,7 @@ export default function CropPlanningScreen() {
             icon={<Ionicons name="calendar-outline" size={32} color={colors.primary} />}
             message="এখনো কোনো ফসল পরিকল্পনা নেই। তৈরি করতে চাপুন।"
             ctaLabel="পরিকল্পনা তৈরি করুন"
-            onCta={() => requestPlan()}
+            onCta={requestPlan}
           />
         ) : (
           <>
@@ -76,10 +89,10 @@ export default function CropPlanningScreen() {
               title="AI সুপারিশ"
               icon={<Ionicons name="sparkles" size={22} color={colors.primary} />}
               footer={
-                <ListenButton
-                  label="সুপারিশ শুনুন"
-                  onPlay={() => speak({ textBn: plan.recommendationBn })}
-                />
+              <ListenButton
+                label="সুপারিশ শুনুন"
+                textBn={plan.recommendationBn}
+              />
               }
             >
               <AppText variant="body" className="leading-6 text-ink">
@@ -87,7 +100,7 @@ export default function CropPlanningScreen() {
               </AppText>
             </StructuredCard>
 
-            <PrimaryButton label="আবার তৈরি করুন" onPress={() => requestPlan()} />
+            <PrimaryButton label="আবার তৈরি করুন" onPress={requestPlan} />
           </>
         )}
       </ScrollView>

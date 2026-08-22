@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,7 +11,12 @@ import {
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { useGetLatestYieldQuery, usePredictYieldMutation } from "@/services/api";
+import {
+  getApiError,
+  useGetLatestYieldQuery,
+  usePredictYieldMutation,
+} from "@/services/api";
+import { useFarmLocation } from "@/hooks/useFarmLocation";
 
 function ReadOnlyRow({ label, value }: { label: string; value: string }) {
   return (
@@ -26,7 +32,20 @@ function ReadOnlyRow({ label, value }: { label: string; value: string }) {
 export default function YieldPredictionScreen() {
   const { data: latest, isLoading, isError, refetch } = useGetLatestYieldQuery();
   const [predict, { isLoading: predicting }] = usePredictYieldMutation();
+  const [predictError, setPredictError] = useState<string | null>(null);
+  const location = useFarmLocation();
   const estimate = latest;
+
+  const runPredict = async () => {
+    setPredictError(null);
+    try {
+      await predict(location.coords ?? {}).unwrap();
+    } catch (err) {
+      setPredictError(
+        getApiError(err).message ?? "AI সেবা এখন কাজ করছে না। আবার চেষ্টা করুন।",
+      );
+    }
+  };
 
   if (isLoading || predicting) {
     return (
@@ -36,7 +55,7 @@ export default function YieldPredictionScreen() {
     );
   }
 
-  if (isError) {
+  if (isError && !estimate) {
     return (
       <SafeAreaView className="flex-1 bg-neutral px-5 py-5">
         <RetryCard message="ফলন তথ্য আনা যায়নি। আবার চেষ্টা করুন।" onRetry={() => refetch()} />
@@ -53,12 +72,18 @@ export default function YieldPredictionScreen() {
             আপনার জমি ও আবহাওয়ার তথ্যের ভিত্তিতে
           </AppText>
         </View>
-        <EmptyState
-          icon={<Ionicons name="stats-chart-outline" size={32} color={colors.primary} />}
-          message="এখনো কোনো ফলন পূর্বাভাস নেই। হিসাব করতে চাপুন।"
-          ctaLabel="ফলন হিসাব করুন"
-          onCta={() => predict()}
-        />
+        {predictError ? (
+          <View className="px-5 py-5">
+            <RetryCard message={predictError} onRetry={runPredict} />
+          </View>
+        ) : (
+          <EmptyState
+            icon={<Ionicons name="stats-chart-outline" size={32} color={colors.primary} />}
+            message="এখনো কোনো ফলন পূর্বাভাস নেই। হিসাব করতে চাপুন।"
+            ctaLabel="ফলন হিসাব করুন"
+            onCta={runPredict}
+          />
+        )}
       </SafeAreaView>
     );
   }
@@ -139,7 +164,10 @@ export default function YieldPredictionScreen() {
           </View>
         </StructuredCard>
 
-        <PrimaryButton label="আবার হিসাব করুন" onPress={() => predict()} />
+        <PrimaryButton label="আবার হিসাব করুন" onPress={runPredict} />
+        {predictError ? (
+          <RetryCard message={predictError} onRetry={runPredict} />
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

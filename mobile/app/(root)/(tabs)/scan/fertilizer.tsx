@@ -7,12 +7,16 @@ import {
   IconPickerRow,
   ListenButton,
   PrimaryButton,
+  RetryCard,
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import type { CropType } from "@/types/treatment";
 import type { FertilizerAdvice, GrowthStage, SoilColor, SoilMoisture } from "@/types/fertilizer";
-import { useRecommendFertilizerMutation, useSpeakMutation } from "@/services/api";
+import {
+  getApiError,
+  useRecommendFertilizerMutation,
+} from "@/services/api";
 
 const CROP_OPTIONS: {
   id: CropType;
@@ -60,7 +64,7 @@ export default function FertilizerRecommendationScreen() {
   const [showResult, setShowResult] = useState(false);
   const [advice, setAdvice] = useState<FertilizerAdvice | null>(null);
   const [recommend, { isLoading }] = useRecommendFertilizerMutation();
-  const [speak] = useSpeakMutation();
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const canSubmit = !!crop && !!stage && !!soilColor && !!soilMoisture;
 
@@ -151,19 +155,31 @@ export default function FertilizerRecommendationScreen() {
           label="সুপারিশ দেখুন"
           onPress={async () => {
             if (!crop || !stage || !soilColor || !soilMoisture) return;
-            const data = await recommend({
-              cropSlug: crop,
-              growthStage: stage,
-              soilColor,
-              soilMoisture,
-            }).unwrap();
-            setAdvice(data);
-            setShowResult(true);
+            setAiError(null);
+            try {
+              const data = await recommend({
+                cropSlug: crop,
+                growthStage: stage,
+                soilColor,
+                soilMoisture,
+              }).unwrap();
+              setAdvice(data);
+              setShowResult(true);
+            } catch (err) {
+              setShowResult(false);
+              setAiError(
+                getApiError(err).message ?? "AI সেবা এখন কাজ করছে না। আবার চেষ্টা করুন।",
+              );
+            }
           }}
           disabled={!canSubmit}
           loading={isLoading}
           icon={<Ionicons name="flask-outline" size={20} color={colors.white} />}
         />
+
+        {aiError ? (
+          <RetryCard message={aiError} onRetry={() => setAiError(null)} />
+        ) : null}
 
         {showResult && advice ? (
           <StructuredCard
@@ -172,8 +188,7 @@ export default function FertilizerRecommendationScreen() {
             footer={
               <ListenButton
                 label="সুপারিশ শুনুন"
-                onPlay={() => speak({ textBn: advice.fertilizerNameBn })}
-                onPause={() => {}}
+                textBn={advice.fertilizerNameBn}
               />
             }
           >

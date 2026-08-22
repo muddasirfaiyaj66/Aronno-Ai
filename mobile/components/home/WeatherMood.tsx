@@ -11,6 +11,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import type { WeatherKind } from "@/types/weather";
+import { colors } from "@/constants/theme";
 
 const KIND_ICON: Record<WeatherKind, keyof typeof Ionicons.glyphMap> = {
   sunny: "sunny",
@@ -21,11 +22,11 @@ const KIND_ICON: Record<WeatherKind, keyof typeof Ionicons.glyphMap> = {
 };
 
 const KIND_COLOR: Record<WeatherKind, string> = {
-  sunny: "#D97706",
-  partly: "#047857",
-  cloudy: "#6B7280",
-  rainy: "#2563EB",
-  storm: "#4F46E5",
+  sunny: colors.harvest,
+  partly: colors.primary,
+  cloudy: colors.muted,
+  rainy: colors.tertiary,
+  storm: colors.forest900,
 };
 
 export function WeatherMood({
@@ -109,6 +110,6 @@ const styles = StyleSheet.create({
     width: 2,
     height: 8,
     borderRadius: 1,
-    backgroundColor: "#3B82F6",
+    backgroundColor: colors.tertiary,
   },
 });

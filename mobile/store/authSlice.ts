@@ -10,6 +10,7 @@ export type AuthUser = {
   role: { slug: string; nameBn: string; nameEn: string };
   profession: { slug: string; nameBn: string; nameEn: string } | null;
   district: { slug: string; nameBn: string } | null;
+  avatarUrl: string | null;
 };
 
 type AuthState = {

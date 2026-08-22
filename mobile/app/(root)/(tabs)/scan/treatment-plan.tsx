@@ -14,7 +14,7 @@ import {
 import { WeatherAdvisoryCard } from "@/components/treatment/WeatherAdvisoryCard";
 import { colors } from "@/constants/theme";
 import type { SeverityLevel } from "@/types/diagnosis";
-import { useGetTreatmentPlanQuery, useSpeakMutation } from "@/services/api";
+import { useGetTreatmentPlanQuery } from "@/services/api";
 
 function SafetyChecklistRow({
   label,
@@ -56,7 +56,6 @@ export default function TreatmentPlanScreen() {
     params.diagnosisId ?? "",
     { skip: !params.diagnosisId },
   );
-  const [speak] = useSpeakMutation();
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
 
   const listenText = useMemo(
@@ -109,8 +108,7 @@ export default function TreatmentPlanScreen() {
       >
         <ListenButton
           label="পুরো পরিকল্পনা শুনুন"
-          onPlay={() => speak({ textBn: listenText })}
-          onPause={() => {}}
+          textBn={listenText}
         />
 
         <WeatherAdvisoryCard

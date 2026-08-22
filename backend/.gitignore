@@ -39,9 +39,13 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# accidental pnpm lock (this package uses npm)
+pnpm-lock.yaml
+
 # local uploads (dev object storage)
 /uploads
 
 # misc
 *.tsbuildinfo
 .eslintcache
+.vercel

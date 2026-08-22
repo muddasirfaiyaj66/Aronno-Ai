@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { PasswordService } from '../auth/password.service';
 import { DEMO_EMAIL, DEMO_NAME, DEMO_PASSWORD } from './demo-account';
+import { BANGLADESH_DISTRICTS } from '../lookups/bangladesh-districts';
 
 const ROLES = [
   { slug: 'SUPERADMIN', nameBn: 'সুপার অ্যাডমিন', nameEn: 'Superadmin' },
@@ -17,14 +18,6 @@ const PROFESSIONS = [
   { slug: 'trader', nameBn: 'ব্যবসায়ী', nameEn: 'Trader' },
   { slug: 'extension_officer', nameBn: 'সম্প্রসারণ কর্মকর্তা', nameEn: 'Extension officer' },
   { slug: 'other', nameBn: 'অন্যান্য', nameEn: 'Other' },
-];
-
-const DISTRICTS = [
-  { slug: 'jashore', nameBn: 'যশোর' },
-  { slug: 'munshiganj', nameBn: 'মুন্সিগঞ্জ' },
-  { slug: 'bogura', nameBn: 'বগুড়া' },
-  { slug: 'rangpur', nameBn: 'রংপুর' },
-  { slug: 'comilla', nameBn: 'কুমিল্লা' },
 ];
 
 const CROPS = [
@@ -69,11 +62,11 @@ export class SeedService implements OnModuleInit {
         create: row,
       });
     }
-    for (const row of DISTRICTS) {
+    for (const row of BANGLADESH_DISTRICTS) {
       await this.prisma.district.upsert({
         where: { slug: row.slug },
         update: { nameBn: row.nameBn },
-        create: row,
+        create: { slug: row.slug, nameBn: row.nameBn },
       });
     }
     for (const row of CROPS) {
@@ -152,18 +145,23 @@ export class SeedService implements OnModuleInit {
 
     let user = await this.prisma.user.findUnique({ where: { email: DEMO_EMAIL } });
     if (!user) {
-      user = await this.prisma.user.create({
-        data: {
-          email: DEMO_EMAIL,
-          passwordHash: await this.passwords.hash(DEMO_PASSWORD),
-          displayName: DEMO_NAME,
-          roleId: userRole.id,
-          professionId: farmer.id,
-          districtId: jashore.id,
-          emailVerifiedAt: new Date(),
-        },
-      });
-      this.logger.log(`Seeded demo farmer ${DEMO_EMAIL}`);
+      try {
+        user = await this.prisma.user.create({
+          data: {
+            email: DEMO_EMAIL,
+            passwordHash: await this.passwords.hash(DEMO_PASSWORD),
+            displayName: DEMO_NAME,
+            roleId: userRole.id,
+            professionId: farmer.id,
+            districtId: jashore.id,
+            emailVerifiedAt: new Date(),
+          },
+        });
+        this.logger.log(`Seeded demo farmer ${DEMO_EMAIL}`);
+      } catch (err) {
+        user = await this.prisma.user.findUnique({ where: { email: DEMO_EMAIL } });
+        if (!user) throw err;
+      }
     } else {
       const passwordOk = user.passwordHash
         ? await this.passwords.verify(user.passwordHash, DEMO_PASSWORD).catch(() => false)

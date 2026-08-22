@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { LoanStatus } from '@prisma/client';
+import { LoanStatus, type Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { PasswordService } from '../auth/password.service';
 import { Errors } from '../common/errors';
 import type { AuthUser } from '../auth/auth.types';
+
+type UserWithLookups = Prisma.UserGetPayload<{
+  include: { role: true; profession: true; district: true };
+}>;
 
 @Injectable()
 export class AdminService {
@@ -53,7 +57,7 @@ export class AdminService {
   }
 
   async listUsers(cursor?: string, limit = 20) {
-    const users = await this.prisma.user.findMany({
+    const users: UserWithLookups[] = await this.prisma.user.findMany({
       take: Math.min(limit, 50),
       skip: cursor ? 1 : 0,
       cursor: cursor ? { id: cursor } : undefined,

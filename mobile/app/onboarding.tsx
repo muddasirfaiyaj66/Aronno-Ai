@@ -57,7 +57,7 @@ export default function OnboardingScreen() {
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top", "bottom"]}>
       <LinearGradient
-        colors={["#064E3B", "#047857"]}
+        colors={[colors.forest900, colors.primary]}
         className="px-5 pb-8 pt-3"
         style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 36 }}
       >
@@ -86,7 +86,7 @@ export default function OnboardingScreen() {
 
       <View className="-mt-5 flex-1 rounded-t-[32px] bg-neutral px-8 pt-10">
         <View className="flex-1 items-center justify-center gap-5">
-          <View className="h-28 w-28 items-center justify-center rounded-full bg-harvest-soft">
+          <View className="h-28 w-28 items-center justify-center rounded-full bg-secondary">
             <Ionicons name={current.icon} size={52} color={colors.primary} />
           </View>
           <AppText variant="title" className="text-center">

@@ -8,7 +8,6 @@ import {
   AI_VISION,
   AI_YIELD,
   COST_ESTIMATE,
-  WEATHER,
 } from './ai.tokens';
 import { MockCostAdapter, MockTtsAdapter } from './mock.adapters';
 import { GeminiClient } from './gemini.client';
@@ -43,8 +42,9 @@ import { WeatherModule } from '../weather/weather.module';
     AI_FERTILIZER,
     AI_YIELD,
     AI_TTS,
-    WEATHER,
+    WeatherModule,
     COST_ESTIMATE,
+    GeminiClient,
   ],
 })
 export class AiModule {}

@@ -50,7 +50,7 @@ export function InsightHeroCard({
       <Pressable onPress={() => onPress?.(active)} accessibilityRole="button">
         <View style={styles.shadow}>
           <LinearGradient
-            colors={["#ECFDF5", "#FFFFFF", "#D1FAE5"]}
+            colors={[colors.secondary, "#FFFFFF", "#D4E8E0"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.card}
@@ -109,7 +109,7 @@ export function InsightHeroCard({
 const styles = StyleSheet.create({
   shadow: {
     borderRadius: 28,
-    shadowColor: "#064E3B",
+    shadowColor: colors.primary,
     shadowOpacity: 0.08,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(209,250,229,0.9)",
+    borderColor: "rgba(213,221,216,0.95)",
     minHeight: 128,
   },
 });

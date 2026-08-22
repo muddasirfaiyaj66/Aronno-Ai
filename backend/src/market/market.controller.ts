@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -18,6 +19,24 @@ const listingSchema = z
     imageUrl: httpUrl.optional(),
   })
   .strict();
+
+type MarketPriceRow = Prisma.MarketPriceGetPayload<{
+  include: { market: { include: { district: true } }; crop: true };
+}>;
+
+type ListingRow = Prisma.ListingGetPayload<{
+  include: { crop: true; district: true; seller: true };
+}>;
+
+type MarketPriceEntry = {
+  id: string;
+  marketNameBn: string;
+  district: string;
+  cropType: string;
+  pricePerMon: number;
+  trend: string;
+  changePercent: number;
+};
 
 @Controller('market')
 export class MarketController {
@@ -48,15 +67,15 @@ export class MarketController {
     });
 
     const seen = new Set<string>();
-    const current: typeof latest = [];
-    for (const row of latest) {
+    const current: MarketPriceRow[] = [];
+    for (const row of latest as MarketPriceRow[]) {
       const key = `${row.marketId}:${row.cropId}`;
       if (seen.has(key)) continue;
       seen.add(key);
       current.push(row);
     }
 
-    const entries = await Promise.all(
+    const entries: MarketPriceEntry[] = await Promise.all(
       current.map(async (row) => {
         const previous = await this.prisma.marketPrice.findFirst({
           where: {
@@ -107,7 +126,7 @@ export class MarketController {
     const district = districtSlug
       ? await this.prisma.district.findUnique({ where: { slug: districtSlug } })
       : null;
-    const rows = await this.prisma.listing.findMany({
+    const rows: ListingRow[] = await this.prisma.listing.findMany({
       where: {
         isActive: true,
         ...(crop ? { cropId: crop.id } : {}),

@@ -223,16 +223,28 @@ export const api = createApi({
     }),
     patchMe: builder.mutation<
       AuthUser,
-      { displayName?: string; phone?: string; professionSlug?: string; districtSlug?: string }
+      { displayName?: string; phone?: string; professionSlug?: string; districtSlug?: string; avatarUrl?: string }
     >({
       query: (body) => ({ url: "/users/me", method: "PATCH", body }),
       transformResponse: (r) => unwrap<AuthUser>(r),
-      invalidatesTags: ["User"],
+      invalidatesTags: ["User", "Auth"],
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(setUser(data));
+        } catch {
+          // keep previous profile
+        }
+      },
     }),
     createPhotoDiagnosis: builder.mutation<DiagnosisResult & { id: string }, { imageUrl: string }>({
       query: (body) => ({ url: "/diagnoses/photo", method: "POST", body }),
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Diagnosis", "History"],
+    }),
+    transcribe: builder.mutation<{ transcriptBn: string }, { audioBase64: string; mimeType?: string }>({
+      query: (body) => ({ url: "/diagnoses/transcribe", method: "POST", body }),
+      transformResponse: (r) => unwrap(r),
     }),
     createVoiceDiagnosis: builder.mutation<
       DiagnosisResult & { id: string },
@@ -326,8 +338,11 @@ export const api = createApi({
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Fertilizer"],
     }),
-    predictYield: builder.mutation<YieldEstimate & { id: string }, void>({
-      query: () => ({ url: "/yield/predict", method: "POST" }),
+    predictYield: builder.mutation<
+      YieldEstimate & { id: string },
+      { lat?: number; lon?: number } | void
+    >({
+      query: (body) => ({ url: "/yield/predict", method: "POST", body: body ?? {} }),
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Yield", "History"],
     }),
@@ -466,6 +481,7 @@ export const {
   useGetMeQuery,
   usePatchMeMutation,
   useCreatePhotoDiagnosisMutation,
+  useTranscribeMutation,
   useCreateVoiceDiagnosisMutation,
   useGetDiagnosisQuery,
   useGetTreatmentPlanQuery,

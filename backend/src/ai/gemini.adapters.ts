@@ -18,35 +18,62 @@ import type {
   YieldResult,
 } from './ports';
 
+const bn = z.string().trim().min(1);
+
+const confidenceSchema = z.preprocess((value) => {
+  const n = typeof value === 'string' ? Number(value) : value;
+  if (typeof n === 'number' && Number.isFinite(n) && n > 0 && n <= 1) {
+    return Math.round(n * 100);
+  }
+  return n;
+}, z.number().min(0).max(100));
+
+const severitySchema = z.preprocess((value) => {
+  if (typeof value !== 'string') return value;
+  const s = value.trim().toLowerCase();
+  if (s === 'low' || s === 'mild' || s === 'minor') return 'low';
+  if (s === 'medium' || s === 'moderate' || s === 'mid') return 'medium';
+  if (s === 'high' || s === 'severe' || s === 'critical') return 'high';
+  return s;
+}, z.enum(['low', 'medium', 'high']));
+
+const num = z.coerce.number();
+
 const visionSchema = z.object({
-  diseaseNameBn: z.string().min(2),
-  diseaseNameEn: z.string().min(2),
-  confidence: z.number().min(0).max(100),
-  severity: z.enum(['low', 'medium', 'high']),
+  diseaseNameBn: bn.min(2),
+  diseaseNameEn: bn.min(2),
+  confidence: confidenceSchema,
+  severity: severitySchema,
 });
 
 const treatmentSchema = z.object({
-  pesticideNameBn: z.string().min(2),
-  dosagePerBigha: z.string().min(2),
-  followUpLabelBn: z.string().min(2),
+  pesticideNameBn: bn.min(2),
+  dosagePerBigha: bn.min(1),
+  followUpLabelBn: bn.min(1),
   steps: z
-    .array(z.object({ step: z.number(), instructionBn: z.string().min(2) }))
-    .min(2)
-    .max(6),
-  safety: z.array(z.string().min(2)).min(2).max(6),
+    .array(z.object({ step: z.coerce.number(), instructionBn: bn.min(2) }))
+    .min(1)
+    .max(8),
+  safety: z.array(bn.min(2)).min(1).max(8),
 });
 
+const httpUrl = z.preprocess((value) => {
+  if (typeof value !== 'string' || !value.trim()) return 'https://www.daraz.com.bd/';
+  const trimmed = value.trim();
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}, z.string().min(8));
+
 const toolsSchema = z.object({
-  toolNameBn: z.string().min(2),
-  toolNameEn: z.string().min(2),
-  reasonBn: z.string().min(2),
+  toolNameBn: bn.min(2),
+  toolNameEn: bn.min(2),
+  reasonBn: bn.min(2),
   listings: z
     .array(
       z.object({
-        sourceName: z.string().min(1),
+        sourceName: bn.min(1),
         thumbnailUrl: z.string().optional().default(''),
         priceBn: z.string().optional(),
-        externalUrl: z.string().min(8),
+        externalUrl: httpUrl,
       }),
     )
     .min(1)
@@ -54,14 +81,14 @@ const toolsSchema = z.object({
 });
 
 const receiptSchema = z.object({
-  totalBdt: z.number().nonnegative(),
-  summaryBn: z.string().min(2),
+  totalBdt: z.coerce.number().nonnegative(),
+  summaryBn: bn.min(2),
   items: z
     .array(
       z.object({
-        nameBn: z.string().min(1),
-        quantity: z.string().min(1),
-        priceBn: z.string().min(1),
+        nameBn: bn.min(1),
+        quantity: bn.min(1),
+        priceBn: bn.min(1),
       }),
     )
     .min(1)
@@ -69,21 +96,28 @@ const receiptSchema = z.object({
 });
 
 const fertilizerSchema = z.object({
-  fertilizerNameBn: z.string().min(2),
-  dosagePerBigha: z.string().min(2),
-  applicationMethodBn: z.string().min(2),
-  timingBn: z.string().min(2),
+  fertilizerNameBn: bn.min(2),
+  dosagePerBigha: bn.min(1),
+  applicationMethodBn: bn.min(2),
+  timingBn: bn.min(1),
   warningBn: z.string().optional(),
 });
 
 const yieldSchema = z.object({
-  landSizeBn: z.string().min(1),
-  weatherSummaryBn: z.string().min(2),
-  estimatedMinMon: z.number(),
-  estimatedMaxMon: z.number(),
-  lastSeasonMon: z.number(),
-  trend: z.enum(['up', 'down', 'flat']),
-  changePercent: z.number(),
+  landSizeBn: bn.min(1),
+  weatherSummaryBn: bn.min(2),
+  estimatedMinMon: num,
+  estimatedMaxMon: num,
+  lastSeasonMon: num,
+  trend: z.preprocess((value) => {
+    if (typeof value !== 'string') return value;
+    const s = value.trim().toLowerCase();
+    if (s === 'up' || s === 'increase' || s === 'rising') return 'up';
+    if (s === 'down' || s === 'decrease' || s === 'falling') return 'down';
+    if (s === 'flat' || s === 'same' || s === 'stable') return 'flat';
+    return s;
+  }, z.enum(['up', 'down', 'flat'])),
+  changePercent: num,
 });
 
 function failAi(logger: Logger, label: string, err: unknown): never {
@@ -103,6 +137,7 @@ export class GeminiVisionAdapter implements AiVisionPort {
         `You are an agronomist for Bangladeshi smallholder farms. Identify crop disease from the photo and/or Bangla description.
 Return JSON only:
 {"diseaseNameBn":"...","diseaseNameEn":"...","confidence":0-100,"severity":"low"|"medium"|"high"}
+Confidence is an integer 0-100, not a fraction. Severity must be exactly low, medium, or high.
 Description: ${input.transcriptBn ?? '(photo only)'}
 If the leaf looks healthy, say so. Confidence must reflect image quality.`,
         { imageUrl: input.imageUrl, imageBuffer: input.imageBuffer },

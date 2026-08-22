@@ -20,7 +20,6 @@ import {
   useCreateReportMutation,
   useDownloadReportPdfMutation,
   useGetTreatmentPlanQuery,
-  useSpeakMutation,
 } from "@/services/api";
 
 export default function ReportPreviewScreen() {
@@ -36,7 +35,6 @@ export default function ReportPreviewScreen() {
   });
   const [createReport] = useCreateReportMutation();
   const [downloadPdf] = useDownloadReportPdfMutation();
-  const [speak] = useSpeakMutation();
   const [reportId, setReportId] = useState<string | null>(null);
 
   const [downloading, setDownloading] = useState(false);
@@ -158,12 +156,7 @@ export default function ReportPreviewScreen() {
       <View className="gap-3 border-t border-neutral-200 bg-white px-5 py-4">
         <ListenButton
           label="পুরো রিপোর্ট শুনুন"
-          onPlay={() =>
-            speak({
-              textBn: `${plan.diseaseNameBn}. ${plan.pesticideNameBn}. ${plan.weatherAdvisory.reasonBn}`,
-            })
-          }
-          onPause={() => {}}
+          textBn={`${plan.diseaseNameBn}. ${plan.pesticideNameBn}. ${plan.weatherAdvisory.reasonBn}`}
         />
 
         {downloading ? (

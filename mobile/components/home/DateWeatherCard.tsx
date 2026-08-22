@@ -1,26 +1,40 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { AppText } from "@/components/ui/AppText";
+import { colors } from "@/constants/theme";
 import { WeatherMood } from "@/components/home/WeatherMood";
 import { useLocale } from "@/context/locale";
 import { formatHomeDate, formatHomeTime, toLocaleDigits } from "@/utils/datetime";
 import type { CurrentWeather } from "@/types/weather";
+import type { FarmLocationStatus } from "@/hooks/useFarmLocation";
 
 const SKY: Record<CurrentWeather["kind"], [string, string, string]> = {
-  sunny: ["#FEF3C7", "#FFFFFF", "#FDE68A"],
-  partly: ["#ECFDF5", "#FFFFFF", "#D1FAE5"],
-  cloudy: ["#F3F4F6", "#FFFFFF", "#E5E7EB"],
-  rainy: ["#DBEAFE", "#FFFFFF", "#BFDBFE"],
-  storm: ["#E0E7FF", "#FFFFFF", "#C7D2FE"],
+  sunny: ["#E8F2EE", "#FFFFFF", "#F4F6F4"],
+  partly: ["#E8F2EE", "#FFFFFF", "#D4E8E0"],
+  cloudy: ["#EEF1EF", "#FFFFFF", "#E8ECE9"],
+  rainy: ["#E4EFE9", "#FFFFFF", "#C5DCD0"],
+  storm: ["#D4E8E0", "#FFFFFF", "#C5DCD0"],
 };
 
-export function DateWeatherCard({ weather }: { weather?: CurrentWeather | null }) {
+export function DateWeatherCard({
+  weather,
+  locationStatus,
+  locationLabel,
+  onEnableLocation,
+}: {
+  weather?: CurrentWeather | null;
+  locationStatus?: FarmLocationStatus;
+  locationLabel?: string | null;
+  onEnableLocation?: () => void;
+}) {
   const { t, locale } = useLocale();
   const [now, setNow] = useState(() => new Date());
   const kind = weather?.kind ?? "partly";
+  const needsPermission = locationStatus === "denied" || locationStatus === "off";
+  const place = weather?.locationBn || locationLabel;
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000);
@@ -49,7 +63,7 @@ export function DateWeatherCard({ weather }: { weather?: CurrentWeather | null }
                   className="h-8 w-8 items-center justify-center rounded-full"
                   style={{ backgroundColor: "rgba(6,78,59,0.1)" }}
                 >
-                  <Ionicons name="time-outline" size={16} color="#064E3B" />
+                  <Ionicons name="time-outline" size={16} color={colors.forest900} />
                 </View>
                 <AppText variant="bodyLg" className="font-bengali-bold text-ink">
                   {formatHomeTime(now, locale)}
@@ -83,7 +97,7 @@ export function DateWeatherCard({ weather }: { weather?: CurrentWeather | null }
                     {t(weather.conditionBn, weather.conditionEn)}
                   </AppText>
                   <AppText variant="caption" className="mt-0.5">
-                    {weather.locationBn}
+                    {place}
                   </AppText>
                 </View>
                 <View className="flex-row gap-4">
@@ -103,6 +117,28 @@ export function DateWeatherCard({ weather }: { weather?: CurrentWeather | null }
               </View>
             </View>
           ) : null}
+
+          {needsPermission && onEnableLocation ? (
+            <Pressable
+              onPress={onEnableLocation}
+              accessibilityRole="button"
+              accessibilityLabel={t("অবস্থান চালু করুন", "Turn on location")}
+              className="mt-3 flex-row items-center gap-2 rounded-2xl bg-white/90 px-3 py-3"
+            >
+              <Ionicons name="location-outline" size={18} color={colors.forest900} />
+              <AppText variant="caption" className="flex-1 font-bengali-semibold text-primary">
+                {locationStatus === "off"
+                  ? t(
+                      "ফোনের লোকেশন চালু করুন — আপনার এলাকার আবহাওয়া দেখুন",
+                      "Turn on phone location for local weather",
+                    )
+                  : t(
+                      "অবস্থানের অনুমতি দিন — আপনার ক্ষেতের আবহাওয়া দেখুন",
+                      "Allow location for field weather",
+                    )}
+              </AppText>
+            </Pressable>
+          ) : null}
         </LinearGradient>
       </View>
     </Animated.View>
@@ -112,7 +148,7 @@ export function DateWeatherCard({ weather }: { weather?: CurrentWeather | null }
 const styles = StyleSheet.create({
   shadow: {
     borderRadius: 28,
-    shadowColor: "#064E3B",
+    shadowColor: colors.forest900,
     shadowOpacity: 0.08,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
@@ -124,6 +160,6 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(209,250,229,0.9)",
+    borderColor: "rgba(213,221,216,0.95)",
   },
 });

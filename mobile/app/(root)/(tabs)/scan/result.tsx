@@ -14,7 +14,6 @@ import {
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { useSpeakMutation } from "@/services/api";
 import type { SeverityLevel } from "@/components/ui/SeverityBadge";
 
 function ConfidenceRing({ percent }: { percent: number }) {
@@ -70,7 +69,6 @@ export default function DiagnosisResultScreen() {
     id?: string;
   }>();
   const [enlarged, setEnlarged] = useState(false);
-  const [speak] = useSpeakMutation();
 
   const confidence = Number(params.confidence) || 0;
   const imageUrl = params.imageUrl ?? "";
@@ -91,12 +89,7 @@ export default function DiagnosisResultScreen() {
           footer={
             <View className="gap-3">
               <ListenButton
-                onPlay={() => {
-                  speak({
-                    textBn: `${params.diseaseNameBn}. ${params.diseaseNameEn}.`,
-                  });
-                }}
-                onPause={() => {}}
+                textBn={`${params.diseaseNameBn}. ${params.diseaseNameEn}.`}
               />
               {readOnly ? (
                 <SecondaryButton

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Linking, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Audio } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   AppText,
@@ -9,6 +10,9 @@ import {
   VoiceInputWidget,
 } from "@/components/ui";
 import { useLocale } from "@/context/locale";
+import { mimeFromAudioUri, readFileBase64 } from "@/lib/readFileBase64";
+import { enablePlaybackAudio, SPEECH_RECORDING } from "@/lib/speechRecording";
+import { getApiError, useTranscribeMutation } from "@/services/api";
 
 const FLOW_CONTENT: Record<string, { subtitle: string }> = {
   disease: {
@@ -31,30 +35,84 @@ export default function VoiceCaptureScreen() {
   const content = FLOW_CONTENT[flow ?? "disease"] ?? FLOW_CONTENT.disease;
   const [mode, setMode] = useState<Mode>(modeParam === "text" ? "text" : "voice");
   const [isRecording, setIsRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const startedAtRef = useRef(0);
+  const [transcribe] = useTranscribeMutation();
 
   useEffect(() => {
     return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      void recordingRef.current?.stopAndUnloadAsync().catch(() => undefined);
     };
   }, []);
 
-  const handleToggleRecording = () => {
+  const handleToggleRecording = async () => {
+    setError(null);
     if (isRecording) {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      const rec = recordingRef.current;
+      recordingRef.current = null;
       setIsRecording(false);
+      if (!rec) return;
+      try {
+        const elapsed = Date.now() - startedAtRef.current;
+        if (elapsed < 900) {
+          await new Promise((r) => setTimeout(r, 900 - elapsed));
+        }
+        await rec.stopAndUnloadAsync();
+        await enablePlaybackAudio();
+        const uri = rec.getURI();
+        if (!uri) {
+          setError("রেকর্ডিং পাওয়া যায়নি। আবার বলুন।");
+          return;
+        }
+        setTranscribing(true);
+        const audioBase64 = await readFileBase64(uri);
+        if (audioBase64.length < 80) {
+          setError("খুব ছোট রেকর্ডিং। একটু লম্বা করে বলুন।");
+          return;
+        }
+        const { transcriptBn } = await transcribe({
+          audioBase64,
+          mimeType: mimeFromAudioUri(uri),
+        }).unwrap();
+        if (!transcriptBn.trim()) {
+          setMode("text");
+          setError("কথা পরিষ্কার শোনা যায়নি। এখানে লিখে দিন।");
+        } else {
+          setTranscript(transcriptBn.trim());
+        }
+      } catch (err) {
+        setMode("text");
+        setError(getApiError(err).message ?? "কথা লেখা যায়নি। এখানে লিখে দিন।");
+      } finally {
+        setTranscribing(false);
+      }
       return;
     }
 
-    setIsRecording(true);
-    timeoutRef.current = setTimeout(() => {
-      setIsRecording(false);
-      setTranscript((prev) => {
-        if (!prev.trim()) setMode("text");
-        return prev;
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        setError("মাইকের অনুমতি দিন, তারপর আবার চাপুন।");
+        if (!permission.canAskAgain) {
+          void Linking.openSettings();
+        }
+        return;
+      }
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
       });
-    }, 1600);
+      const { recording } = await Audio.Recording.createAsync(SPEECH_RECORDING);
+      recordingRef.current = recording;
+      startedAtRef.current = Date.now();
+      setIsRecording(true);
+    } catch {
+      setError("মাইক চালু করা যায়নি। ফোনের সেটিংস দেখুন।");
+    }
   };
 
   const handleSubmit = () => {
@@ -112,27 +170,41 @@ export default function VoiceCaptureScreen() {
         <VoiceInputWidget
           isRecording={isRecording}
           transcript={transcript}
-          onToggleRecording={handleToggleRecording}
+          onToggleRecording={() => {
+            void handleToggleRecording();
+          }}
           onChangeTranscript={setTranscript}
           preferTyping={mode === "text"}
+          listeningLabel={
+            transcribing
+              ? t("কথা লেখা হচ্ছে…", "Writing your words…")
+              : t("শুনছি… কথা বলুন", "Listening… speak now")
+          }
           placeholder={
             mode === "text"
               ? t("এখানে বাংলায় লিখুন…", "Type in Bangla…")
-              : t("মাইকে চাপুন, তারপর কথা বলুন", "Tap the mic, then speak")
+              : t("মাইকে চাপুন, কথা বলুন, আবার চাপুন", "Tap mic, speak, tap again")
           }
         />
 
-        <AppText variant="caption" className="text-center leading-6">
-          {t(
-            "জমা দেওয়ার আগে লেখাটি পড়ে নিন। ভুল হলে «সম্পাদনা» চাপুন।",
-            "Read the text before sending. Tap Edit if it is wrong.",
-          )}
-        </AppText>
+        {error ? (
+          <AppText variant="caption" className="text-center text-severity-high">
+            {error}
+          </AppText>
+        ) : (
+          <AppText variant="caption" className="text-center leading-6">
+            {t(
+              "মাইকে চাপুন, বাংলায় বলুন, আবার চাপুন। জমা দেওয়ার আগে লেখা পড়ে নিন।",
+              "Tap the mic, speak Bangla, tap again. Read the text before sending.",
+            )}
+          </AppText>
+        )}
 
         <PrimaryButton
-          label={t("জমা দিন", "Submit")}
+          label={transcribing ? t("লেখা হচ্ছে…", "Writing…") : t("জমা দিন", "Submit")}
           onPress={handleSubmit}
-          disabled={!transcript.trim()}
+          disabled={!transcript.trim() || transcribing || isRecording}
+          loading={transcribing}
         />
       </ScrollView>
     </SafeAreaView>

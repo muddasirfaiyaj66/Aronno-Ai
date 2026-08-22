@@ -14,7 +14,7 @@ export class LookupsController {
 
   @Get('districts')
   districts() {
-    return this.prisma.district.findMany({ orderBy: { slug: 'asc' } });
+    return this.prisma.district.findMany({ orderBy: { nameBn: 'asc' } });
   }
 
   @Get('crops')

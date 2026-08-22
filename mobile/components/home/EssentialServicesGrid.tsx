@@ -68,23 +68,19 @@ function ServiceTile({
       >
         <Animated.View style={[styles.tile, animatedStyle]}>
           <View
-            className="h-14 w-14 items-center justify-center rounded-full"
+            className="h-11 w-11 items-center justify-center rounded-2xl"
             style={{ backgroundColor: accent }}
           >
-            <Ionicons name={item.icon} size={26} color={colors.primary} />
+            <Ionicons name={item.icon} size={22} color={colors.primary} />
           </View>
           <AppText
             variant="body"
-            numberOfLines={2}
-            className="mt-3.5 text-center font-bengali-bold text-ink"
+            numberOfLines={1}
+            className="mt-3 font-bengali-bold text-ink"
           >
             {item.title}
           </AppText>
-          <AppText
-            variant="caption"
-            numberOfLines={2}
-            className="mt-1.5 text-center leading-5"
-          >
+          <AppText variant="caption" numberOfLines={2} className="mt-1 leading-5">
             {item.subtitle}
           </AppText>
         </Animated.View>
@@ -115,15 +111,11 @@ const styles = StyleSheet.create({
   },
   tile: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 26,
-    paddingVertical: 20,
+    borderRadius: 20,
+    paddingVertical: 16,
     paddingHorizontal: 14,
-    alignItems: "center",
-    minHeight: 164,
-    shadowColor: "#064E3B",
-    shadowOpacity: 0.09,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 7 },
-    elevation: 3,
+    minHeight: 120,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
 });

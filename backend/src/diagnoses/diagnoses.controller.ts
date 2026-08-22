@@ -14,6 +14,13 @@ const voiceSchema = z
   })
   .strict();
 
+const transcribeSchema = z
+  .object({
+    audioBase64: z.string().min(80),
+    mimeType: z.string().min(3).max(80).optional(),
+  })
+  .strict();
+
 @Controller('diagnoses')
 export class DiagnosesController {
   constructor(private readonly diagnoses: DiagnosesService) {}
@@ -34,6 +41,16 @@ export class DiagnosesController {
     @Body(new ZodPipe(voiceSchema)) body: z.infer<typeof voiceSchema>,
   ) {
     return this.diagnoses.createVoice(user, body.transcriptBn, body.cropSlug);
+  }
+
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  @Post('transcribe')
+  transcribe(
+    @CurrentUser() user: AuthUser,
+    @Body(new ZodPipe(transcribeSchema)) body: z.infer<typeof transcribeSchema>,
+  ) {
+    void user;
+    return this.diagnoses.transcribe(body.audioBase64, body.mimeType);
   }
 
   @Get()

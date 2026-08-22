@@ -10,20 +10,7 @@ export type MarketCropType =
   | "corn"
   | "lentil";
 
-export type District =
-  | "jashore"
-  | "munshiganj"
-  | "bogura"
-  | "rangpur"
-  | "comilla";
-
-export const DISTRICT_LABELS: Record<District, string> = {
-  jashore: "যশোর",
-  munshiganj: "মুন্সিগঞ্জ",
-  bogura: "বগুড়া",
-  rangpur: "রংপুর",
-  comilla: "কুমিল্লা",
-};
+export type District = string;
 
 export type PriceTrend = "up" | "down" | "flat";
 

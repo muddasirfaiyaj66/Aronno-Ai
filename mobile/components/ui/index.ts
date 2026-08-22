@@ -41,6 +41,8 @@ export type { SensorPlaceholderCardProps } from "./SensorPlaceholderCard";
 export { ListingCard } from "./ListingCard";
 export type { ListingCardProps } from "./ListingCard";
 export { OfflineBanner } from "./OfflineBanner";
+export { DistrictPicker } from "./DistrictPicker";
+export type { DistrictOption } from "./DistrictPicker";
 export { FieldInput } from "./FieldInput";
 export type { FieldInputProps } from "./FieldInput";
 export { ScreenHeader } from "./ScreenHeader";

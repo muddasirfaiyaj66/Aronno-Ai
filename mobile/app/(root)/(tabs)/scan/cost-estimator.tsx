@@ -2,7 +2,15 @@ import { useMemo, useState } from "react";
 import { ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { AIGeneratingShimmer, AppText, IconPickerRow, PrimaryButton, SegmentedTabs, StructuredCard } from "@/components/ui";
+import {
+  AIGeneratingShimmer,
+  AppText,
+  IconPickerRow,
+  PrimaryButton,
+  RetryCard,
+  SegmentedTabs,
+  StructuredCard,
+} from "@/components/ui";
 import { colors } from "@/constants/theme";
 import type {
   CostEstimateResult,
@@ -10,6 +18,7 @@ import type {
   LandUnit,
 } from "@/types/treatment";
 import {
+  getApiError,
   useCreateCostEstimateMutation,
 } from "@/services/api";
 
@@ -31,6 +40,7 @@ export default function CostEstimatorScreen() {
   const [landUnit, setLandUnit] = useState<LandUnit>("bigha");
   const [result, setResult] = useState<CostEstimateResult | null>(null);
   const [createEstimate, { isLoading }] = useCreateCostEstimateMutation();
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const parsedLandSize = Number(landSize);
   const canSubmit = !!cropType && parsedLandSize > 0;
@@ -42,12 +52,20 @@ export default function CostEstimatorScreen() {
 
   const handleSubmit = async () => {
     if (!canSubmit || !cropType) return;
-    const data = await createEstimate({
-      cropSlug: cropType,
-      landSize: parsedLandSize,
-      landUnit,
-    }).unwrap();
-    setResult(data);
+    setErrorMessage(null);
+    try {
+      const data = await createEstimate({
+        cropSlug: cropType,
+        landSize: parsedLandSize,
+        landUnit,
+      }).unwrap();
+      setResult(data);
+    } catch (err) {
+      setResult(null);
+      setErrorMessage(
+        getApiError(err).message ?? "খরচ হিসাব করা যায়নি। আবার চেষ্টা করুন।",
+      );
+    }
   };
 
   return (
@@ -110,6 +128,10 @@ export default function CostEstimatorScreen() {
             <Ionicons name="calculator-outline" size={20} color={colors.white} />
           }
         />
+
+        {errorMessage ? (
+          <RetryCard message={errorMessage} onRetry={handleSubmit} />
+        ) : null}
 
         {isLoading ? (
           <AIGeneratingShimmer label="খরচ হিসাব হচ্ছে" lines={3} className="w-full" />

@@ -10,13 +10,12 @@ import {
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { useGetReceiptQuery, useSpeakMutation } from "@/services/api";
+import { useGetReceiptQuery } from "@/services/api";
 
 export default function ReceiptResultScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: summary } = useGetReceiptQuery(id!, { skip: !id });
-  const [speak] = useSpeakMutation();
 
   if (!summary) {
     return (
@@ -53,8 +52,7 @@ export default function ReceiptResultScreen() {
           footer={
             <ListenButton
               label="সারাংশ বাংলায় শুনুন"
-              onPlay={() => speak({ textBn: summary.summaryBn })}
-              onPause={() => {}}
+              textBn={summary.summaryBn}
             />
           }
         >

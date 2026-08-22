@@ -21,6 +21,7 @@ export class UsersService {
       phone?: string;
       professionSlug?: string;
       districtSlug?: string;
+      avatarUrl?: string;
     },
   ) {
     const profession = input.professionSlug
@@ -42,6 +43,7 @@ export class UsersService {
         phone: input.phone,
         professionId: profession?.id,
         districtId: district?.id,
+        avatarUrl: input.avatarUrl,
       },
     });
     return this.auth.me(id);

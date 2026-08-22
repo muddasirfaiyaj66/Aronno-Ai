@@ -4,49 +4,56 @@ import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "./AppText";
 import { colors } from "@/constants/theme";
 import { useLocale } from "@/context/locale";
+import { speakBangla, stopBanglaSpeech } from "@/lib/speakBangla";
 
 export type ListenButtonProps = {
-  onPlay: () => void;
-  onPause?: () => void;
+  textBn: string;
   label?: string;
   className?: string;
 };
 
-export function ListenButton({
-  onPlay,
-  onPause,
-  label,
-  className = "",
-}: ListenButtonProps) {
+export function ListenButton({ textBn, label, className = "" }: ListenButtonProps) {
   const { t } = useLocale();
   const [playing, setPlaying] = useState(false);
   const playLabel = label ?? t("শুনুন বাংলায়", "Listen in Bangla");
   const pauseLabel = t("থামান", "Stop");
 
-  const toggle = () => {
+  const toggle = async () => {
     if (playing) {
-      onPause?.();
+      await stopBanglaSpeech();
       setPlaying(false);
       return;
     }
-    onPlay();
+    const spoken = textBn.replace(/\s+/g, " ").trim();
+    if (!spoken) return;
     setPlaying(true);
+    try {
+      await speakBangla(spoken, {
+        onDone: () => setPlaying(false),
+        onStopped: () => setPlaying(false),
+        onError: () => setPlaying(false),
+      });
+    } catch {
+      setPlaying(false);
+    }
   };
 
   return (
     <Pressable
-      onPress={toggle}
+      onPress={() => {
+        void toggle();
+      }}
       accessibilityRole="button"
       accessibilityLabel={playing ? pauseLabel : playLabel}
       className={`min-h-touch-lg flex-row items-center justify-center gap-2 rounded-2xl px-5 active:opacity-90 ${
-        playing ? "bg-forest-800" : "bg-primary"
+        playing ? "bg-primary-800" : "bg-primary"
       } ${className}`}
       style={{
         shadowColor: colors.primary,
-        shadowOpacity: 0.25,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 6 },
-        elevation: 4,
+        shadowOpacity: 0.18,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 3,
       }}
     >
       <Ionicons

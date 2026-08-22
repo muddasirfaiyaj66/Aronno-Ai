@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   AppText,
+  DistrictPicker,
   EmptyState,
   IconPickerRow,
   ListingCard,
@@ -16,6 +17,7 @@ import {
 import { colors } from "@/constants/theme";
 import {
   useCreateMarketListingMutation,
+  useGetDistrictsQuery,
   useGetHeatmapQuery,
   useGetMarketListingsQuery,
   useGetMarketPricesQuery,
@@ -23,7 +25,6 @@ import {
 } from "@/services/api";
 import { uploadImageToCloudinary } from "@/services/cloudinary";
 import {
-  DISTRICT_LABELS,
   type District,
   type HeatMapDimension,
   type MarketCropType,
@@ -58,17 +59,6 @@ const CROP_FILTER_OPTIONS: { id: MarketCropType | "all"; label: string }[] = [
   ...CROP_OPTIONS.map((c) => ({ id: c.id, label: c.label })),
 ];
 
-const DISTRICT_FILTER_OPTIONS: { id: District | "all"; label: string }[] = [
-  { id: "all", label: "সব জেলা" },
-  ...(Object.entries(DISTRICT_LABELS) as [District, string][]).map(
-    ([id, label]) => ({ id, label }),
-  ),
-];
-
-const DISTRICT_OPTIONS: { id: District; label: string }[] = (
-  Object.entries(DISTRICT_LABELS) as [District, string][]
-).map(([id, label]) => ({ id, label }));
-
 const HEATMAP_DIMENSION_OPTIONS: { id: HeatMapDimension; label: string }[] = [
   { id: "disease", label: "রোগের প্রাদুর্ভাব" },
   { id: "price", label: "দাম" },
@@ -80,7 +70,7 @@ function cropLabel(cropType: MarketCropType | null) {
 
 function trendVisual(trend: PriceTrend) {
   if (trend === "up") {
-    return { icon: "trending-up" as const, color: "#047857" };
+    return { icon: "trending-up" as const, color: colors.primary };
   }
   if (trend === "down") {
     return { icon: "trending-down" as const, color: "#B42318" };
@@ -198,6 +188,13 @@ export default function MarketScreen() {
     sort: sortDesc ? "price_desc" : "price_asc",
   });
   const { data: heatmap } = useGetHeatmapQuery();
+  const { data: districts = [] } = useGetDistrictsQuery();
+  const districtLabel = (slug: string) =>
+    districts.find((d) => d.slug === slug)?.nameBn ?? slug;
+  const districtFilterOptions: { id: District | "all"; label: string }[] = [
+    { id: "all", label: "সব জেলা" },
+    ...districts.map((d) => ({ id: d.slug, label: d.nameBn })),
+  ];
 
   useEffect(() => {
     if (params.tab === "direct") setTab("direct");
@@ -279,7 +276,7 @@ export default function MarketScreen() {
             />
             <FilterChipRow
               label="জেলা"
-              options={DISTRICT_FILTER_OPTIONS}
+              options={districtFilterOptions}
               value={priceDistrict}
               onChange={setPriceDistrict}
             />
@@ -318,7 +315,7 @@ export default function MarketScreen() {
                   }
                   footer={
                     <AppText variant="caption">
-                      {DISTRICT_LABELS[entry.district]} ·{" "}
+                      {districtLabel(entry.district)} ·{" "}
                       {cropLabel(entry.cropType)}
                     </AppText>
                   }
@@ -391,7 +388,7 @@ export default function MarketScreen() {
             />
             <FilterChipRow
               label="জেলা"
-              options={DISTRICT_FILTER_OPTIONS}
+              options={districtFilterOptions}
               value={marketDistrict}
               onChange={setMarketDistrict}
             />
@@ -432,7 +429,7 @@ export default function MarketScreen() {
                 {filteredListings.map((listing) => (
                   <ListingCard
                     key={listing.id}
-                    sourceName={`${listing.cropNameBn} · ${listing.quantityBn} · ${DISTRICT_LABELS[listing.district]}`}
+                    sourceName={`${listing.cropNameBn} · ${listing.quantityBn} · ${districtLabel(listing.district)}`}
                     thumbnailUrl={listing.thumbnailUrl}
                     price={listing.askingPriceBn}
                     onPressLink={() => {}}
@@ -492,7 +489,7 @@ export default function MarketScreen() {
                     className={`gap-1 rounded-3xl px-4 py-5 ${bgClass}`}
                   >
                     <AppText variant="body" className={`font-bengali-bold ${textClass}`}>
-                      {DISTRICT_LABELS[region.district]}
+                      {districtLabel(region.district)}
                     </AppText>
                     <AppText variant="caption" className={textClass}>
                       {Math.round(intensity * 100)}%
@@ -558,7 +555,7 @@ export default function MarketScreen() {
                   </AppText>
                   <AppText variant="hero">৳ {dsPrice}/কেজি</AppText>
                   <AppText variant="caption">
-                    {dsDistrict ? DISTRICT_LABELS[dsDistrict] : ""}
+                    {dsDistrict ? districtLabel(dsDistrict) : ""}
                   </AppText>
                 </View>
               </StructuredCard>
@@ -608,12 +605,16 @@ export default function MarketScreen() {
                   />
                 </View>
 
-                <FilterChipRow
-                  label="জেলা"
-                  options={DISTRICT_OPTIONS}
-                  value={dsDistrict ?? ("" as District)}
-                  onChange={setDsDistrict}
-                />
+                <View className="gap-3">
+                  <AppText variant="body" className="font-bengali-bold text-ink">
+                    জেলা
+                  </AppText>
+                  <DistrictPicker
+                    districts={districts}
+                    value={dsDistrict}
+                    onChange={setDsDistrict}
+                  />
+                </View>
 
                 <View className="gap-3">
                   <AppText variant="body" className="font-bengali-bold text-ink">

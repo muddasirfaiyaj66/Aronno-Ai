@@ -56,7 +56,7 @@ Superadmin comes from `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` in `backend/.en
 
 ## What is finished
 
-Screens talk to the real API (auth, OTP email, diagnoses, treatment, market, loans, …). Photos upload to **Cloudinary**; the API stores URLs. Gemini disease detection is still a **mock** so the product can run without a paid AI key.
+Screens talk to the real API (auth, OTP email, diagnoses, treatment, market, loans, …). Photos upload to **Cloudinary**; the API stores URLs. Live weather and 6-month crop outlook use **Open-Meteo** (no API key). With `GEMINI_API_KEY` set, disease / treatment / tools / receipts / fertilizer / yield use the free **gemini-2.5-flash-lite** model (never Pro).
 
 ## License
 

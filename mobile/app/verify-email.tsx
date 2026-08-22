@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { AuthScaffold } from "@/components/auth/AuthScaffold";
 import { AppText, FieldInput, PrimaryButton, SecondaryButton } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import {
@@ -32,21 +32,28 @@ export default function VerifyEmailScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-neutral" edges={["top", "bottom"]}>
-      <View className="flex-1 justify-center gap-6 px-6">
-        <View className="gap-2">
-          <AppText variant="title">ইমেইল যাচাই করুন</AppText>
-          <AppText variant="bodyLg" className="leading-8 text-muted">
-            ইনবক্সে পাঠানো ৬ সংখ্যার কোডটি বড় করে লিখুন।
-          </AppText>
-        </View>
-
+    <AuthScaffold
+      title="ইমেইল যাচাই করুন"
+      subtitle="ইনবক্সে পাঠানো ৬ সংখ্যার কোডটি লিখুন। কোড না এলে আবার পাঠান।"
+      footer={
+        <Link href="/login" asChild>
+          <Pressable accessibilityRole="button" className="min-h-touch items-center justify-center">
+            <AppText variant="body" className="font-bengali-bold text-primary">
+              লগইনে ফিরে যান
+            </AppText>
+          </Pressable>
+        </Link>
+      }
+    >
+      <View className="gap-5">
         <FieldInput
           label="ইমেইল"
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
+          autoComplete="email"
           keyboardType="email-address"
+          textContentType="emailAddress"
           placeholder="ইমেইল"
         />
         <FieldInput
@@ -55,6 +62,7 @@ export default function VerifyEmailScreen() {
           onChangeText={setCode}
           keyboardType="number-pad"
           maxLength={6}
+          textContentType="oneTimeCode"
           placeholder="••••••"
         />
 
@@ -83,15 +91,7 @@ export default function VerifyEmailScreen() {
           disabled={!email || resending}
           onPress={() => resend({ email: email.trim() })}
         />
-
-        <Link href="/login" asChild>
-          <Pressable accessibilityRole="button" className="min-h-touch items-center justify-center">
-            <AppText variant="bodyLg" className="font-bengali-bold text-primary">
-              লগইনে ফিরে যান
-            </AppText>
-          </Pressable>
-        </Link>
       </View>
-    </SafeAreaView>
+    </AuthScaffold>
   );
 }

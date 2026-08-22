@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useRouter, type Href } from "expo-router";
+import { AuthScaffold } from "@/components/auth/AuthScaffold";
 import { AppText, FieldInput, PrimaryButton } from "@/components/ui";
 import { getApiError, useForgotPasswordMutation } from "@/services/api";
 
@@ -24,21 +24,28 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-neutral" edges={["top", "bottom"]}>
-      <View className="flex-1 justify-center gap-6 px-6">
-        <View className="gap-2">
-          <AppText variant="title">পাসওয়ার্ড ভুলে গেছেন?</AppText>
-          <AppText variant="bodyLg" className="leading-8 text-muted">
-            ইমেইলে একটি ৬ সংখ্যার কোড যাবে। কোড না এলে স্প্যাম দেখুন।
-          </AppText>
-        </View>
-
+    <AuthScaffold
+      title="পাসওয়ার্ড ভুলে গেছেন?"
+      subtitle="ইমেইলে একটি ৬ সংখ্যার কোড যাবে। কোড না এলে স্প্যাম ফোল্ডার দেখুন।"
+      footer={
+        <Link href="/login" asChild>
+          <Pressable accessibilityRole="button" className="min-h-touch items-center justify-center">
+            <AppText variant="body" className="font-bengali-bold text-primary">
+              লগইনে ফিরে যান
+            </AppText>
+          </Pressable>
+        </Link>
+      }
+    >
+      <View className="gap-5">
         <FieldInput
           label="ইমেইল"
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
+          autoComplete="email"
           keyboardType="email-address"
+          textContentType="emailAddress"
           placeholder="যে ইমেইল দিয়ে অ্যাকাউন্ট খুলেছিলেন"
         />
 
@@ -54,15 +61,7 @@ export default function ForgotPasswordScreen() {
           disabled={!email}
           onPress={handleSubmit}
         />
-
-        <Link href="/login" asChild>
-          <Pressable accessibilityRole="button" className="min-h-touch items-center justify-center">
-            <AppText variant="bodyLg" className="font-bengali-bold text-primary">
-              লগইনে ফিরে যান
-            </AppText>
-          </Pressable>
-        </Link>
       </View>
-    </SafeAreaView>
+    </AuthScaffold>
   );
 }

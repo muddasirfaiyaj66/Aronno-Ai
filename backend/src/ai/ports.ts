@@ -1,6 +1,10 @@
-import type { Severity, SprayLevel, YieldTrend } from '@prisma/client';
+import type { Severity, YieldTrend } from '@prisma/client';
 
-export type VisionInput = { imageBuffer?: Buffer; transcriptBn?: string };
+export type VisionInput = {
+  imageBuffer?: Buffer;
+  imageUrl?: string;
+  transcriptBn?: string;
+};
 
 export type VisionResult = {
   diseaseNameBn: string;
@@ -48,7 +52,7 @@ export type ReceiptResult = {
 };
 
 export interface AiReceiptPort {
-  scan(imageBuffer: Buffer): Promise<ReceiptResult>;
+  scan(input: { imageUrl?: string; imageBuffer?: Buffer }): Promise<ReceiptResult>;
 }
 
 export type FertilizerResult = {
@@ -95,10 +99,7 @@ export interface TtsPort {
   synthesize(textBn: string): Promise<Buffer>;
 }
 
-export interface WeatherPort {
-  sprayAdvisory(): Promise<{ level: SprayLevel; reasonBn: string }>;
-  summaryBn(): Promise<string>;
-}
+export type { WeatherPort } from '../weather/weather.types';
 
 export interface CostEstimatePort {
   estimate(landSize: number, landUnit: 'bigha' | 'acre'): {

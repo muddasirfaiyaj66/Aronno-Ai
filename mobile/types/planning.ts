@@ -7,6 +7,8 @@ export type MonthForecast = {
   month: string;
   weatherIcon: IconName;
   recommendedCropBn: string;
+  tempC?: number;
+  precipMm?: number;
 };
 
 export type CropPlan = {

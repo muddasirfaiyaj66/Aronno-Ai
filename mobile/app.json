@@ -20,7 +20,11 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -48,11 +52,23 @@
         {
           "cameraPermission": "আরণ্যকে ফসলের ছবি তুলে রোগ নির্ণয় করতে ক্যামেরা ব্যবহারের অনুমতি দিন।"
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "আরণ্যকে আপনার ক্ষেতের আবহাওয়া দেখাতে অবস্থান ব্যবহারের অনুমতি দিন।"
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "ebe51e56-7ffe-431e-93c5-d363f0d46e01"
+      }
     }
   }
 }

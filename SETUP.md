@@ -42,7 +42,7 @@ This document is written so someone who is **not a developer** can clone the pro
 - Identify a **tool**, scan a **receipt**, get **fertilizer** advice, **yield** and **crop planning**
 - See **market prices**, post a **listing**, apply for a **loan**
 
-**Honest status:** the screens and APIs are connected. Disease / tool / receipt / fertilizer / yield / TTS answers currently come from **safe mock adapters** (`TODO(gemini)`). Real Gemini / weather providers are not required to run the app. Photos **are** uploaded for real: the phone sends them to **Cloudinary**, then the API stores the HTTPS URL (Vercel has no durable disk for file uploads).
+**Honest status:** the screens and APIs are connected. With `GEMINI_API_KEY` set, disease, treatment, tools, receipts, fertilizer, and yield call **gemini-2.5-flash-lite** (free). If the key is missing or a call fails, the API falls back to mock Bangla payloads. Crop plans use **Open-Meteo** (no key). TTS is still a stub. Photos **are** uploaded for real: the phone sends them to **Cloudinary**, then the API stores the HTTPS URL.
 
 ---
 
@@ -169,9 +169,11 @@ Leave `GOOGLE_CLIENT_ID` empty if you only use email/password.
 
 | Variable | Free source | Used today? |
 |----------|-------------|-------------|
-| `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | **No** — diagnosis still mocked |
+| `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | **Yes** — disease, treatment, tools, receipts, fertilizer, yield use **gemini-2.5-flash-lite** (free). |
 | `TTS_PROVIDER_KEY` | Provider of your choice | **No** — mock WAV |
 | `S3_BUCKET` | Cloudflare R2 / AWS | **No** — images go to Cloudinary |
+
+Weather uses **[Open-Meteo](https://open-meteo.com)** (no API key): current conditions + a 6-month seasonal outlook for the farmer GPS or saved district. If seasonal data is unavailable, Bangladesh monthly rainfall normals are used.
 
 You can leave these blank.
 
@@ -243,6 +245,7 @@ GOOGLE_CLIENT_SECRET=
 THROTTLE_TTL=60
 THROTTLE_LIMIT=60
 GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash-lite
 TTS_PROVIDER_KEY=
 S3_BUCKET=
 SMTP_HOST=
@@ -452,9 +455,9 @@ iOS installable builds need a Mac and an Apple Developer account. This repo is d
 | Loans | Apply, current application |
 | Images | Phone → Cloudinary → `{ imageUrl }` JSON to API |
 
-### Not real AI yet (mock adapters)
+### Still mocked or local
 
-Gemini, live weather, and production TTS/PDF are **not** called. Endpoints still return realistic Bangla mock payloads so the UI can be demonstrated.
+TTS (WAV stub) and PDF generation stay mocked. Cost estimates are a local formula (not Gemini). Crop plans come from Open-Meteo, not Gemini. If `GEMINI_API_KEY` is empty, disease / treatment / tools / receipts / fertilizer / yield use mock adapters.
 
 ### Intentionally not on Vercel disk
 
@@ -639,6 +642,7 @@ Public POSTs do not need CSRF. Logged-in POSTs/PATCHes need cookie + `X-CSRF-Tok
 | POST | `/yield/predict` | cookie | |
 | POST | `/crop-plans/generate` | cookie | |
 | GET | `/crop-plans/latest` | cookie | |
+| GET | `/weather/current` | cookie | Open-Meteo; optional `?lat=&lon=` else user district |
 | GET | `/market/prices` | cookie | |
 | GET | `/market/listings` | cookie | |
 | POST | `/market/listings` | cookie | JSON + optional `imageUrl` |

@@ -20,21 +20,86 @@ import {
   MockTreatmentAdapter,
   MockTtsAdapter,
   MockVisionAdapter,
-  MockWeatherAdapter,
   MockYieldAdapter,
 } from './mock.adapters';
+import { GeminiClient } from './gemini.client';
+import {
+  GeminiFertilizerAdapter,
+  GeminiReceiptAdapter,
+  GeminiToolsAdapter,
+  GeminiTreatmentAdapter,
+  GeminiVisionAdapter,
+  GeminiYieldAdapter,
+} from './gemini.adapters';
+import { WeatherModule } from '../weather/weather.module';
+
+function useLiveAi(gemini: GeminiClient) {
+  return gemini.isEnabled();
+}
 
 @Module({
+  imports: [WeatherModule],
   providers: [
-    { provide: AI_VISION, useClass: MockVisionAdapter },
-    { provide: AI_TREATMENT, useClass: MockTreatmentAdapter },
-    { provide: AI_TOOLS, useClass: MockToolsAdapter },
-    { provide: AI_RECEIPT, useClass: MockReceiptAdapter },
-    { provide: AI_FERTILIZER, useClass: MockFertilizerAdapter },
-    { provide: AI_YIELD, useClass: MockYieldAdapter },
+    GeminiClient,
+    MockVisionAdapter,
+    MockTreatmentAdapter,
+    MockToolsAdapter,
+    MockReceiptAdapter,
+    MockFertilizerAdapter,
+    MockYieldAdapter,
+    MockPlanningAdapter,
+    MockTtsAdapter,
+    MockCostAdapter,
+    GeminiVisionAdapter,
+    GeminiTreatmentAdapter,
+    GeminiToolsAdapter,
+    GeminiReceiptAdapter,
+    GeminiFertilizerAdapter,
+    GeminiYieldAdapter,
+    {
+      provide: AI_VISION,
+      useFactory: (gemini: GeminiClient, live: GeminiVisionAdapter, mock: MockVisionAdapter) =>
+        useLiveAi(gemini) ? live : mock,
+      inject: [GeminiClient, GeminiVisionAdapter, MockVisionAdapter],
+    },
+    {
+      provide: AI_TREATMENT,
+      useFactory: (
+        gemini: GeminiClient,
+        live: GeminiTreatmentAdapter,
+        mock: MockTreatmentAdapter,
+      ) => (useLiveAi(gemini) ? live : mock),
+      inject: [GeminiClient, GeminiTreatmentAdapter, MockTreatmentAdapter],
+    },
+    {
+      provide: AI_TOOLS,
+      useFactory: (gemini: GeminiClient, live: GeminiToolsAdapter, mock: MockToolsAdapter) =>
+        useLiveAi(gemini) ? live : mock,
+      inject: [GeminiClient, GeminiToolsAdapter, MockToolsAdapter],
+    },
+    {
+      provide: AI_RECEIPT,
+      useFactory: (gemini: GeminiClient, live: GeminiReceiptAdapter, mock: MockReceiptAdapter) =>
+        useLiveAi(gemini) ? live : mock,
+      inject: [GeminiClient, GeminiReceiptAdapter, MockReceiptAdapter],
+    },
+    {
+      provide: AI_FERTILIZER,
+      useFactory: (
+        gemini: GeminiClient,
+        live: GeminiFertilizerAdapter,
+        mock: MockFertilizerAdapter,
+      ) => (useLiveAi(gemini) ? live : mock),
+      inject: [GeminiClient, GeminiFertilizerAdapter, MockFertilizerAdapter],
+    },
+    {
+      provide: AI_YIELD,
+      useFactory: (gemini: GeminiClient, live: GeminiYieldAdapter, mock: MockYieldAdapter) =>
+        useLiveAi(gemini) ? live : mock,
+      inject: [GeminiClient, GeminiYieldAdapter, MockYieldAdapter],
+    },
     { provide: AI_PLANNING, useClass: MockPlanningAdapter },
     { provide: AI_TTS, useClass: MockTtsAdapter },
-    { provide: WEATHER, useClass: MockWeatherAdapter },
     { provide: COST_ESTIMATE, useClass: MockCostAdapter },
   ],
   exports: [

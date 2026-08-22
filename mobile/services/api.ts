@@ -23,6 +23,7 @@ import type { YieldEstimate } from "@/types/yield";
 import type { CropPlan } from "@/types/planning";
 import type { HeatMapRegion, MarketListing, MarketPriceEntry } from "@/types/market";
 import type { LoanApplication } from "@/types/loan";
+import type { CurrentWeather } from "@/types/weather";
 
 export const API_URL =
   process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000/api";
@@ -135,6 +136,7 @@ export const api = createApi({
     "Loan",
     "Report",
     "AdminUsers",
+    "Weather",
   ],
   endpoints: (builder) => ({
     getProfessions: builder.query<{ slug: string; nameBn: string; nameEn: string }[], void>({
@@ -334,8 +336,11 @@ export const api = createApi({
       transformResponse: (r) => unwrap(r),
       providesTags: ["Yield"],
     }),
-    generateCropPlan: builder.mutation<CropPlan & { id: string }, void>({
-      query: () => ({ url: "/crop-plans/generate", method: "POST" }),
+    generateCropPlan: builder.mutation<
+      CropPlan & { id: string },
+      { lat?: number; lon?: number } | void
+    >({
+      query: (body) => ({ url: "/crop-plans/generate", method: "POST", body: body ?? {} }),
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["CropPlan"],
     }),
@@ -343,6 +348,17 @@ export const api = createApi({
       query: () => "/crop-plans/latest",
       transformResponse: (r) => unwrap(r),
       providesTags: ["CropPlan"],
+    }),
+    getWeather: builder.query<CurrentWeather, { lat?: number; lon?: number } | void>({
+      query: (arg) => {
+        const p = new URLSearchParams();
+        if (arg?.lat != null) p.set("lat", String(arg.lat));
+        if (arg?.lon != null) p.set("lon", String(arg.lon));
+        const q = p.toString();
+        return `/weather/current${q ? `?${q}` : ""}`;
+      },
+      transformResponse: (r) => unwrap(r),
+      providesTags: ["Weather"],
     }),
     getMarketPrices: builder.query<
       { markets: (MarketPriceEntry & { bestPrice?: boolean })[]; estimatedRevenueHero: number },
@@ -469,6 +485,7 @@ export const {
   useGetLatestYieldQuery,
   useGenerateCropPlanMutation,
   useGetLatestCropPlanQuery,
+  useGetWeatherQuery,
   useGetMarketPricesQuery,
   useGetMarketListingsQuery,
   useCreateMarketListingMutation,

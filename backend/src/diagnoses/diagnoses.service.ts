@@ -37,7 +37,7 @@ export class DiagnosesService {
   }
 
   async createPhoto(user: AuthUser, imageUrl: string) {
-    const ai = await this.vision.diagnose({});
+    const ai = await this.vision.diagnose({ imageUrl });
     return this.persist(user.id, {
       source: 'photo',
       imageObjectKey: imageUrl,

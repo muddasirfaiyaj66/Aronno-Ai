@@ -1,9 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AI_TREATMENT, WEATHER } from '../ai/ai.tokens';
-import type { AiTreatmentPort, WeatherPort } from '../ai/ports';
+import type { AiTreatmentPort } from '../ai/ports';
+import type { WeatherPort } from '../weather/weather.types';
 import { Errors } from '../common/errors';
 import type { AuthUser } from '../auth/auth.types';
+import { WeatherLocationService } from '../weather/weather-location.service';
 
 @Injectable()
 export class TreatmentService {
@@ -11,6 +13,7 @@ export class TreatmentService {
     private readonly prisma: PrismaService,
     @Inject(AI_TREATMENT) private readonly ai: AiTreatmentPort,
     @Inject(WEATHER) private readonly weather: WeatherPort,
+    private readonly locations: WeatherLocationService,
   ) {}
 
   private dto(plan: {
@@ -62,7 +65,8 @@ export class TreatmentService {
     if (diagnosis.userId !== user.id && user.role === 'USER') throw Errors.forbidden();
 
     const generated = await this.ai.plan(diagnosis.diseaseNameBn, diagnosis.severity);
-    const advisory = await this.weather.sprayAdvisory();
+    const point = await this.locations.forUser(user.id);
+    const advisory = await this.weather.sprayAdvisory(point);
 
     const created = await this.prisma.withTransaction(async (tx) => {
       const plan = await tx.treatmentPlan.create({

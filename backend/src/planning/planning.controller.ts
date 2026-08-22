@@ -1,20 +1,26 @@
-import { Controller, Get, Inject, Post } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Post } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AI_PLANNING } from '../ai/ai.tokens';
-import type { AiPlanningPort } from '../ai/ports';
+import { WEATHER } from '../ai/ai.tokens';
+import type { WeatherPort } from '../weather/weather.types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/auth.types';
+import { WeatherLocationService } from '../weather/weather-location.service';
 
 @Controller('crop-plans')
 export class PlanningController {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(AI_PLANNING) private readonly ai: AiPlanningPort,
+    @Inject(WEATHER) private readonly weather: WeatherPort,
+    private readonly locations: WeatherLocationService,
   ) {}
 
   @Post('generate')
-  async generate(@CurrentUser() user: AuthUser) {
-    const plan = await this.ai.generate();
+  async generate(
+    @CurrentUser() user: AuthUser,
+    @Body() body?: { lat?: number; lon?: number },
+  ) {
+    const point = await this.locations.forUser(user.id, body?.lat, body?.lon);
+    const plan = await this.weather.sixMonthPlan(point);
     const row = await this.prisma.cropPlan.create({
       data: {
         userId: user.id,
@@ -30,7 +36,7 @@ export class PlanningController {
       },
       include: { months: { orderBy: { sortOrder: 'asc' } } },
     });
-    return this.dto(row);
+    return this.dto(row, plan.months);
   }
 
   @Get('latest')
@@ -43,22 +49,27 @@ export class PlanningController {
     return row ? this.dto(row) : null;
   }
 
-  private dto(row: {
-    id: string;
-    recommendationBn: string;
-    months: {
-      monthBn: string;
-      weatherIcon: string;
-      recommendedCropBn: string;
-    }[];
-  }) {
+  private dto(
+    row: {
+      id: string;
+      recommendationBn: string;
+      months: {
+        monthBn: string;
+        weatherIcon: string;
+        recommendedCropBn: string;
+      }[];
+    },
+    live?: { tempC?: number; precipMm?: number }[],
+  ) {
     return {
       id: row.id,
       recommendationBn: row.recommendationBn,
-      months: row.months.map((m) => ({
+      months: row.months.map((m, i) => ({
         month: m.monthBn,
         weatherIcon: m.weatherIcon,
         recommendedCropBn: m.recommendedCropBn,
+        tempC: live?.[i]?.tempC,
+        precipMm: live?.[i]?.precipMm,
       })),
     };
   }

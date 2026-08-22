@@ -22,7 +22,7 @@ export function IconPickerRow({
   className = "",
 }: IconPickerRowProps) {
   return (
-    <View className={`flex-row gap-3 ${className}`}>
+    <View className={`flex-row flex-wrap gap-3 ${className}`}>
       {options.map((option) => {
         const selected = option.id === value;
 
@@ -33,15 +33,13 @@ export function IconPickerRow({
             accessibilityRole="button"
             accessibilityState={{ selected }}
             accessibilityLabel={option.label}
-            className={`min-h-touch flex-1 items-center gap-2 rounded-3xl px-3 py-4 ${
-              selected ? "bg-secondary" : "bg-white"
+            className={`min-h-touch w-[47%] items-center gap-2 rounded-3xl border px-3 py-4 ${
+              selected
+                ? "border-primary bg-secondary"
+                : "border-neutral-200 bg-neutral"
             }`}
           >
-            <View
-              className={`h-11 w-11 items-center justify-center rounded-2xl ${
-                selected ? "bg-white" : "bg-neutral"
-              }`}
-            >
+            <View className="h-11 w-11 items-center justify-center rounded-2xl bg-white">
               {option.icon}
             </View>
             <AppText

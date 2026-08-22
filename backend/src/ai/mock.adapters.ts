@@ -53,7 +53,10 @@ export class MockVisionAdapter implements AiVisionPort {
 @Injectable()
 export class MockTreatmentAdapter implements AiTreatmentPort {
   // TODO(gemini): generate treatment from diagnosis via Gemini/Gamma
-  async plan(diseaseNameBn: string): Promise<TreatmentResult> {
+  async plan(
+    diseaseNameBn: string,
+    _severity?: 'low' | 'medium' | 'high',
+  ): Promise<TreatmentResult> {
     await delay(300);
     return {
       pesticideNameBn: 'প্রোপিকোনাজল ২৫% ইসি',
@@ -127,7 +130,7 @@ export class MockToolsAdapter implements AiToolsPort {
 @Injectable()
 export class MockReceiptAdapter implements AiReceiptPort {
   // TODO(gemini): receipt OCR
-  async scan(_imageBuffer: Buffer): Promise<ReceiptResult> {
+  async scan(_input: { imageUrl?: string; imageBuffer?: Buffer }): Promise<ReceiptResult> {
     await delay(400);
     return {
       totalBdt: 3200,
@@ -201,7 +204,6 @@ export class MockPlanningAdapter implements AiPlanningPort {
 
 @Injectable()
 export class MockWeatherAdapter implements WeatherPort {
-  // TODO(weather-api): live forecast
   async sprayAdvisory() {
     return {
       level: 'caution' as const,
@@ -210,6 +212,35 @@ export class MockWeatherAdapter implements WeatherPort {
   }
   async summaryBn() {
     return 'স্বাভাবিক বৃষ্টিপাত প্রত্যাশিত';
+  }
+  async current() {
+    return {
+      tempC: 30,
+      humidity: 70,
+      windKph: 10,
+      weatherCode: 2,
+      kind: 'partly' as const,
+      conditionBn: 'আংশিক মেঘলা',
+      conditionEn: 'Partly cloudy',
+      precipitationMm: 0,
+      precipProb: 20,
+      locationBn: 'যশোর',
+      source: 'mock',
+    };
+  }
+  async sixMonthPlan() {
+    return {
+      recommendationBn:
+        'আগামী ছয় মাসের আবহাওয়া পূর্বাভাস অনুযায়ী শ্রাবণ ও ভাদ্র মাসে পর্যাপ্ত বৃষ্টিপাত হবে।',
+      months: [
+        { monthBn: 'শ্রাবণ', weatherIcon: 'rainy-outline', recommendedCropBn: 'আমন ধান' },
+        { monthBn: 'ভাদ্র', weatherIcon: 'rainy-outline', recommendedCropBn: 'আমন ধান' },
+        { monthBn: 'আশ্বিন', weatherIcon: 'partly-sunny-outline', recommendedCropBn: 'শাকসবজি' },
+        { monthBn: 'কার্তিক', weatherIcon: 'sunny-outline', recommendedCropBn: 'আলু' },
+        { monthBn: 'অগ্রহায়ণ', weatherIcon: 'sunny-outline', recommendedCropBn: 'আলু' },
+        { monthBn: 'পৌষ', weatherIcon: 'cloudy-outline', recommendedCropBn: 'সরিষা' },
+      ],
+    };
   }
 }
 

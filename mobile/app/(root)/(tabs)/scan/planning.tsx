@@ -17,12 +17,15 @@ import {
   useGetLatestCropPlanQuery,
   useSpeakMutation,
 } from "@/services/api";
+import { useFarmLocation } from "@/hooks/useFarmLocation";
 
 export default function CropPlanningScreen() {
   const { data: latest, isLoading, isError, refetch } = useGetLatestCropPlanQuery();
   const [generate, { isLoading: generating }] = useGenerateCropPlanMutation();
   const [speak] = useSpeakMutation();
+  const coords = useFarmLocation();
   const plan = latest;
+  const requestPlan = () => generate(coords ?? {});
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
@@ -53,7 +56,7 @@ export default function CropPlanningScreen() {
             icon={<Ionicons name="calendar-outline" size={32} color={colors.primary} />}
             message="এখনো কোনো ফসল পরিকল্পনা নেই। তৈরি করতে চাপুন।"
             ctaLabel="পরিকল্পনা তৈরি করুন"
-            onCta={() => generate()}
+            onCta={() => requestPlan()}
           />
         ) : (
           <>
@@ -65,6 +68,7 @@ export default function CropPlanningScreen() {
                 monthLabel: month.month,
                 weatherIcon: month.weatherIcon,
                 cropLabel: month.recommendedCropBn,
+                tempC: month.tempC,
               }))}
             />
 
@@ -83,7 +87,7 @@ export default function CropPlanningScreen() {
               </AppText>
             </StructuredCard>
 
-            <PrimaryButton label="আবার তৈরি করুন" onPress={() => generate()} />
+            <PrimaryButton label="আবার তৈরি করুন" onPress={() => requestPlan()} />
           </>
         )}
       </ScrollView>

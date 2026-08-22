@@ -11,11 +11,17 @@ import {
 } from "@/components/ui";
 import { HomeSection } from "@/components/home/HomeSection";
 import { EssentialServicesGrid } from "@/components/home/EssentialServicesGrid";
+import { DateWeatherCard } from "@/components/home/DateWeatherCard";
 import { InsightHeroCard, type InsightItem } from "@/components/home/InsightHeroCard";
 import { useLocale } from "@/context/locale";
 import { useAppSelector } from "@/store";
 import { colors } from "@/constants/theme";
-import { useGetCurrentLoanQuery, useGetHistoryQuery } from "@/services/api";
+import { useFarmLocation } from "@/hooks/useFarmLocation";
+import {
+  useGetCurrentLoanQuery,
+  useGetHistoryQuery,
+  useGetWeatherQuery,
+} from "@/services/api";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -23,9 +29,31 @@ export default function HomeScreen() {
   const name = useAppSelector((s) => s.auth.user?.displayName);
   const { data: history } = useGetHistoryQuery();
   const { data: loan } = useGetCurrentLoanQuery();
+  const coords = useFarmLocation();
+  const { data: weather } = useGetWeatherQuery(coords ?? {});
 
   const insights = useMemo(() => {
     const items: InsightItem[] = [];
+    if (weather) {
+      items.push({
+        id: "weather-live",
+        kind: "weather",
+        icon:
+          weather.kind === "rainy" || weather.kind === "storm"
+            ? "rainy-outline"
+            : "partly-sunny-outline",
+        message:
+          weather.precipProb >= 40
+            ? t(
+                `${weather.conditionBn} — স্প্রে করার আগে আকাশ দেখুন`,
+                `${weather.conditionEn} — check the sky before spraying`,
+              )
+            : t(
+                `এখন ${weather.conditionBn}, ${weather.tempC}°`,
+                `Now ${weather.conditionEn}, ${weather.tempC}°`,
+              ),
+      });
+    }
     const disease = history?.find((entry) => entry.kind === "disease");
     if (disease?.kind === "disease") {
       items.push({
@@ -63,7 +91,7 @@ export default function HomeScreen() {
       });
     }
     return items;
-  }, [history, loan, t]);
+  }, [history, loan, t, weather]);
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
@@ -113,6 +141,8 @@ export default function HomeScreen() {
         </LinearGradient>
 
         <View className="-mt-4 gap-5 px-5">
+          <DateWeatherCard weather={weather} />
+
           <HomeSection
             title={t("আজকের কাজ", "Today")}
             subtitle={t(
@@ -173,7 +203,8 @@ export default function HomeScreen() {
             <InsightHeroCard
               insights={insights}
               onPress={(item) => {
-                if (item.kind === "disease") router.push("/(root)/(tabs)/history");
+                if (item.kind === "weather") router.push("/(root)/(tabs)/scan/planning");
+                else if (item.kind === "disease") router.push("/(root)/(tabs)/history");
                 else if (item.kind === "yield") router.push("/(root)/(tabs)/scan/yield");
                 else if (item.kind === "loan") router.push("/(root)/loan/overview");
               }}

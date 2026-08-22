@@ -2,7 +2,8 @@ import type { ComponentProps } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "./AppText";
-import { colors } from "@/constants/theme";
+import { WeatherMood } from "@/components/home/WeatherMood";
+import { weatherKindFromIcon } from "@/types/weather";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -55,7 +56,7 @@ export function ForecastTimelineCard({
               {item.monthLabel}
             </AppText>
             <View className="my-2 h-10 w-10 items-center justify-center rounded-full bg-white">
-              <Ionicons name={item.weatherIcon} size={20} color={colors.primary} />
+              <WeatherMood kind={weatherKindFromIcon(String(item.weatherIcon))} size={20} />
             </View>
             {item.tempC != null ? (
               <AppText variant="caption" className="mb-1 text-muted">

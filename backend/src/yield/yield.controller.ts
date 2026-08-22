@@ -1,10 +1,12 @@
 import { Controller, Get, Inject, Param, Post } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AI_YIELD, WEATHER } from '../ai/ai.tokens';
-import type { AiYieldPort, WeatherPort } from '../ai/ports';
+import type { AiYieldPort } from '../ai/ports';
+import type { WeatherPort } from '../weather/weather.types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Errors } from '../common/errors';
 import type { AuthUser } from '../auth/auth.types';
+import { WeatherLocationService } from '../weather/weather-location.service';
 
 @Controller('yield')
 export class YieldController {
@@ -12,6 +14,7 @@ export class YieldController {
     private readonly prisma: PrismaService,
     @Inject(AI_YIELD) private readonly ai: AiYieldPort,
     @Inject(WEATHER) private readonly weather: WeatherPort,
+    private readonly locations: WeatherLocationService,
   ) {}
 
   @Get('latest')
@@ -37,7 +40,8 @@ export class YieldController {
     const rice = await this.prisma.crop.findUnique({ where: { slug: 'rice' } });
     if (!rice) throw Errors.notFound();
     const predicted = await this.ai.predict('rice');
-    const weatherSummaryBn = await this.weather.summaryBn();
+    const point = await this.locations.forUser(user.id);
+    const weatherSummaryBn = await this.weather.summaryBn(point);
     const row = await this.prisma.withTransaction(async (tx) => {
       const created = await tx.yieldEstimate.create({
         data: {

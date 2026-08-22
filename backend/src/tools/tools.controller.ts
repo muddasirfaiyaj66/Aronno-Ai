@@ -53,7 +53,7 @@ export class ToolsController {
     @CurrentUser() user: AuthUser,
     @Body(new ZodPipe(imageUrlSchema)) body: z.infer<typeof imageUrlSchema>,
   ) {
-    const ai = await this.ai.identify({});
+    const ai = await this.ai.identify({ imageUrl: body.imageUrl });
     return this.persist(user.id, 'photo', ai, body.imageUrl);
   }
 

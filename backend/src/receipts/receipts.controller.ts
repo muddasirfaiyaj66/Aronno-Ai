@@ -23,7 +23,7 @@ export class ReceiptsController {
     @CurrentUser() user: AuthUser,
     @Body(new ZodPipe(imageUrlSchema)) body: z.infer<typeof imageUrlSchema>,
   ) {
-    const ai = await this.ai.scan(Buffer.from(body.imageUrl));
+    const ai = await this.ai.scan({ imageUrl: body.imageUrl });
     const row = await this.prisma.receipt.create({
       data: {
         userId: user.id,

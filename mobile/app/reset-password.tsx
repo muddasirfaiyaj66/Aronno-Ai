@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
+import { AuthScaffold } from "@/components/auth/AuthScaffold";
 import { AppText, FieldInput, PrimaryButton } from "@/components/ui";
 import { getApiError, useResetPasswordMutation } from "@/services/api";
 
@@ -28,21 +28,28 @@ export default function ResetPasswordScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-neutral" edges={["top", "bottom"]}>
-      <View className="flex-1 justify-center gap-6 px-6">
-        <View className="gap-2">
-          <AppText variant="title">নতুন পাসওয়ার্ড</AppText>
-          <AppText variant="bodyLg" className="leading-8 text-muted">
-            কোড ও নতুন পাসওয়ার্ড দিন। পাসওয়ার্ড অন্তত ১০ অক্ষর।
-          </AppText>
-        </View>
-
+    <AuthScaffold
+      title="নতুন পাসওয়ার্ড"
+      subtitle="কোড ও নতুন পাসওয়ার্ড দিন। পাসওয়ার্ড অন্তত ১০ অক্ষর।"
+      footer={
+        <Link href="/login" asChild>
+          <Pressable accessibilityRole="button" className="min-h-touch items-center justify-center">
+            <AppText variant="body" className="font-bengali-bold text-primary">
+              লগইনে ফিরে যান
+            </AppText>
+          </Pressable>
+        </Link>
+      }
+    >
+      <View className="gap-5">
         <FieldInput
           label="ইমেইল"
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
+          autoComplete="email"
           keyboardType="email-address"
+          textContentType="emailAddress"
           placeholder="ইমেইল"
         />
         <FieldInput
@@ -51,6 +58,7 @@ export default function ResetPasswordScreen() {
           onChangeText={setCode}
           keyboardType="number-pad"
           maxLength={6}
+          textContentType="oneTimeCode"
           placeholder="৬ সংখ্যা"
         />
         <FieldInput
@@ -58,6 +66,8 @@ export default function ResetPasswordScreen() {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
+          autoComplete="new-password"
+          textContentType="newPassword"
           placeholder="নতুন পাসওয়ার্ড"
         />
 
@@ -73,15 +83,7 @@ export default function ResetPasswordScreen() {
           disabled={!email || code.length !== 6 || password.length < 10}
           onPress={handleSubmit}
         />
-
-        <Link href="/login" asChild>
-          <Pressable accessibilityRole="button" className="min-h-touch items-center justify-center">
-            <AppText variant="bodyLg" className="font-bengali-bold text-primary">
-              লগইনে ফিরে যান
-            </AppText>
-          </Pressable>
-        </Link>
       </View>
-    </SafeAreaView>
+    </AuthScaffold>
   );
 }

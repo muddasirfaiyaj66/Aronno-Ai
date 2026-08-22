@@ -9,7 +9,11 @@ import {
   kindFromPrecipMm,
   kindFromWmo,
 } from './wmo';
-import type { CurrentWeather, MonthOutlook, WeatherPort } from './weather.types';
+import type {
+  CurrentWeather,
+  MonthOutlook,
+  WeatherPort,
+} from './weather.types';
 
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast';
 const SEASONAL_URL = 'https://seasonal-api.open-meteo.com/v1/seasonal';
@@ -79,12 +83,17 @@ export class OpenMeteoWeatherAdapter implements WeatherPort {
     const now = await this.current(point);
     let level: SprayLevel = 'safe';
     let reasonBn = 'আজ আকাশ অনুকূল, সকালে বা বিকেলে স্প্রে করা যায়।';
-    if (now.kind === 'storm' || now.precipProb >= 70 || now.precipitationMm >= 1) {
+    if (
+      now.kind === 'storm' ||
+      now.precipProb >= 70 ||
+      now.precipitationMm >= 1
+    ) {
       level = 'wait';
       reasonBn = 'বৃষ্টি বা বজ্রের সম্ভাবনা বেশি — আজ স্প্রে করবেন না।';
     } else if (now.kind === 'rainy' || now.precipProb >= 40) {
       level = 'caution';
-      reasonBn = 'হালকা বৃষ্টির সম্ভাবনা আছে, স্প্রে করলে সকালের শুকনো সময় বেছে নিন।';
+      reasonBn =
+        'হালকা বৃষ্টির সম্ভাবনা আছে, স্প্রে করলে সকালের শুকনো সময় বেছে নিন।';
     }
     return { level, reasonBn };
   }
@@ -100,7 +109,9 @@ export class OpenMeteoWeatherAdapter implements WeatherPort {
       const total = rains.reduce((a, b) => a + Number(b || 0), 0);
       const avgTemp =
         temps.length > 0
-          ? Math.round(temps.reduce((a, b) => a + Number(b || 0), 0) / temps.length)
+          ? Math.round(
+              temps.reduce((a, b) => a + Number(b || 0), 0) / temps.length,
+            )
           : 30;
       if (total >= 80) {
         return `আগামী ১৬ দিনে প্রায় ${Math.round(total)} মিমি বৃষ্টির সম্ভাবনা, গড় তাপমাত্রা ${avgTemp}° — জমি ভেজা থাকবে।`;
@@ -118,8 +129,12 @@ export class OpenMeteoWeatherAdapter implements WeatherPort {
 
   async sixMonthPlan(point: GeoPoint) {
     const months = (await this.monthlyOutlook(point)).slice(0, 6);
-    const rainy = months.filter((m) => (m.precipMm ?? 0) >= 140).map((m) => m.monthBn);
-    const dry = months.filter((m) => (m.precipMm ?? 0) < 60).map((m) => m.monthBn);
+    const rainy = months
+      .filter((m) => (m.precipMm ?? 0) >= 140)
+      .map((m) => m.monthBn);
+    const dry = months
+      .filter((m) => (m.precipMm ?? 0) < 60)
+      .map((m) => m.monthBn);
     const recommendationBn = [
       `${point.locationBn} এলাকার Open-Meteo মৌসুমি পূর্বাভাস (৬ মাস) অনুযায়ী চাষ সাজান।`,
       rainy.length
@@ -159,9 +174,13 @@ export class OpenMeteoWeatherAdapter implements WeatherPort {
       if (maxP > 0 && maxP < 40) {
         precip = precip.map((n) => Number(n || 0) * 30);
       }
-      return times.slice(0, 6).map((iso, i) => monthRow(iso, Number(temps[i]), Number(precip[i])));
+      return times
+        .slice(0, 6)
+        .map((iso, i) => monthRow(iso, Number(temps[i]), Number(precip[i])));
     } catch (err) {
-      this.logger.warn(`Open-Meteo seasonal failed, using climate normals: ${String(err)}`);
+      this.logger.warn(
+        `Open-Meteo seasonal failed, using climate normals: ${String(err)}`,
+      );
       return null;
     }
   }

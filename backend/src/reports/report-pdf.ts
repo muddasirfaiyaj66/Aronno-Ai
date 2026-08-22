@@ -1,3 +1,4 @@
+import 'regenerator-runtime/runtime';
 import { PDFDocument, rgb, type PDFFont } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 
@@ -32,7 +33,12 @@ const ink = rgb(0.11, 0.169, 0.141);
 const muted = rgb(0.357, 0.42, 0.392);
 const line = rgb(0.835, 0.867, 0.847);
 
-function wrap(text: string, font: PDFFont, size: number, max: number): string[] {
+function wrap(
+  text: string,
+  font: PDFFont,
+  size: number,
+  max: number,
+): string[] {
   const out: string[] = [];
   for (const para of text.split(/\n/)) {
     const words = para.split(/\s+/).filter(Boolean);
@@ -94,8 +100,20 @@ export async function buildReportPdf(input: ReportPdfInput): Promise<Buffer> {
   const max = width - 96;
   let y = height - 56;
 
-  page.drawRectangle({ x: 0, y: height - 92, width, height: 92, color: forest });
-  page.drawText('আরণ্য', { x: left, y: height - 48, size: 22, font, color: rgb(1, 1, 1) });
+  page.drawRectangle({
+    x: 0,
+    y: height - 92,
+    width,
+    height: 92,
+    color: forest,
+  });
+  page.drawText('আরণ্য', {
+    x: left,
+    y: height - 48,
+    size: 22,
+    font,
+    color: rgb(1, 1, 1),
+  });
   page.drawText('ফসলের রোগ ও চিকিৎসা রিপোর্ট', {
     x: left,
     y: height - 72,

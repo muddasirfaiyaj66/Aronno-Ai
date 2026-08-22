@@ -17,16 +17,21 @@ export default function LoginScreen() {
   const message = apiError.message;
 
   const handleSubmit = async () => {
-    try {
-      await login({ email: email.trim(), password }).unwrap();
+    const normalizedEmail = email.trim().toLowerCase();
+    const result = await login({ email: normalizedEmail, password });
+
+    if ("data" in result && result.data) {
       router.replace("/(root)/(tabs)");
-    } catch (err) {
-      if (getApiError(err).code === "EMAIL_UNVERIFIED") {
-        router.push({
-          pathname: "/verify-email",
-          params: { email: email.trim() },
-        } as unknown as Href);
-      }
+      return;
+    }
+
+    // Backend issues a fresh OTP whenever an unverified user tries to log in,
+    // so we just need to forward the user to the verify screen.
+    if ("error" in result && getApiError(result.error).code === "EMAIL_UNVERIFIED") {
+      router.push({
+        pathname: "/verify-email",
+        params: { email: normalizedEmail, resent: "1" },
+      } as unknown as Href);
     }
   };
 

@@ -28,14 +28,17 @@ const confidenceSchema = z.preprocess((value) => {
   return n;
 }, z.number().min(0).max(100));
 
-const severitySchema = z.preprocess((value) => {
-  if (typeof value !== 'string') return value;
-  const s = value.trim().toLowerCase();
-  if (s === 'low' || s === 'mild' || s === 'minor') return 'low';
-  if (s === 'medium' || s === 'moderate' || s === 'mid') return 'medium';
-  if (s === 'high' || s === 'severe' || s === 'critical') return 'high';
-  return s;
-}, z.enum(['low', 'medium', 'high']));
+const severitySchema = z.preprocess(
+  (value) => {
+    if (typeof value !== 'string') return value;
+    const s = value.trim().toLowerCase();
+    if (s === 'low' || s === 'mild' || s === 'minor') return 'low';
+    if (s === 'medium' || s === 'moderate' || s === 'mid') return 'medium';
+    if (s === 'high' || s === 'severe' || s === 'critical') return 'high';
+    return s;
+  },
+  z.enum(['low', 'medium', 'high']),
+);
 
 const num = z.coerce.number();
 
@@ -58,7 +61,8 @@ const treatmentSchema = z.object({
 });
 
 const httpUrl = z.preprocess((value) => {
-  if (typeof value !== 'string' || !value.trim()) return 'https://www.daraz.com.bd/';
+  if (typeof value !== 'string' || !value.trim())
+    return 'https://www.daraz.com.bd/';
   const trimmed = value.trim();
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }, z.string().min(8));
@@ -115,14 +119,17 @@ const yieldSchema = z.object({
   estimatedMinMon: num,
   estimatedMaxMon: num,
   lastSeasonMon: num,
-  trend: z.preprocess((value) => {
-    if (typeof value !== 'string') return value;
-    const s = value.trim().toLowerCase();
-    if (s === 'up' || s === 'increase' || s === 'rising') return 'up';
-    if (s === 'down' || s === 'decrease' || s === 'falling') return 'down';
-    if (s === 'flat' || s === 'same' || s === 'stable') return 'flat';
-    return s;
-  }, z.enum(['up', 'down', 'flat'])),
+  trend: z.preprocess(
+    (value) => {
+      if (typeof value !== 'string') return value;
+      const s = value.trim().toLowerCase();
+      if (s === 'up' || s === 'increase' || s === 'rising') return 'up';
+      if (s === 'down' || s === 'decrease' || s === 'falling') return 'down';
+      if (s === 'flat' || s === 'same' || s === 'stable') return 'flat';
+      return s;
+    },
+    z.enum(['up', 'down', 'flat']),
+  ),
   changePercent: num,
 });
 
@@ -190,7 +197,10 @@ export class GeminiTreatmentAdapter implements AiTreatmentPort {
   private readonly logger = new Logger(GeminiTreatmentAdapter.name);
   constructor(private readonly gemini: GeminiClient) {}
 
-  async plan(diseaseNameBn: string, severity: 'low' | 'medium' | 'high'): Promise<TreatmentResult> {
+  async plan(
+    diseaseNameBn: string,
+    severity: 'low' | 'medium' | 'high',
+  ): Promise<TreatmentResult> {
     try {
       const raw = await this.gemini.generateJson<unknown>(
         `Write a practical pesticide spray plan for a Bangladeshi farmer.
@@ -223,7 +233,10 @@ Give 2-3 listings with real https search URLs on daraz.com.bd or google.com. If 
         { imageUrl: input.imageUrl, imageBuffer: input.imageBuffer },
       );
       const parsed = toolsSchema.parse(raw);
-      const listings = parsed.listings.length >= 1 ? parsed.listings : shopListings(parsed.toolNameEn);
+      const listings =
+        parsed.listings.length >= 1
+          ? parsed.listings
+          : shopListings(parsed.toolNameEn);
       return { ...parsed, listings };
     } catch (err) {
       failAi(this.logger, 'Tools', err);
@@ -236,7 +249,10 @@ export class GeminiReceiptAdapter implements AiReceiptPort {
   private readonly logger = new Logger(GeminiReceiptAdapter.name);
   constructor(private readonly gemini: GeminiClient) {}
 
-  async scan(input: { imageUrl?: string; imageBuffer?: Buffer }): Promise<ReceiptResult> {
+  async scan(input: {
+    imageUrl?: string;
+    imageBuffer?: Buffer;
+  }): Promise<ReceiptResult> {
     try {
       const raw = await this.gemini.generateJson<unknown>(
         `Read this Bangladeshi shop/agro receipt (Bangla or English handwriting or print).
@@ -247,7 +263,10 @@ totalBdt must be a number (not a string). If the printed total is missing, sum t
         { imageUrl: input.imageUrl, imageBuffer: input.imageBuffer },
       );
       const parsed = receiptSchema.parse(raw);
-      const summed = parsed.items.reduce((acc, item) => acc + takaFromPrice(item.priceBn), 0);
+      const summed = parsed.items.reduce(
+        (acc, item) => acc + takaFromPrice(item.priceBn),
+        0,
+      );
       const totalBdt = parsed.totalBdt > 0 ? parsed.totalBdt : summed;
       return { ...parsed, totalBdt };
     } catch (err) {

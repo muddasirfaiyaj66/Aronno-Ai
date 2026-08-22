@@ -52,7 +52,10 @@ export type ReceiptResult = {
 };
 
 export interface AiReceiptPort {
-  scan(input: { imageUrl?: string; imageBuffer?: Buffer }): Promise<ReceiptResult>;
+  scan(input: {
+    imageUrl?: string;
+    imageBuffer?: Buffer;
+  }): Promise<ReceiptResult>;
 }
 
 export type FertilizerResult = {
@@ -93,7 +96,10 @@ export interface TtsPort {
 export type { WeatherPort } from '../weather/weather.types';
 
 export interface CostEstimatePort {
-  estimate(landSize: number, landUnit: 'bigha' | 'acre'): {
+  estimate(
+    landSize: number,
+    landUnit: 'bigha' | 'acre',
+  ): {
     pesticideQuantity: string;
     totalCostBdt: number;
     spraySessions: number;

@@ -34,7 +34,10 @@ import { WeatherModule } from './weather/weather.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env', '.env.local'] }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['.env', '.env.local'],
+    }),
     JwtModule.register({}),
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],

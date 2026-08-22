@@ -28,7 +28,9 @@ export class CostController {
     @CurrentUser() user: AuthUser,
     @Body(new ZodPipe(createSchema)) body: z.infer<typeof createSchema>,
   ) {
-    const crop = await this.prisma.crop.findUnique({ where: { slug: body.cropSlug } });
+    const crop = await this.prisma.crop.findUnique({
+      where: { slug: body.cropSlug },
+    });
     if (!crop) throw Errors.notFound();
     const result = this.port.estimate(body.landSize, body.landUnit);
     const row = await this.prisma.costEstimate.create({
@@ -52,7 +54,8 @@ export class CostController {
   async get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     const row = await this.prisma.costEstimate.findUnique({ where: { id } });
     if (!row) throw Errors.notFound();
-    if (row.userId !== user.id && user.role === 'USER') throw Errors.forbidden();
+    if (row.userId !== user.id && user.role === 'USER')
+      throw Errors.forbidden();
     return {
       id: row.id,
       pesticideQuantity: row.pesticideQuantity,

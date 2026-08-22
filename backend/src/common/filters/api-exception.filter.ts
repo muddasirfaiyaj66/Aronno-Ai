@@ -45,7 +45,8 @@ export class ApiExceptionFilter implements ExceptionFilter {
           message:
             typeof payload === 'string'
               ? payload
-              : ((payload as { message?: string }).message ?? 'অনুরোধ ব্যর্থ হয়েছে।'),
+              : ((payload as { message?: string }).message ??
+                'অনুরোধ ব্যর্থ হয়েছে।'),
         },
       });
       return;

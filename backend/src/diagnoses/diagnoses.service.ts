@@ -20,24 +20,24 @@ export class DiagnosesService {
     private readonly gemini: GeminiClient,
   ) {}
 
-  private dto(
-    row: {
-      id: string;
-      diseaseNameBn: string;
-      diseaseNameEn: string;
-      confidence: number;
-      severity: string;
-      imageObjectKey: string | null;
-      createdAt: Date;
-    },
-  ) {
+  private dto(row: {
+    id: string;
+    diseaseNameBn: string;
+    diseaseNameEn: string;
+    confidence: number;
+    severity: string;
+    imageObjectKey: string | null;
+    createdAt: Date;
+  }) {
     return {
       id: row.id,
       diseaseNameBn: row.diseaseNameBn,
       diseaseNameEn: row.diseaseNameEn,
       confidence: row.confidence,
       severity: row.severity,
-      imageUrl: row.imageObjectKey ? this.storage.urlFor(row.imageObjectKey) : '',
+      imageUrl: row.imageObjectKey
+        ? this.storage.urlFor(row.imageObjectKey)
+        : '',
       createdAt: row.createdAt.toISOString(),
     };
   }
@@ -53,7 +53,8 @@ export class DiagnosesService {
 
   async transcribe(audioBase64: string, mimeType?: string) {
     const buf = Buffer.from(audioBase64, 'base64');
-    if (buf.length < 80 || buf.length > 4_000_000) throw Errors.validation({ audio: 'invalid' });
+    if (buf.length < 80 || buf.length > 4_000_000)
+      throw Errors.validation({ audio: 'invalid' });
     const prompt = `Transcribe this farmer speaking. Prefer Bangla (bn-BD).
 Return JSON only: {"transcriptBn":"..."}
 If the clip is silent or unintelligible, return {"transcriptBn":""}.`;
@@ -131,7 +132,8 @@ If the clip is silent or unintelligible, return {"transcriptBn":""}.`;
   async get(user: AuthUser, id: string) {
     const row = await this.prisma.diagnosis.findUnique({ where: { id } });
     if (!row) throw Errors.notFound();
-    if (row.userId !== user.id && user.role === 'USER') throw Errors.forbidden();
+    if (row.userId !== user.id && user.role === 'USER')
+      throw Errors.forbidden();
     return this.dto(row);
   }
 

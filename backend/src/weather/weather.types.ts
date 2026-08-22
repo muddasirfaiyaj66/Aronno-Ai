@@ -26,7 +26,9 @@ export type MonthOutlook = {
 
 export interface WeatherPort {
   current(point: GeoPoint): Promise<CurrentWeather>;
-  sprayAdvisory(point: GeoPoint): Promise<{ level: SprayLevel; reasonBn: string }>;
+  sprayAdvisory(
+    point: GeoPoint,
+  ): Promise<{ level: SprayLevel; reasonBn: string }>;
   summaryBn(point: GeoPoint): Promise<string>;
   sixMonthPlan(point: GeoPoint): Promise<{
     recommendationBn: string;

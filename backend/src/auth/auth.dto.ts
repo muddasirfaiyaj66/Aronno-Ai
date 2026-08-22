@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { normalizeOtpCode } from './otp.util';
+import { normalizeEmail, normalizeOtpCode } from './otp.util';
 
 const passwordSchema = z
   .string()
@@ -11,7 +11,10 @@ const passwordSchema = z
 
 export const registerSchema = z
   .object({
-    email: z.string().email(),
+    email: z
+      .string()
+      .email()
+      .transform((value) => normalizeEmail(value)),
     password: passwordSchema,
     displayName: z.string().min(2).max(80),
     professionSlug: z.string().min(1).optional(),
@@ -20,7 +23,10 @@ export const registerSchema = z
 
 export const loginSchema = z
   .object({
-    email: z.string().email(),
+    email: z
+      .string()
+      .email()
+      .transform((value) => normalizeEmail(value)),
     password: z.string().min(1),
   })
   .strict();
@@ -33,7 +39,10 @@ export const googleSchema = z
 
 export const otpSchema = z
   .object({
-    email: z.string().email(),
+    email: z
+      .string()
+      .email()
+      .transform((value) => normalizeEmail(value)),
     code: z
       .string()
       .transform((value) => normalizeOtpCode(value))
@@ -41,11 +50,21 @@ export const otpSchema = z
   })
   .strict();
 
-export const emailOnlySchema = z.object({ email: z.string().email() }).strict();
+export const emailOnlySchema = z
+  .object({
+    email: z
+      .string()
+      .email()
+      .transform((value) => normalizeEmail(value)),
+  })
+  .strict();
 
 export const resetPasswordSchema = z
   .object({
-    email: z.string().email(),
+    email: z
+      .string()
+      .email()
+      .transform((value) => normalizeEmail(value)),
     code: z
       .string()
       .transform((value) => normalizeOtpCode(value))

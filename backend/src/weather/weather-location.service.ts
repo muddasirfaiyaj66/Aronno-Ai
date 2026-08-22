@@ -20,7 +20,8 @@ export class WeatherLocationService {
   ): Promise<GeoPoint> {
     const gps = parseLatLon(latRaw, lonRaw);
     if (gps) {
-      const locationBn = (await this.reverseLabel(gps.lat, gps.lon)) ?? 'আপনার অবস্থান';
+      const locationBn =
+        (await this.reverseLabel(gps.lat, gps.lon)) ?? 'আপনার অবস্থান';
       return { ...gps, locationBn };
     }
     const me = await this.prisma.user.findUnique({

@@ -29,12 +29,16 @@ export class UsersService {
           where: { slug: input.professionSlug },
         })
       : undefined;
-    if (input.professionSlug && !profession) throw Errors.validation({ professionSlug: 'unknown' });
+    if (input.professionSlug && !profession)
+      throw Errors.validation({ professionSlug: 'unknown' });
 
     const district = input.districtSlug
-      ? await this.prisma.district.findUnique({ where: { slug: input.districtSlug } })
+      ? await this.prisma.district.findUnique({
+          where: { slug: input.districtSlug },
+        })
       : undefined;
-    if (input.districtSlug && !district) throw Errors.validation({ districtSlug: 'unknown' });
+    if (input.districtSlug && !district)
+      throw Errors.validation({ districtSlug: 'unknown' });
 
     await this.prisma.user.update({
       where: { id },

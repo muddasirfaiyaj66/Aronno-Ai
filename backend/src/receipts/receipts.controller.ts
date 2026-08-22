@@ -51,7 +51,8 @@ export class ReceiptsController {
       include: { items: { orderBy: { sortOrder: 'asc' } } },
     });
     if (!row) throw Errors.notFound();
-    if (row.userId !== user.id && user.role === 'USER') throw Errors.forbidden();
+    if (row.userId !== user.id && user.role === 'USER')
+      throw Errors.forbidden();
     return this.dto(row);
   }
 

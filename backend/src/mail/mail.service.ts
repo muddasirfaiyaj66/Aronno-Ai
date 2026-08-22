@@ -25,7 +25,10 @@ export class MailService {
   }
 
   async sendOtp(to: string, subject: string, code: string, bodyBn: string) {
-    const from = this.config.get<string>('SMTP_FROM', 'Aronno <noreply@aronno.local>');
+    const from = this.config.get<string>(
+      'SMTP_FROM',
+      'Aronno <noreply@aronno.local>',
+    );
     const html = `
       <div style="font-family:sans-serif;max-width:480px">
         <h2>আরণ্য</h2>

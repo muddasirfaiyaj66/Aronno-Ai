@@ -158,8 +158,12 @@ export const api = createApi({
       query: (body) => ({ url: "/auth/login", method: "POST", body }),
       transformResponse: (r) => unwrap<AuthUser>(r),
       async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
-        const { data } = await queryFulfilled;
-        dispatch(setUser(data));
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(setUser(data));
+        } catch {
+          // handled via mutation error state
+        }
       },
       invalidatesTags: ["Auth", "User"],
     }),
@@ -167,8 +171,12 @@ export const api = createApi({
       query: (body) => ({ url: "/auth/google", method: "POST", body }),
       transformResponse: (r) => unwrap<AuthUser>(r),
       async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
-        const { data } = await queryFulfilled;
-        dispatch(setUser(data));
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(setUser(data));
+        } catch {
+          // handled via mutation error state
+        }
       },
       invalidatesTags: ["Auth", "User"],
     }),
@@ -176,8 +184,12 @@ export const api = createApi({
       query: (body) => ({ url: "/auth/verify-email", method: "POST", body }),
       transformResponse: (r) => unwrap<AuthUser>(r),
       async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
-        const { data } = await queryFulfilled;
-        dispatch(setUser(data));
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(setUser(data));
+        } catch {
+          // handled via mutation error state
+        }
       },
       invalidatesTags: ["Auth", "User"],
     }),

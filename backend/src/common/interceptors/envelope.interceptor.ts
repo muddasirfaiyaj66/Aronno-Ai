@@ -13,7 +13,11 @@ const SKIP = new Set(['/api/health']);
 export class EnvelopeInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const req = context.switchToHttp().getRequest<Request>();
-    if (SKIP.has(req.path) || req.path.startsWith('/api/uploads') || req.path.startsWith('/api/tts/audio')) {
+    if (
+      SKIP.has(req.path) ||
+      req.path.startsWith('/api/uploads') ||
+      req.path.startsWith('/api/tts/audio')
+    ) {
       return next.handle();
     }
     return next.handle().pipe(

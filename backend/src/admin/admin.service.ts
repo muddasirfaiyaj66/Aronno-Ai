@@ -30,7 +30,9 @@ export class AdminService {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) throw Errors.conflict('এই ইমেইল ইতিমধ্যে ব্যবহৃত হয়েছে।');
 
-    const adminRole = await this.prisma.role.findUnique({ where: { slug: 'ADMIN' } });
+    const adminRole = await this.prisma.role.findUnique({
+      where: { slug: 'ADMIN' },
+    });
     if (!adminRole) throw Errors.notFound('রোল পাওয়া যায়নি।');
 
     const user = await this.prisma.user.create({
@@ -79,9 +81,14 @@ export class AdminService {
     if (roleSlug === 'SUPERADMIN' && actor.role !== 'SUPERADMIN') {
       throw Errors.forbidden();
     }
-    const role = await this.prisma.role.findUnique({ where: { slug: roleSlug } });
+    const role = await this.prisma.role.findUnique({
+      where: { slug: roleSlug },
+    });
     if (!role) throw Errors.notFound();
-    await this.prisma.user.update({ where: { id: userId }, data: { roleId: role.id } });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { roleId: role.id },
+    });
     await this.prisma.auditLog.create({
       data: {
         actorUserId: actor.id,
@@ -102,7 +109,10 @@ export class AdminService {
     if (target.role.slug === 'SUPERADMIN' && actor.role !== 'SUPERADMIN') {
       throw Errors.forbidden();
     }
-    await this.prisma.user.update({ where: { id: userId }, data: { isActive } });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { isActive },
+    });
     await this.prisma.auditLog.create({
       data: {
         actorUserId: actor.id,

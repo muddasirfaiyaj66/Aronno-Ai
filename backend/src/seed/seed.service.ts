@@ -16,7 +16,11 @@ const PROFESSIONS = [
   { slug: 'shop_owner', nameBn: 'দোকান মালিক', nameEn: 'Shop owner' },
   { slug: 'agronomist', nameBn: 'কৃষিবিদ', nameEn: 'Agronomist' },
   { slug: 'trader', nameBn: 'ব্যবসায়ী', nameEn: 'Trader' },
-  { slug: 'extension_officer', nameBn: 'সম্প্রসারণ কর্মকর্তা', nameEn: 'Extension officer' },
+  {
+    slug: 'extension_officer',
+    nameBn: 'সম্প্রসারণ কর্মকর্তা',
+    nameEn: 'Extension officer',
+  },
   { slug: 'other', nameBn: 'অন্যান্য', nameEn: 'Other' },
 ];
 
@@ -100,7 +104,10 @@ export class SeedService implements OnModuleInit {
     });
     if (existingRoleUser) return;
 
-    const email = this.config.get<string>('SUPERADMIN_EMAIL')?.trim().toLowerCase();
+    const email = this.config
+      .get<string>('SUPERADMIN_EMAIL')
+      ?.trim()
+      .toLowerCase();
     const password = this.config.get<string>('SUPERADMIN_PASSWORD');
     if (!email || !password) {
       this.logger.warn(
@@ -108,7 +115,9 @@ export class SeedService implements OnModuleInit {
       );
       return;
     }
-    const existingEmail = await this.prisma.user.findUnique({ where: { email } });
+    const existingEmail = await this.prisma.user.findUnique({
+      where: { email },
+    });
     if (existingEmail) return;
 
     const name =
@@ -135,15 +144,28 @@ export class SeedService implements OnModuleInit {
   }
 
   private async seedDemoUser() {
-    const userRole = await this.prisma.role.findUnique({ where: { slug: 'USER' } });
-    const farmer = await this.prisma.profession.findUnique({ where: { slug: 'farmer' } });
-    const jashore = await this.prisma.district.findUnique({ where: { slug: 'jashore' } });
+    const userRole = await this.prisma.role.findUnique({
+      where: { slug: 'USER' },
+    });
+    const farmer = await this.prisma.profession.findUnique({
+      where: { slug: 'farmer' },
+    });
+    const jashore = await this.prisma.district.findUnique({
+      where: { slug: 'jashore' },
+    });
     const rice = await this.prisma.crop.findUnique({ where: { slug: 'rice' } });
-    const potato = await this.prisma.crop.findUnique({ where: { slug: 'potato' } });
-    const seedPurpose = await this.prisma.loanPurpose.findUnique({ where: { slug: 'fertilizer' } });
-    if (!userRole || !farmer || !jashore || !rice || !potato || !seedPurpose) return;
+    const potato = await this.prisma.crop.findUnique({
+      where: { slug: 'potato' },
+    });
+    const seedPurpose = await this.prisma.loanPurpose.findUnique({
+      where: { slug: 'fertilizer' },
+    });
+    if (!userRole || !farmer || !jashore || !rice || !potato || !seedPurpose)
+      return;
 
-    let user = await this.prisma.user.findUnique({ where: { email: DEMO_EMAIL } });
+    let user = await this.prisma.user.findUnique({
+      where: { email: DEMO_EMAIL },
+    });
     if (!user) {
       try {
         user = await this.prisma.user.create({
@@ -159,12 +181,16 @@ export class SeedService implements OnModuleInit {
         });
         this.logger.log(`Seeded demo farmer ${DEMO_EMAIL}`);
       } catch (err) {
-        user = await this.prisma.user.findUnique({ where: { email: DEMO_EMAIL } });
+        user = await this.prisma.user.findUnique({
+          where: { email: DEMO_EMAIL },
+        });
         if (!user) throw err;
       }
     } else {
       const passwordOk = user.passwordHash
-        ? await this.passwords.verify(user.passwordHash, DEMO_PASSWORD).catch(() => false)
+        ? await this.passwords
+            .verify(user.passwordHash, DEMO_PASSWORD)
+            .catch(() => false)
         : false;
       if (!passwordOk || !user.emailVerifiedAt) {
         user = await this.prisma.user.update({
@@ -179,10 +205,13 @@ export class SeedService implements OnModuleInit {
       }
     }
 
-    const existing = await this.prisma.diagnosis.count({ where: { userId: user.id } });
+    const existing = await this.prisma.diagnosis.count({
+      where: { userId: user.id },
+    });
     if (existing > 0) return;
 
-    const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+    const daysAgo = (n: number) =>
+      new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 
     const diagnosis = await this.prisma.diagnosis.create({
       data: {
@@ -223,31 +252,67 @@ export class SeedService implements OnModuleInit {
     });
     await this.prisma.treatmentStep.createMany({
       data: [
-        { treatmentPlanId: plan.id, step: 1, instructionBn: '১৬ লিটার পানির সাথে ৫০ মিলি ওষুধ মেশান।' },
-        { treatmentPlanId: plan.id, step: 2, instructionBn: 'মিশ্রণটি ভালোভাবে ঝাঁকিয়ে নিন।' },
-        { treatmentPlanId: plan.id, step: 3, instructionBn: 'বিকেলে রোদ কম থাকা অবস্থায় পুরো পাতায় স্প্রে করুন।' },
-        { treatmentPlanId: plan.id, step: 4, instructionBn: 'স্প্রে করার পর হাত ও মুখ ভালোভাবে ধুয়ে ফেলুন।' },
+        {
+          treatmentPlanId: plan.id,
+          step: 1,
+          instructionBn: '১৬ লিটার পানির সাথে ৫০ মিলি ওষুধ মেশান।',
+        },
+        {
+          treatmentPlanId: plan.id,
+          step: 2,
+          instructionBn: 'মিশ্রণটি ভালোভাবে ঝাঁকিয়ে নিন।',
+        },
+        {
+          treatmentPlanId: plan.id,
+          step: 3,
+          instructionBn: 'বিকেলে রোদ কম থাকা অবস্থায় পুরো পাতায় স্প্রে করুন।',
+        },
+        {
+          treatmentPlanId: plan.id,
+          step: 4,
+          instructionBn: 'স্প্রে করার পর হাত ও মুখ ভালোভাবে ধুয়ে ফেলুন।',
+        },
       ],
     });
     await this.prisma.safetyItem.createMany({
       data: [
         { treatmentPlanId: plan.id, labelBn: 'হাতে গ্লাভস পরুন', sortOrder: 0 },
         { treatmentPlanId: plan.id, labelBn: 'মুখে মাস্ক পরুন', sortOrder: 1 },
-        { treatmentPlanId: plan.id, labelBn: 'শিশুদের ক্ষেত থেকে দূরে রাখুন', sortOrder: 2 },
+        {
+          treatmentPlanId: plan.id,
+          labelBn: 'শিশুদের ক্ষেত থেকে দূরে রাখুন',
+          sortOrder: 2,
+        },
       ],
     });
 
     await this.prisma.receipt.create({
       data: {
         userId: user.id,
-        imageObjectKey: 'https://res.cloudinary.com/demo/image/upload/sample.jpg',
+        imageObjectKey:
+          'https://res.cloudinary.com/demo/image/upload/sample.jpg',
         totalBdt: 3200,
         summaryBn: 'মোট ৩,২০০ টাকা খরচ হয়েছে, যার মধ্যে সার ২,০০০ টাকা।',
         items: {
           create: [
-            { nameBn: 'ইউরিয়া সার', quantity: '২ ব্যাগ', priceBn: '৳ ২,০০০', sortOrder: 0 },
-            { nameBn: 'কীটনাশক', quantity: '১ বোতল', priceBn: '৳ ৮০০', sortOrder: 1 },
-            { nameBn: 'বীজ', quantity: '৫ কেজি', priceBn: '৳ ৪০০', sortOrder: 2 },
+            {
+              nameBn: 'ইউরিয়া সার',
+              quantity: '২ ব্যাগ',
+              priceBn: '৳ ২,০০০',
+              sortOrder: 0,
+            },
+            {
+              nameBn: 'কীটনাশক',
+              quantity: '১ বোতল',
+              priceBn: '৳ ৮০০',
+              sortOrder: 1,
+            },
+            {
+              nameBn: 'বীজ',
+              quantity: '৫ কেজি',
+              priceBn: '৳ ৪০০',
+              sortOrder: 2,
+            },
           ],
         },
       },
@@ -260,7 +325,8 @@ export class SeedService implements OnModuleInit {
         transcriptBn: 'ঘাস কাটার যন্ত্র দরকার',
         toolNameBn: 'ব্রাশ কাটার',
         toolNameEn: 'Brush Cutter',
-        reasonBn: 'ঘাস ও ছোট ঝোপ হাতে কাটার চেয়ে অনেক কম সময়ে পরিষ্কার করা যায়।',
+        reasonBn:
+          'ঘাস ও ছোট ঝোপ হাতে কাটার চেয়ে অনেক কম সময়ে পরিষ্কার করা যায়।',
         listings: {
           create: [
             {
@@ -325,12 +391,42 @@ export class SeedService implements OnModuleInit {
           'শ্রাবণ ও ভাদ্রে আমন ধান উপযুক্ত। আশ্বিনে শাকসবজি, শীতে আলু, পৌষে সরিষা চাষ করা যায়।',
         months: {
           create: [
-            { monthBn: 'শ্রাবণ', weatherIcon: 'rainy-outline', recommendedCropBn: 'আমন ধান', sortOrder: 0 },
-            { monthBn: 'ভাদ্র', weatherIcon: 'rainy-outline', recommendedCropBn: 'আমন ধান', sortOrder: 1 },
-            { monthBn: 'আশ্বিন', weatherIcon: 'partly-sunny-outline', recommendedCropBn: 'শাকসবজি', sortOrder: 2 },
-            { monthBn: 'কার্তিক', weatherIcon: 'sunny-outline', recommendedCropBn: 'আলু', sortOrder: 3 },
-            { monthBn: 'অগ্রহায়ণ', weatherIcon: 'sunny-outline', recommendedCropBn: 'আলু', sortOrder: 4 },
-            { monthBn: 'পৌষ', weatherIcon: 'cloudy-outline', recommendedCropBn: 'সরিষা', sortOrder: 5 },
+            {
+              monthBn: 'শ্রাবণ',
+              weatherIcon: 'rainy-outline',
+              recommendedCropBn: 'আমন ধান',
+              sortOrder: 0,
+            },
+            {
+              monthBn: 'ভাদ্র',
+              weatherIcon: 'rainy-outline',
+              recommendedCropBn: 'আমন ধান',
+              sortOrder: 1,
+            },
+            {
+              monthBn: 'আশ্বিন',
+              weatherIcon: 'partly-sunny-outline',
+              recommendedCropBn: 'শাকসবজি',
+              sortOrder: 2,
+            },
+            {
+              monthBn: 'কার্তিক',
+              weatherIcon: 'sunny-outline',
+              recommendedCropBn: 'আলু',
+              sortOrder: 3,
+            },
+            {
+              monthBn: 'অগ্রহায়ণ',
+              weatherIcon: 'sunny-outline',
+              recommendedCropBn: 'আলু',
+              sortOrder: 4,
+            },
+            {
+              monthBn: 'পৌষ',
+              weatherIcon: 'cloudy-outline',
+              recommendedCropBn: 'সরিষা',
+              sortOrder: 5,
+            },
           ],
         },
       },

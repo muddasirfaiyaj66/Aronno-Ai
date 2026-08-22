@@ -17,7 +17,8 @@ export function isRetiredGeminiModel(id: string): boolean {
 
 export function resolveFreeGeminiModel(raw?: string | null): string {
   const id = raw?.trim() ?? '';
-  if (!id || /pro/i.test(id) || isRetiredGeminiModel(id)) return DEFAULT_GEMINI_MODEL;
+  if (!id || /pro/i.test(id) || isRetiredGeminiModel(id))
+    return DEFAULT_GEMINI_MODEL;
   if (/flash/i.test(id)) return id;
   return DEFAULT_GEMINI_MODEL;
 }
@@ -27,8 +28,7 @@ function modelCandidates(preferred: string): string[] {
 }
 
 type GeminiPart =
-  | { text: string }
-  | { inline_data: { mime_type: string; data: string } };
+  { text: string } | { inline_data: { mime_type: string; data: string } };
 
 @Injectable()
 export class GeminiClient {
@@ -38,11 +38,17 @@ export class GeminiClient {
 
   constructor(private readonly config: ConfigService) {
     this.apiKey = this.config.get<string>('GEMINI_API_KEY')?.trim() ?? '';
-    this.model = resolveFreeGeminiModel(this.config.get<string>('GEMINI_MODEL'));
+    this.model = resolveFreeGeminiModel(
+      this.config.get<string>('GEMINI_MODEL'),
+    );
     if (this.isEnabled()) {
-      this.logger.log(`Gemini enabled — free model ${this.model} (Pro never used)`);
+      this.logger.log(
+        `Gemini enabled — free model ${this.model} (Pro never used)`,
+      );
     } else {
-      this.logger.warn('GEMINI_API_KEY missing — AI endpoints will return AI_UNAVAILABLE');
+      this.logger.warn(
+        'GEMINI_API_KEY missing — AI endpoints will return AI_UNAVAILABLE',
+      );
     }
   }
 
@@ -67,7 +73,9 @@ export class GeminiClient {
       if (opts.audioBuffer.length > 4_000_000) throw Errors.aiUnavailable();
       parts.unshift({
         inline_data: {
-          mime_type: opts.audioMime?.startsWith('audio/') ? opts.audioMime : 'audio/mp4',
+          mime_type: opts.audioMime?.startsWith('audio/')
+            ? opts.audioMime
+            : 'audio/mp4',
           data: opts.audioBuffer.toString('base64'),
         },
       });
@@ -96,13 +104,18 @@ export class GeminiClient {
       const raw = await res.text();
       lastStatus = res.status;
       if (!res.ok) {
-        this.logger.warn(`Gemini ${model} HTTP ${res.status}: ${this.redact(raw)}`);
+        this.logger.warn(
+          `Gemini ${model} HTTP ${res.status}: ${this.redact(raw)}`,
+        );
         if (res.status === 404) continue;
         throw Errors.aiUnavailable();
       }
 
       let payload: {
-        candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
+        candidates?: {
+          content?: { parts?: { text?: string }[] };
+          finishReason?: string;
+        }[];
       };
       try {
         payload = JSON.parse(raw) as typeof payload;
@@ -112,7 +125,9 @@ export class GeminiClient {
       }
 
       const text =
-        payload.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+        payload.candidates?.[0]?.content?.parts
+          ?.map((p) => p.text ?? '')
+          .join('') ?? '';
       try {
         return extractJson<T>(text);
       } catch {
@@ -128,7 +143,10 @@ export class GeminiClient {
   }
 
   private redact(text: string) {
-    return text.replaceAll(this.apiKey, '[redacted]').replace(/[A-Za-z0-9_-]{24,}/g, '[id]').slice(0, 220);
+    return text
+      .replaceAll(this.apiKey, '[redacted]')
+      .replace(/[A-Za-z0-9_-]{24,}/g, '[id]')
+      .slice(0, 220);
   }
 
   private async imagePart(
@@ -149,7 +167,8 @@ export class GeminiClient {
       if (!res.ok) return null;
       const buf = Buffer.from(await res.arrayBuffer());
       if (buf.length < 80 || buf.length > 4_000_000) return null;
-      const mime = res.headers.get('content-type')?.split(';')[0] || 'image/jpeg';
+      const mime =
+        res.headers.get('content-type')?.split(';')[0] || 'image/jpeg';
       return {
         inline_data: {
           mime_type: mime.startsWith('image/') ? mime : 'image/jpeg',

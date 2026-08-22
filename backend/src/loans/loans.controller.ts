@@ -55,7 +55,9 @@ export class LoansController {
       repaymentPeriod: PERIOD_API[row.repaymentPeriod],
       status: row.status,
       submittedDateBn: dateBn(row.createdAt),
-      nextPaymentDateBn: row.nextPaymentDue ? dateBn(row.nextPaymentDue) : undefined,
+      nextPaymentDateBn: row.nextPaymentDue
+        ? dateBn(row.nextPaymentDue)
+        : undefined,
     };
   }
 
@@ -104,7 +106,8 @@ export class LoansController {
       include: { purpose: true },
     });
     if (!row) throw Errors.notFound();
-    if (row.userId !== user.id && user.role === 'USER') throw Errors.forbidden();
+    if (row.userId !== user.id && user.role === 'USER')
+      throw Errors.forbidden();
     return this.dto(row);
   }
 }

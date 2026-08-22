@@ -41,6 +41,7 @@
     "nodemailer": "^9.0.5",
     "pdf-lib": "^1.17.1",
     "reflect-metadata": "^0.2.2",
+    "regenerator-runtime": "^0.14.1",
     "rxjs": "^7.8.1",
     "zod": "^4.4.3"
   },

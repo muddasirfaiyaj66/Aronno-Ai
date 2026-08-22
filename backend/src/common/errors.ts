@@ -13,11 +13,20 @@ export class ApiError extends HttpException {
 
 export const Errors = {
   validation: (details?: unknown) =>
-    new ApiError('VALIDATION_ERROR', 'অবৈধ তথ্য দেওয়া হয়েছে।', HttpStatus.BAD_REQUEST, details),
+    new ApiError(
+      'VALIDATION_ERROR',
+      'অবৈধ তথ্য দেওয়া হয়েছে।',
+      HttpStatus.BAD_REQUEST,
+      details,
+    ),
   unauthorized: () =>
     new ApiError('AUTH_INVALID', 'লগইন প্রয়োজন।', HttpStatus.UNAUTHORIZED),
   invalidCredentials: () =>
-    new ApiError('AUTH_INVALID', 'ইমেইল বা পাসওয়ার্ড ভুল।', HttpStatus.UNAUTHORIZED),
+    new ApiError(
+      'AUTH_INVALID',
+      'ইমেইল বা পাসওয়ার্ড ভুল।',
+      HttpStatus.UNAUTHORIZED,
+    ),
   locked: () =>
     new ApiError(
       'AUTH_LOCKED',
@@ -31,13 +40,25 @@ export const Errors = {
   conflict: (message: string) =>
     new ApiError('CONFLICT', message, HttpStatus.CONFLICT),
   unsupportedMedia: () =>
-    new ApiError('UNSUPPORTED_MEDIA', 'এই ফাইলের ধরন গ্রহণযোগ্য নয়।', HttpStatus.UNSUPPORTED_MEDIA_TYPE),
+    new ApiError(
+      'UNSUPPORTED_MEDIA',
+      'এই ফাইলের ধরন গ্রহণযোগ্য নয়।',
+      HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+    ),
   payloadTooLarge: () =>
-    new ApiError('PAYLOAD_TOO_LARGE', 'ফাইলের আকার খুব বড়।', HttpStatus.PAYLOAD_TOO_LARGE),
+    new ApiError(
+      'PAYLOAD_TOO_LARGE',
+      'ফাইলের আকার খুব বড়।',
+      HttpStatus.PAYLOAD_TOO_LARGE,
+    ),
   csrf: () =>
     new ApiError('CSRF', 'নিরাপত্তা টোকেন মিলছে না।', HttpStatus.FORBIDDEN),
   aiUnavailable: () =>
-    new ApiError('AI_UNAVAILABLE', 'AI সেবা এখন কাজ করছে না।', HttpStatus.SERVICE_UNAVAILABLE),
+    new ApiError(
+      'AI_UNAVAILABLE',
+      'AI সেবা এখন কাজ করছে না।',
+      HttpStatus.SERVICE_UNAVAILABLE,
+    ),
   weatherUnavailable: () =>
     new ApiError(
       'WEATHER_UNAVAILABLE',
@@ -51,5 +72,15 @@ export const Errors = {
       HttpStatus.FORBIDDEN,
     ),
   otpInvalid: () =>
-    new ApiError('OTP_INVALID', 'কোডটি ভুল বা মেয়াদ শেষ।', HttpStatus.BAD_REQUEST),
+    new ApiError(
+      'OTP_INVALID',
+      'কোডটি ভুল। আবার চেক করুন বা নতুন কোড পাঠান।',
+      HttpStatus.BAD_REQUEST,
+    ),
+  otpExpired: () =>
+    new ApiError(
+      'OTP_EXPIRED',
+      'কোডের মেয়াদ শেষ। "আবার কোড পাঠান" চাপুন।',
+      HttpStatus.BAD_REQUEST,
+    ),
 };

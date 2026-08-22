@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Inject, Param, Post, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
@@ -44,7 +52,8 @@ export class ReportsTtsController {
       include: { crop: true },
     });
     if (!diagnosis) throw Errors.notFound();
-    if (diagnosis.userId !== user.id && user.role === 'USER') throw Errors.forbidden();
+    if (diagnosis.userId !== user.id && user.role === 'USER')
+      throw Errors.forbidden();
     const plan = await this.treatment.getOrCreate(user, diagnosis.id);
     const report = await this.prisma.report.create({
       data: {
@@ -77,7 +86,8 @@ export class ReportsTtsController {
       include: { diagnosis: { include: { crop: true } } },
     });
     if (!report) throw Errors.notFound();
-    if (report.userId !== user.id && user.role === 'USER') throw Errors.forbidden();
+    if (report.userId !== user.id && user.role === 'USER')
+      throw Errors.forbidden();
     const treatment = report.treatmentPlanId
       ? await this.treatment.getOrCreate(user, report.diagnosisId)
       : null;
@@ -95,7 +105,9 @@ export class ReportsTtsController {
         cropNameBn: report.diagnosis.crop?.nameBn,
       },
       treatment,
-      pdfUrl: report.pdfObjectKey ? this.storage.urlFor(report.pdfObjectKey) : null,
+      pdfUrl: report.pdfObjectKey
+        ? this.storage.urlFor(report.pdfObjectKey)
+        : null,
       createdAt: report.createdAt.toISOString(),
     };
   }
@@ -110,7 +122,8 @@ export class ReportsTtsController {
       },
     });
     if (!report) throw Errors.notFound();
-    if (report.userId !== user.id && user.role === 'USER') throw Errors.forbidden();
+    if (report.userId !== user.id && user.role === 'USER')
+      throw Errors.forbidden();
 
     const plan = await this.treatment.getOrCreate(user, report.diagnosisId);
     const bytes = await buildReportPdf({
@@ -136,9 +149,7 @@ export class ReportsTtsController {
 
   @Throttle({ default: { ttl: 60000, limit: 10 } })
   @Post('tts')
-  async speak(
-    @Body(new ZodPipe(ttsSchema)) body: z.infer<typeof ttsSchema>,
-  ) {
+  async speak(@Body(new ZodPipe(ttsSchema)) body: z.infer<typeof ttsSchema>) {
     const text = body.textBn ?? 'আরণ্য থেকে শোনার সুবিধা।';
     const audio = await this.tts.synthesize(text);
     const id = `${Date.now()}`;

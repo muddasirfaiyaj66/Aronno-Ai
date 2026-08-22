@@ -4,6 +4,7 @@ import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { AuthScaffold } from "@/components/auth/AuthScaffold";
 import { AppText, FieldInput, PrimaryButton } from "@/components/ui";
 import { getApiError, useResetPasswordMutation } from "@/services/api";
+import { sanitizeOtpInput } from "@/utils/otp";
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
@@ -18,7 +19,7 @@ export default function ResetPasswordScreen() {
     try {
       await reset({
         email: email.trim(),
-        code: code.trim(),
+        code: sanitizeOtpInput(code),
         password,
       }).unwrap();
       router.replace("/login");
@@ -55,7 +56,7 @@ export default function ResetPasswordScreen() {
         <FieldInput
           label="কোড"
           value={code}
-          onChangeText={setCode}
+          onChangeText={(text) => setCode(sanitizeOtpInput(text))}
           keyboardType="number-pad"
           maxLength={6}
           textContentType="oneTimeCode"

@@ -27,7 +27,11 @@ function isPrivateOrigin(origin: string) {
   );
 }
 
-function isAllowedOrigin(origin: string | undefined, allowed: string[], isDev: boolean) {
+function isAllowedOrigin(
+  origin: string | undefined,
+  allowed: string[],
+  isDev: boolean,
+) {
   if (!origin) return true;
   if (allowed.includes(origin)) return true;
   if (origin.endsWith('.vercel.app')) return true;
@@ -40,7 +44,8 @@ function isAllowedOrigin(origin: string | undefined, allowed: string[], isDev: b
 export async function createNestApp(): Promise<NestExpressApplication> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService);
-  const isDev = (config.get<string>('NODE_ENV') ?? 'development') !== 'production';
+  const isDev =
+    (config.get<string>('NODE_ENV') ?? 'development') !== 'production';
 
   if (process.env.VERCEL === '1') {
     app.set('trust proxy', 1);
@@ -62,7 +67,10 @@ export async function createNestApp(): Promise<NestExpressApplication> {
     .filter(Boolean);
 
   app.enableCors({
-    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
       callback(null, isAllowedOrigin(origin, origins, isDev));
     },
     credentials: true,

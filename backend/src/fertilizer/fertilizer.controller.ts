@@ -29,7 +29,9 @@ export class FertilizerController {
     @CurrentUser() user: AuthUser,
     @Body(new ZodPipe(schema)) body: z.infer<typeof schema>,
   ) {
-    const crop = await this.prisma.crop.findUnique({ where: { slug: body.cropSlug } });
+    const crop = await this.prisma.crop.findUnique({
+      where: { slug: body.cropSlug },
+    });
     if (!crop) throw Errors.notFound();
     const ai = await this.ai.recommend(body);
     const row = await this.prisma.fertilizerAdvice.create({
@@ -52,9 +54,12 @@ export class FertilizerController {
 
   @Get(':id')
   async get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    const row = await this.prisma.fertilizerAdvice.findUnique({ where: { id } });
+    const row = await this.prisma.fertilizerAdvice.findUnique({
+      where: { id },
+    });
     if (!row) throw Errors.notFound();
-    if (row.userId !== user.id && user.role === 'USER') throw Errors.forbidden();
+    if (row.userId !== user.id && user.role === 'USER')
+      throw Errors.forbidden();
     return {
       id: row.id,
       fertilizerNameBn: row.fertilizerNameBn,

@@ -87,7 +87,8 @@ export class MarketController {
         });
         const prev = previous?.pricePerMon ?? row.pricePerMon;
         const diff = row.pricePerMon - prev;
-        const changePercent = prev === 0 ? 0 : Math.round((Math.abs(diff) / prev) * 100);
+        const changePercent =
+          prev === 0 ? 0 : Math.round((Math.abs(diff) / prev) * 100);
         const trend = diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat';
         return {
           id: row.id,
@@ -156,7 +157,9 @@ export class MarketController {
     @CurrentUser() user: AuthUser,
     @Body(new ZodPipe(listingSchema)) body: z.infer<typeof listingSchema>,
   ) {
-    const crop = await this.prisma.crop.findUnique({ where: { slug: body.cropSlug } });
+    const crop = await this.prisma.crop.findUnique({
+      where: { slug: body.cropSlug },
+    });
     const district = await this.prisma.district.findUnique({
       where: { slug: body.districtSlug },
     });

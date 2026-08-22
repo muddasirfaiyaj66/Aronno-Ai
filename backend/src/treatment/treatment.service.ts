@@ -32,8 +32,14 @@ export class TreatmentService {
       diseaseNameBn: plan.diagnosis.diseaseNameBn,
       pesticideNameBn: plan.pesticideNameBn,
       dosagePerBigha: plan.dosagePerBigha,
-      steps: plan.steps.map((s) => ({ step: s.step, instructionBn: s.instructionBn })),
-      safetyChecklist: plan.safety.map((s) => ({ id: s.id, labelBn: s.labelBn })),
+      steps: plan.steps.map((s) => ({
+        step: s.step,
+        instructionBn: s.instructionBn,
+      })),
+      safetyChecklist: plan.safety.map((s) => ({
+        id: s.id,
+        labelBn: s.labelBn,
+      })),
       followUpLabelBn: plan.followUpLabelBn,
       weatherAdvisory: plan.weather
         ? { level: plan.weather.level, reasonBn: plan.weather.reasonBn }
@@ -53,7 +59,8 @@ export class TreatmentService {
       include,
     });
     if (existing) {
-      if (existing.userId !== user.id && user.role === 'USER') throw Errors.forbidden();
+      if (existing.userId !== user.id && user.role === 'USER')
+        throw Errors.forbidden();
       return this.dto(existing);
     }
 
@@ -62,9 +69,13 @@ export class TreatmentService {
       include: { crop: true },
     });
     if (!diagnosis) throw Errors.notFound();
-    if (diagnosis.userId !== user.id && user.role === 'USER') throw Errors.forbidden();
+    if (diagnosis.userId !== user.id && user.role === 'USER')
+      throw Errors.forbidden();
 
-    const generated = await this.ai.plan(diagnosis.diseaseNameBn, diagnosis.severity);
+    const generated = await this.ai.plan(
+      diagnosis.diseaseNameBn,
+      diagnosis.severity,
+    );
     const point = await this.locations.forUser(user.id);
     const advisory = await this.weather.sprayAdvisory(point);
 

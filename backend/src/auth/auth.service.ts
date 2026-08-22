@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { OAuth2Client } from 'google-auth-library';
@@ -18,7 +18,7 @@ import { MailService } from '../mail/mail.service';
 import type { AuthUser } from './auth.types';
 import { EmailTokenPurpose } from '@prisma/client';
 import { randomInt } from 'node:crypto';
-import { normalizeOtpCode } from './otp.util';
+import { otpTokenHash } from './otp.util';
 
 export type UserDto = {
   id: string;
@@ -42,6 +42,7 @@ const userInclude = {
 @Injectable()
 export class AuthService {
   private google: OAuth2Client;
+  private readonly logger = new Logger(AuthService.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -139,7 +140,17 @@ export class AuthService {
     });
     if (!user || !user.passwordHash) throw Errors.invalidCredentials();
     if (!user.isActive) throw Errors.forbidden();
-    if (!user.emailVerifiedAt) throw Errors.unverified();
+    if (!user.emailVerifiedAt) {
+      const recentlySent = await this.hasActiveOtp(user.id, 'verification');
+      if (!recentlySent) {
+        try {
+          await this.sendOtp(user.id, user.email, 'verification');
+        } catch {
+          // still report unverified — user can resend on the verify screen
+        }
+      }
+      throw Errors.unverified();
+    }
     if (user.lockedUntil && user.lockedUntil > new Date())
       throw Errors.locked();
 
@@ -197,7 +208,10 @@ export class AuthService {
       where: { email: email.toLowerCase() },
     });
     if (user && !user.emailVerifiedAt) {
-      await this.sendOtp(user.id, user.email, 'verification');
+      const recentlySent = await this.hasActiveOtp(user.id, 'verification');
+      if (!recentlySent) {
+        await this.sendOtp(user.id, user.email, 'verification');
+      }
     }
     return { ok: true };
   }
@@ -207,7 +221,10 @@ export class AuthService {
       where: { email: email.toLowerCase() },
     });
     if (user?.passwordHash) {
-      await this.sendOtp(user.id, user.email, 'password_reset');
+      const recentlySent = await this.hasActiveOtp(user.id, 'password_reset');
+      if (!recentlySent) {
+        await this.sendOtp(user.id, user.email, 'password_reset');
+      }
     }
     return { ok: true };
   }
@@ -242,34 +259,70 @@ export class AuthService {
     email: string,
     purpose: EmailTokenPurpose,
   ) {
-    await this.prisma.emailToken.updateMany({
-      where: { userId, purpose, usedAt: null },
-      data: { usedAt: new Date() },
-    });
     const code = String(randomInt(100000, 1000000));
-    await this.prisma.emailToken.create({
+    const tokenHash = otpTokenHash(userId, purpose, code);
+    const token = await this.prisma.emailToken.create({
       data: {
         userId,
         purpose,
-        tokenHash: sha256(`${userId}:${purpose}:${code}`),
+        tokenHash,
+        usedAt: null,
         expiresAt: new Date(Date.now() + 15 * 60 * 1000),
       },
     });
-    if (purpose === 'verification') {
-      await this.mail.sendOtp(
-        email,
-        'আরণ্য — ইমেইল যাচাই',
-        code,
-        'আপনার ইমেইল যাচাইয়ের কোড:',
-      );
-    } else {
-      await this.mail.sendOtp(
-        email,
-        'আরণ্য — পাসওয়ার্ড রিসেট',
-        code,
-        'পাসওয়ার্ড রিসেটের কোড:',
-      );
+
+    this.logger.log(
+      `OTP send: userId=${userId} purpose=${purpose} code=${code} hash=${tokenHash.slice(0, 12)}… tokenId=${token.id}`,
+    );
+
+    try {
+      if (purpose === 'verification') {
+        await this.mail.sendOtp(
+          email,
+          'আরণ্য — ইমেইল যাচাই',
+          code,
+          'আপনার ইমেইল যাচাইয়ের কোড:',
+        );
+      } else {
+        await this.mail.sendOtp(
+          email,
+          'আরণ্য — পাসওয়ার্ড রিসেট',
+          code,
+          'পাসওয়ার্ড রিসেটের কোড:',
+        );
+      }
+    } catch (err) {
+      await this.prisma.emailToken.delete({ where: { id: token.id } });
+      throw err;
     }
+
+    // NOTE: we intentionally do NOT invalidate older unused codes here.
+    // Any code the user has in their inbox from the last 15 minutes should
+    // work, so the user is never confused about "which email do I use?".
+    // consumeOtp() marks the specific code as used on successful verification.
+  }
+
+  private isOtpTokenActive(token: {
+    usedAt: Date | null;
+    expiresAt: Date;
+  }): boolean {
+    return token.usedAt == null && token.expiresAt.getTime() > Date.now();
+  }
+
+  private async hasActiveOtp(
+    userId: string,
+    purpose: EmailTokenPurpose,
+  ): Promise<boolean> {
+    const RECENT_WINDOW_MS = 60 * 1000;
+    const recent = await this.prisma.emailToken.findMany({
+      where: {
+        userId,
+        purpose,
+        expiresAt: { gt: new Date() },
+        createdAt: { gt: new Date(Date.now() - RECENT_WINDOW_MS) },
+      },
+    });
+    return recent.some((t) => this.isOtpTokenActive(t));
   }
 
   private async consumeOtp(
@@ -281,18 +334,56 @@ export class AuthService {
       where: { email: email.toLowerCase() },
       include: { role: true },
     });
-    if (!user) throw Errors.otpInvalid();
-    const normalizedCode = normalizeOtpCode(code);
-    const token = await this.prisma.emailToken.findFirst({
+    if (!user) {
+      this.logger.warn(`OTP consume: no user for email=${email}`);
+      throw Errors.otpInvalid();
+    }
+    const tokenHash = otpTokenHash(user.id, purpose, code);
+    this.logger.log(
+      `OTP consume: userId=${user.id} purpose=${purpose} rawCode=${JSON.stringify(code)} hash=${tokenHash.slice(0, 12)}…`,
+    );
+
+    // MongoDB omits unset optional fields; Prisma `usedAt: null` does not match
+    // those documents. Fetch by hash, then validate used/expiry in application code.
+    const candidates = await this.prisma.emailToken.findMany({
       where: {
         userId: user.id,
         purpose,
-        usedAt: null,
-        expiresAt: { gt: new Date() },
-        tokenHash: sha256(`${user.id}:${purpose}:${normalizedCode}`),
+        tokenHash,
       },
+      orderBy: { createdAt: 'desc' },
     });
-    if (!token) throw Errors.otpInvalid();
+
+    const token = candidates.find((t) => this.isOtpTokenActive(t));
+    if (!token) {
+      const allForUser = await this.prisma.emailToken.findMany({
+        where: { userId: user.id, purpose },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          tokenHash: true,
+          usedAt: true,
+          createdAt: true,
+          expiresAt: true,
+        },
+      });
+      this.logger.warn(
+        `OTP consume miss: userId=${user.id} recentTokens=${
+          allForUser
+            .map(
+              (t) =>
+                `${t.id}(hash=${t.tokenHash.slice(0, 12)}…,used=${t.usedAt?.toISOString() ?? 'unset'},exp=${t.expiresAt.toISOString()})`,
+            )
+            .join(', ') || '<none>'
+        }`,
+      );
+      const expired = candidates.find(
+        (t) => t.usedAt == null && t.expiresAt.getTime() <= Date.now(),
+      );
+      if (expired) throw Errors.otpExpired();
+      throw Errors.otpInvalid();
+    }
     await this.prisma.emailToken.update({
       where: { id: token.id },
       data: { usedAt: new Date() },

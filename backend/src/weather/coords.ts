@@ -1,4 +1,7 @@
-import { BANGLADESH_DISTRICTS, DISTRICT_COORDS } from '../lookups/bangladesh-districts';
+import {
+  BANGLADESH_DISTRICTS,
+  DISTRICT_COORDS,
+} from '../lookups/bangladesh-districts';
 
 export type GeoPoint = {
   lat: number;
@@ -21,7 +24,10 @@ export function pointFromDistrict(
   if (slug && DISTRICT_COORDS[slug]) {
     return {
       ...DISTRICT_COORDS[slug],
-      locationBn: nameBn ?? BANGLADESH_DISTRICTS.find((d) => d.slug === slug)?.nameBn ?? slug,
+      locationBn:
+        nameBn ??
+        BANGLADESH_DISTRICTS.find((d) => d.slug === slug)?.nameBn ??
+        slug,
     };
   }
   return { ...DEFAULT_POINT, locationBn: nameBn ?? DEFAULT_POINT.locationBn };

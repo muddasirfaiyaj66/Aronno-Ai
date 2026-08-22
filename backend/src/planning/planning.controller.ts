@@ -26,7 +26,10 @@ export class PlanningController {
   ) {
     const point = await this.locations.forUser(user.id, body?.lat, body?.lon);
     const plan = await this.weather.sixMonthPlan(point);
-    const recommendationBn = await this.polishRecommendation(point.locationBn, plan);
+    const recommendationBn = await this.polishRecommendation(
+      point.locationBn,
+      plan,
+    );
     const row = await this.prisma.cropPlan.create({
       data: {
         userId: user.id,
@@ -59,7 +62,15 @@ export class PlanningController {
 
   private async polishRecommendation(
     locationBn: string,
-    plan: { recommendationBn: string; months: { monthBn: string; recommendedCropBn: string; tempC?: number; precipMm?: number }[] },
+    plan: {
+      recommendationBn: string;
+      months: {
+        monthBn: string;
+        recommendedCropBn: string;
+        tempC?: number;
+        precipMm?: number;
+      }[];
+    },
   ) {
     const monthLines = plan.months
       .map(

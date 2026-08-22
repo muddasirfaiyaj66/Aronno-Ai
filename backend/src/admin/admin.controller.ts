@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ZodPipe } from '../common/pipes/zod.pipe';
@@ -16,7 +24,7 @@ const loanStatusSchema = z
     status: z.enum(['pending', 'approved', 'repaying', 'rejected']),
   })
   .strict();
-
+// users
 @Controller('admin')
 @Roles('ADMIN')
 export class AdminController {
@@ -40,7 +48,8 @@ export class AdminController {
   patchRole(
     @CurrentUser() actor: AuthUser,
     @Param('id') id: string,
-    @Body(new ZodPipe(patchRoleSchema)) body: ReturnType<typeof patchRoleSchema.parse>,
+    @Body(new ZodPipe(patchRoleSchema))
+    body: ReturnType<typeof patchRoleSchema.parse>,
   ) {
     return this.admin.patchRole(actor, id, body.roleSlug);
   }
@@ -49,7 +58,8 @@ export class AdminController {
   patchActive(
     @CurrentUser() actor: AuthUser,
     @Param('id') id: string,
-    @Body(new ZodPipe(patchActiveSchema)) body: ReturnType<typeof patchActiveSchema.parse>,
+    @Body(new ZodPipe(patchActiveSchema))
+    body: ReturnType<typeof patchActiveSchema.parse>,
   ) {
     return this.admin.patchActive(actor, id, body.isActive);
   }
@@ -58,7 +68,8 @@ export class AdminController {
   patchLoan(
     @CurrentUser() actor: AuthUser,
     @Param('id') id: string,
-    @Body(new ZodPipe(loanStatusSchema)) body: ReturnType<typeof loanStatusSchema.parse>,
+    @Body(new ZodPipe(loanStatusSchema))
+    body: ReturnType<typeof loanStatusSchema.parse>,
   ) {
     return this.admin.patchLoanStatus(actor, id, body.status);
   }

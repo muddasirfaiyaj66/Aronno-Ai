@@ -17,7 +17,8 @@ export class UsersController {
   @Patch('me')
   patchMe(
     @CurrentUser() user: AuthUser,
-    @Body(new ZodPipe(patchMeSchema)) body: ReturnType<typeof patchMeSchema.parse>,
+    @Body(new ZodPipe(patchMeSchema))
+    body: ReturnType<typeof patchMeSchema.parse>,
   ) {
     return this.users.patchMe(user.id, body);
   }

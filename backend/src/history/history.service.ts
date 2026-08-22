@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { HistoryKind, RepaymentPeriod, type HistoryEvent } from '@prisma/client';
+import {
+  HistoryKind,
+  RepaymentPeriod,
+  type HistoryEvent,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { Errors } from '../common/errors';
@@ -33,8 +37,7 @@ export class HistoryService {
     cursor?: string,
     limit = 30,
   ) {
-    const ownerId =
-      user.role === 'USER' ? user.id : (userId ?? user.id);
+    const ownerId = user.role === 'USER' ? user.id : (userId ?? user.id);
     const events: HistoryEvent[] = await this.prisma.historyEvent.findMany({
       where: { userId: ownerId, ...(kind ? { kind } : {}) },
       take: Math.min(limit, 50),
@@ -49,7 +52,8 @@ export class HistoryService {
   async get(user: AuthUser, id: string) {
     const event = await this.prisma.historyEvent.findUnique({ where: { id } });
     if (!event) throw Errors.notFound();
-    if (event.userId !== user.id && user.role === 'USER') throw Errors.forbidden();
+    if (event.userId !== user.id && user.role === 'USER')
+      throw Errors.forbidden();
     const assembled = await this.assemble(event);
     if (!assembled) throw Errors.notFound();
     return assembled;
@@ -112,8 +116,10 @@ export class HistoryService {
       title: `কৃষি ঋণ — ${loan.purpose.nameBn}`,
       amount: `৳ ${loan.amountBdt.toLocaleString('bn-BD')}`,
       status: loan.status,
-      nextPaymentDate: loan.nextPaymentDue ? dateBn(loan.nextPaymentDue) : undefined,
-      repaymentPeriodBn: PERIOD_BN[loan.repaymentPeriod as RepaymentPeriod],
+      nextPaymentDate: loan.nextPaymentDue
+        ? dateBn(loan.nextPaymentDue)
+        : undefined,
+      repaymentPeriodBn: PERIOD_BN[loan.repaymentPeriod],
     };
   }
 }

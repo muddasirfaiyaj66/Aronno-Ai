@@ -1,3 +1,5 @@
+import { sha256 } from '../common/crypto.util';
+
 const UNICODE_ZERO_POINTS = [
   0x0030, // ASCII
   0x0660, // Arabic-Indic
@@ -19,5 +21,18 @@ function toAsciiDigit(char: string): string | null {
 }
 
 export function normalizeOtpCode(code: string): string {
-  return [...code].map((char) => toAsciiDigit(char) ?? '').join('');
+  const stripped = code.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+  return [...stripped].map((char) => toAsciiDigit(char) ?? '').join('');
+}
+
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+export function otpTokenHash(
+  userId: string,
+  purpose: string,
+  code: string,
+): string {
+  return sha256(`${userId}:${purpose}:${normalizeOtpCode(code)}`);
 }

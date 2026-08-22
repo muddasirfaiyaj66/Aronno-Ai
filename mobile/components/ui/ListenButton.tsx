@@ -20,8 +20,8 @@ export function ListenButton({
 }: ListenButtonProps) {
   const { t } = useLocale();
   const [playing, setPlaying] = useState(false);
-  const playLabel = label ?? t("শুনুন", "Listen");
-  const pauseLabel = t("বিরতি", "Pause");
+  const playLabel = label ?? t("শুনুন বাংলায়", "Listen in Bangla");
+  const pauseLabel = t("থামান", "Stop");
 
   const toggle = () => {
     if (playing) {
@@ -38,14 +38,23 @@ export function ListenButton({
       onPress={toggle}
       accessibilityRole="button"
       accessibilityLabel={playing ? pauseLabel : playLabel}
-      className={`min-h-touch flex-row items-center justify-center gap-2 rounded-2xl bg-white px-4 active:bg-secondary-soft ${className}`}
+      className={`min-h-touch-lg flex-row items-center justify-center gap-2 rounded-2xl px-5 active:opacity-90 ${
+        playing ? "bg-forest-800" : "bg-primary"
+      } ${className}`}
+      style={{
+        shadowColor: colors.primary,
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+        elevation: 4,
+      }}
     >
       <Ionicons
-        name={playing ? "pause-circle" : "play-circle"}
-        size={24}
-        color={colors.primary}
+        name={playing ? "stop-circle" : "volume-high"}
+        size={26}
+        color={colors.white}
       />
-      <AppText variant="body" className="font-bengali-semibold text-primary">
+      <AppText variant="bodyLg" className="font-bengali-bold text-white">
         {playing ? pauseLabel : playLabel}
       </AppText>
     </Pressable>

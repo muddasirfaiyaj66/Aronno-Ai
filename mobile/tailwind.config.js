@@ -32,19 +32,24 @@ module.exports = {
           soft: "#D1FAE5",
           strong: "#059669",
         },
-        // Neutral canvas #F9FAFB
+        harvest: {
+          DEFAULT: "#E8B84A",
+          soft: "#FBF3D5",
+          strong: "#C4921A",
+        },
+        // Warm field canvas
         neutral: {
-          DEFAULT: "#F9FAFB",
-          50: "#F9FAFB",
-          100: "#F3F4F6",
-          200: "#E5E7EB",
+          DEFAULT: "#F6F3EA",
+          50: "#F6F3EA",
+          100: "#EEE8D8",
+          200: "#E4DDCC",
           300: "#D1D5DB",
           400: "#9CA3AF",
-          500: "#6B7280",
+          500: "#5C6B63",
           600: "#4B5563",
           700: "#374151",
           800: "#1F2937",
-          900: "#111827",
+          900: "#1A2E24",
         },
         // Aliases used across existing components
         forest: {
@@ -73,9 +78,9 @@ module.exports = {
           500: "#6B7280",
           700: "#374151",
         },
-        sand: "#F9FAFB",
-        ink: "#111827",
-        muted: "#6B7280",
+        sand: "#F6F3EA",
+        ink: "#1A2E24",
+        muted: "#5C6B63",
         accent: {
           DEFAULT: "#10B981",
           soft: "#D1FAE5",
@@ -97,16 +102,16 @@ module.exports = {
         "bengali-bold": ["NotoSansBengali_700Bold"],
       },
       fontSize: {
-        caption: ["14px", { lineHeight: "20px" }],
-        body: ["16px", { lineHeight: "24px" }],
-        "body-lg": ["18px", { lineHeight: "28px" }],
-        title: ["22px", { lineHeight: "30px" }],
-        display: ["28px", { lineHeight: "36px" }],
+        caption: ["15px", { lineHeight: "22px" }],
+        body: ["18px", { lineHeight: "28px" }],
+        "body-lg": ["20px", { lineHeight: "30px" }],
+        title: ["24px", { lineHeight: "32px" }],
+        display: ["32px", { lineHeight: "40px" }],
         hero: ["40px", { lineHeight: "48px" }],
       },
       minHeight: {
-        touch: "48px",
-        "touch-lg": "56px",
+        touch: "52px",
+        "touch-lg": "64px",
       },
       borderRadius: {
         card: "16px",

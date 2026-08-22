@@ -50,7 +50,7 @@ export function PrimaryButton({
       style={[
         animatedStyle,
         {
-          minHeight: 56,
+          minHeight: 64,
           borderRadius: 18,
           backgroundColor: colors.primary,
           flexDirection: "row",

@@ -1,29 +1,24 @@
-import { Dimensions, Image, Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import {
   AppText,
-  BentoTile,
+  HeroChoiceCard,
   LanguageToggle,
-  SensorPlaceholderCard,
 } from "@/components/ui";
-import {
-  InsightHeroCard,
-  type InsightItem,
-} from "@/components/home/InsightHeroCard";
+import { HomeSection } from "@/components/home/HomeSection";
+import { EssentialServicesGrid } from "@/components/home/EssentialServicesGrid";
+import { InsightHeroCard, type InsightItem } from "@/components/home/InsightHeroCard";
 import { useLocale } from "@/context/locale";
+import { useAppSelector } from "@/store";
 import { colors } from "@/constants/theme";
-
-const SCREEN_PADDING = 20;
-const GRID_GAP = 14;
-const TILE_WIDTH =
-  (Dimensions.get("window").width - SCREEN_PADDING * 2 - GRID_GAP) / 2;
 
 export default function HomeScreen() {
   const router = useRouter();
   const { t } = useLocale();
+  const name = useAppSelector((s) => s.auth.user?.displayName);
 
   const insights: InsightItem[] = [
     {
@@ -31,8 +26,8 @@ export default function HomeScreen() {
       kind: "weather",
       icon: "rainy-outline",
       message: t(
-        "আজ বিকেলে বৃষ্টির সম্ভাবনা — স্প্রে এড়িয়ে চলুন",
-        "Rain likely this afternoon — skip spraying",
+        "আজ বিকেলে বৃষ্টি হতে পারে — স্প্রে করবেন না",
+        "Rain this afternoon — skip spraying",
       ),
     },
     {
@@ -57,151 +52,169 @@ export default function HomeScreen() {
     },
   ];
 
-  const handleInsightPress = (item: InsightItem) => {
-    if (item.kind === "weather") router.push("/(root)/(tabs)/scan");
-    else if (item.kind === "loan") router.push("/(root)/(tabs)/profile");
-  };
-
-  const primaryActions = [
-    {
-      id: "photo",
-      label: t("ছবি তুলুন", "Take a photo"),
-      icon: "camera-outline" as const,
-      onPress: () => router.push("/(root)/(tabs)/scan"),
-    },
-    {
-      id: "voice",
-      label: t("কথা বলুন", "Speak"),
-      icon: "mic-outline" as const,
-      onPress: () => router.push("/(root)/(tabs)/scan"),
-    },
-  ];
-
-  const bentoItems = [
-    {
-      id: "fertilizer",
-      label: t("সার সুপারিশ", "Fertilizer"),
-      icon: "flask-outline" as const,
-      onPress: () => router.push("/(root)/(tabs)/scan/fertilizer"),
-    },
-    {
-      id: "yield",
-      label: t("ফলন পূর্বাভাস", "Yield"),
-      icon: "stats-chart-outline" as const,
-      onPress: () => router.push("/(root)/(tabs)/scan/yield"),
-    },
-    {
-      id: "tool",
-      label: t("যন্ত্র চেনা", "Tool ID"),
-      icon: "construct-outline" as const,
-      onPress: () => router.push("/(root)/(tabs)/scan/tools"),
-    },
-    {
-      id: "receipt",
-      label: t("রসিদ স্ক্যান", "Receipt Scan"),
-      icon: "receipt-outline" as const,
-      onPress: () => router.push("/(root)/(tabs)/scan/receipt"),
-    },
-    {
-      id: "planning",
-      label: t("আবহাওয়া–ফসল পরিকল্পনা", "Weather–Crop Plan"),
-      icon: "calendar-outline" as const,
-      onPress: () => router.push("/(root)/(tabs)/scan/planning"),
-    },
-    {
-      id: "loan",
-      label: t("ঋণ", "Loan"),
-      icon: "cash-outline" as const,
-      onPress: () => router.push("/(root)/(tabs)/profile"),
-    },
-  ];
-
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       <ScrollView
         className="flex-1"
-        contentContainerClassName="pb-16"
+        contentContainerClassName="pb-20"
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View
-          entering={FadeInDown.duration(420)}
-          className="px-5 pb-2 pt-3"
+        <LinearGradient
+          colors={["#064E3B", "#047857"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 28 }}
         >
           <View className="flex-row items-center justify-between">
-            <Image
-              source={require("@/assets/images/logo-mark.png")}
-              accessibilityLabel={t("আরণ্য", "Aronno")}
-              style={{ width: 148, height: 44 }}
-              resizeMode="contain"
-            />
+            <View className="flex-1 pr-3">
+              <AppText variant="caption" className="font-bengali-semibold text-leaf-300">
+                {t("আরণ্য · ক্ষেতের সহচর", "Aronno · field companion")}
+              </AppText>
+              <AppText
+                variant="title"
+                className="mt-1 text-white"
+                numberOfLines={1}
+              >
+                {t("আসসালামু আলাইকুম", "Welcome")}
+                {name ? `, ${name}` : ""}
+              </AppText>
+              <AppText variant="body" className="mt-1 text-secondary">
+                {t(
+                  "ছবি তুলুন, বাংলায় বলুন, অথবা লিখুন",
+                  "Take a photo, speak Bangla, or type",
+                )}
+              </AppText>
+            </View>
             <View className="flex-row items-center gap-2">
-              <LanguageToggle />
+              <LanguageToggle light />
               <Pressable
                 onPress={() => router.push("/(root)/notifications")}
                 accessibilityRole="button"
                 accessibilityLabel={t("বিজ্ঞপ্তি", "Notifications")}
-                className="h-12 w-12 items-center justify-center rounded-full bg-white"
+                className="h-12 w-12 items-center justify-center rounded-full bg-white/15"
               >
-                <Ionicons
-                  name="notifications-outline"
-                  size={22}
-                  color={colors.primary}
-                />
+                <Ionicons name="notifications-outline" size={22} color={colors.white} />
               </Pressable>
             </View>
           </View>
-          <AppText variant="bodyLg" className="mt-4 font-bengali-bold text-ink">
-            {t("আসসালামু আলাইকুম", "Welcome back")}
-          </AppText>
-          <AppText variant="caption" className="mt-1">
-            {t("আপনার ক্ষেতের সহজ সহায়ক", "Your simple field assistant")}
-          </AppText>
-        </Animated.View>
+        </LinearGradient>
 
-        <View className="mt-6 gap-6 px-5">
-          <InsightHeroCard insights={insights} onPress={handleInsightPress} />
-
-          <View className="flex-row gap-4">
-            {primaryActions.map((action, index) => (
-              <BentoTile
-                key={action.id}
-                className="flex-1"
-                size="lg"
-                icon={action.icon}
-                label={action.label}
-                onPress={action.onPress}
-                delay={80 + index * 60}
-              />
-            ))}
-          </View>
-
-          <View className="flex-row flex-wrap justify-between gap-y-4">
-            {bentoItems.map((item, index) => (
-              <BentoTile
-                key={item.id}
-                style={{ width: TILE_WIDTH }}
-                icon={item.icon}
-                label={item.label}
-                onPress={item.onPress}
-                delay={160 + index * 60}
-              />
-            ))}
-          </View>
-
-          <SensorPlaceholderCard
-            title={t("মাটি সেন্সর", "Soil Sensor")}
+        <View className="-mt-4 gap-5 px-5">
+          <HomeSection
+            title={t("আজকের কাজ", "Today")}
             subtitle={t(
-              "হার্ডওয়্যার যুক্ত হলে সরাসরি তথ্য দেখুন",
-              "See live readings once hardware is connected",
+              "এক ট্যাপে রোগ চিনুন — ছবি, কণ্ঠ, বা লেখা",
+              "One tap to identify disease — photo, voice, or text",
             )}
-            icon={
-              <Ionicons
-                name="hardware-chip-outline"
-                size={22}
-                color={colors.muted}
+          >
+            <View className="gap-3">
+              <HeroChoiceCard
+                tone="photo"
+                icon="camera"
+                title={t("পাতার ছবি তুলুন", "Photograph a leaf")}
+                subtitle={t(
+                  "রোগ শনাক্ত করুন মুহূর্তে",
+                  "Identify the disease instantly",
+                )}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(root)/(tabs)/scan/photo",
+                    params: { flow: "disease" },
+                  })
+                }
               />
-            }
+              <HeroChoiceCard
+                tone="voice"
+                icon="mic"
+                title={t("বাংলায় বলুন", "Speak in Bangla")}
+                subtitle={t(
+                  "সমস্যাটি কণ্ঠে বর্ণনা করুন",
+                  "Describe the problem out loud",
+                )}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(root)/(tabs)/scan/voice",
+                    params: { flow: "disease" },
+                  })
+                }
+              />
+              <HeroChoiceCard
+                tone="text"
+                icon="create-outline"
+                title={t("লিখে জানান", "Type it")}
+                subtitle={t(
+                  "কথা বলতে না পারলে এখানে লিখুন",
+                  "Write if you prefer not to speak",
+                )}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(root)/(tabs)/scan/voice",
+                    params: { flow: "disease", mode: "text" },
+                  })
+                }
+              />
+            </View>
+          </HomeSection>
+
+          <InsightHeroCard
+            insights={insights}
+            onPress={(item) => {
+              if (item.kind === "weather") router.push("/(root)/(tabs)/scan");
+              else if (item.kind === "loan") router.push("/(root)/(tabs)/profile");
+            }}
           />
+
+          <HomeSection
+            title={t("আরও সহায়তা", "More help")}
+            subtitle={t("সার, ফলন, যন্ত্র, রসিদ, বাজার", "Fertilizer, yield, tools, receipts, market")}
+          >
+            <EssentialServicesGrid
+              items={[
+                {
+                  id: "fertilizer",
+                  title: t("সার", "Fertilizer"),
+                  subtitle: t("কী দেবেন, কতটা", "What and how much"),
+                  icon: "flask-outline",
+                  onPress: () => router.push("/(root)/(tabs)/scan/fertilizer"),
+                },
+                {
+                  id: "yield",
+                  title: t("ফলন", "Yield"),
+                  subtitle: t("এবার কত হতে পারে", "Season forecast"),
+                  icon: "stats-chart-outline",
+                  onPress: () => router.push("/(root)/(tabs)/scan/yield"),
+                },
+                {
+                  id: "tool",
+                  title: t("যন্ত্র", "Tools"),
+                  subtitle: t("ছবি বা কথা দিয়ে খুঁজুন", "Find by photo or voice"),
+                  icon: "construct-outline",
+                  onPress: () => router.push("/(root)/(tabs)/scan/tools"),
+                },
+                {
+                  id: "receipt",
+                  title: t("রসিদ", "Receipt"),
+                  subtitle: t("ছবি তুলুন — খরচ শুনুন", "Photo, then hear the cost"),
+                  icon: "receipt-outline",
+                  onPress: () => router.push("/(root)/(tabs)/scan/receipt"),
+                },
+                {
+                  id: "planning",
+                  title: t("পরিকল্পনা", "Plan"),
+                  subtitle: t("আবহাওয়া মেনে ফসল", "Weather-aware crops"),
+                  icon: "calendar-outline",
+                  onPress: () => router.push("/(root)/(tabs)/scan/planning"),
+                },
+                {
+                  id: "market",
+                  title: t("বাজার", "Market"),
+                  subtitle: t("দাম দেখুন, বিক্রি করুন", "Prices and selling"),
+                  icon: "storefront-outline",
+                  onPress: () => router.push("/(root)/(tabs)/market"),
+                },
+              ]}
+            />
+          </HomeSection>
         </View>
       </ScrollView>
     </SafeAreaView>

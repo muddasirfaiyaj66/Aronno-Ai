@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { Pressable, TextInput, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useRouter, type Href } from "expo-router";
-import { AppText, PrimaryButton } from "@/components/ui";
-import { colors } from "@/constants/theme";
+import { AppText, FieldInput, PrimaryButton } from "@/components/ui";
 import { getApiError, useForgotPasswordMutation } from "@/services/api";
 
 export default function ForgotPasswordScreen() {
@@ -29,20 +28,18 @@ export default function ForgotPasswordScreen() {
       <View className="flex-1 justify-center gap-6 px-6">
         <View className="gap-2">
           <AppText variant="title">পাসওয়ার্ড ভুলে গেছেন?</AppText>
-          <AppText variant="body" className="text-muted">
-            ইমেইলে একটি রিসেট কোড পাঠানো হবে
+          <AppText variant="bodyLg" className="leading-8 text-muted">
+            ইমেইলে একটি ৬ সংখ্যার কোড যাবে। কোড না এলে স্প্যাম দেখুন।
           </AppText>
         </View>
 
-        <TextInput
+        <FieldInput
+          label="ইমেইল"
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
           keyboardType="email-address"
-          placeholder="ইমেইল"
-          placeholderTextColor={colors.muted}
-          accessibilityLabel="ইমেইল"
-          className="min-h-touch-lg rounded-2xl bg-white px-4 font-bengali-medium text-body-lg text-ink"
+          placeholder="যে ইমেইল দিয়ে অ্যাকাউন্ট খুলেছিলেন"
         />
 
         {message ? (
@@ -59,8 +56,8 @@ export default function ForgotPasswordScreen() {
         />
 
         <Link href="/login" asChild>
-          <Pressable accessibilityRole="button">
-            <AppText variant="body" className="text-center text-primary">
+          <Pressable accessibilityRole="button" className="min-h-touch items-center justify-center">
+            <AppText variant="bodyLg" className="font-bengali-bold text-primary">
               লগইনে ফিরে যান
             </AppText>
           </Pressable>

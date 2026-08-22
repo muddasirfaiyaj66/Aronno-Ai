@@ -4,9 +4,14 @@ import { useLocale, type Locale } from "@/context/locale";
 
 export type LanguageToggleProps = {
   className?: string;
+  /** High contrast on a dark (forest) background */
+  light?: boolean;
 };
 
-export function LanguageToggle({ className = "" }: LanguageToggleProps) {
+export function LanguageToggle({
+  className = "",
+  light = false,
+}: LanguageToggleProps) {
   const { locale, setLocale } = useLocale();
 
   const Option = ({
@@ -23,14 +28,20 @@ export function LanguageToggle({ className = "" }: LanguageToggleProps) {
         accessibilityRole="button"
         accessibilityState={{ selected: active }}
         accessibilityLabel={label}
-        className={`min-h-[36px] min-w-[48px] items-center justify-center rounded-full px-3 ${
-          active ? "bg-primary" : "bg-transparent"
+        className={`min-h-[40px] min-w-[48px] items-center justify-center rounded-full px-3 ${
+          active ? (light ? "bg-white" : "bg-primary") : "bg-transparent"
         }`}
       >
         <AppText
           variant="caption"
           className={`font-bengali-bold ${
-            active ? "text-white" : "text-muted"
+            active
+              ? light
+                ? "text-primary"
+                : "text-white"
+              : light
+                ? "text-white"
+                : "text-muted"
           }`}
         >
           {label}
@@ -41,8 +52,9 @@ export function LanguageToggle({ className = "" }: LanguageToggleProps) {
 
   return (
     <View
-      className={`flex-row items-center rounded-full bg-neutral-100 p-1 ${className}`}
-      accessibilityRole="tablist"
+      className={`flex-row items-center rounded-full p-1 ${
+        light ? "bg-white/20" : "bg-neutral-100"
+      } ${className}`}
     >
       <Option code="bn" label="বাং" />
       <Option code="en" label="EN" />

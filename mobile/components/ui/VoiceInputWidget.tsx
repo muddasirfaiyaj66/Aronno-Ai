@@ -24,6 +24,7 @@ export type VoiceInputWidgetProps = {
   editLabel?: string;
   doneLabel?: string;
   className?: string;
+  preferTyping?: boolean;
 };
 
 export function VoiceInputWidget({
@@ -37,8 +38,13 @@ export function VoiceInputWidget({
   editLabel = "সম্পাদনা",
   doneLabel = "ঠিক আছে",
   className = "",
+  preferTyping = false,
 }: VoiceInputWidgetProps) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(preferTyping);
+
+  useEffect(() => {
+    if (preferTyping) setEditing(true);
+  }, [preferTyping]);
   const pulse = useSharedValue(0);
 
   useEffect(() => {
@@ -66,37 +72,39 @@ export function VoiceInputWidget({
   return (
     <View style={styles.card} className={className}>
       <View className="items-center gap-5">
-        <View className="h-24 w-24 items-center justify-center">
-          <Animated.View
-            style={[
-              styles.ring,
-              { borderColor: isRecording ? "#B42318" : colors.primary },
-              ring2Style,
-            ]}
-          />
-          <Animated.View
-            style={[
-              styles.ring,
-              { borderColor: isRecording ? "#B42318" : colors.tertiary },
-              ringStyle,
-            ]}
-          />
-          <Pressable
-            onPress={onToggleRecording}
-            accessibilityRole="button"
-            accessibilityLabel={isRecording ? "stop" : "mic"}
-            className={`h-20 w-20 items-center justify-center rounded-full ${
-              isRecording ? "bg-severity-high" : "bg-primary"
-            }`}
-            style={styles.micShadow}
-          >
-            <Ionicons
-              name={isRecording ? "stop" : "mic"}
-              size={34}
-              color={colors.white}
+        {preferTyping ? null : (
+          <View className="h-24 w-24 items-center justify-center">
+            <Animated.View
+              style={[
+                styles.ring,
+                { borderColor: isRecording ? "#B42318" : colors.primary },
+                ring2Style,
+              ]}
             />
-          </Pressable>
-        </View>
+            <Animated.View
+              style={[
+                styles.ring,
+                { borderColor: isRecording ? "#B42318" : colors.tertiary },
+                ringStyle,
+              ]}
+            />
+            <Pressable
+              onPress={onToggleRecording}
+              accessibilityRole="button"
+              accessibilityLabel={isRecording ? "রেকর্ডিং থামান" : "কথা বলুন"}
+              className={`h-20 w-20 items-center justify-center rounded-full ${
+                isRecording ? "bg-severity-high" : "bg-primary"
+              }`}
+              style={styles.micShadow}
+            >
+              <Ionicons
+                name={isRecording ? "stop" : "mic"}
+                size={34}
+                color={colors.white}
+              />
+            </Pressable>
+          </View>
+        )}
 
         {isRecording ? (
           <Animated.View entering={FadeIn.duration(220)}>

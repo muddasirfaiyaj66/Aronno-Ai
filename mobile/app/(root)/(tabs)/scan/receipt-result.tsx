@@ -6,6 +6,7 @@ import {
   AppText,
   EmptyState,
   ListenButton,
+  ScreenHeader,
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
@@ -37,12 +38,10 @@ export default function ReceiptResultScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-neutral-200 bg-white px-5 py-4">
-        <AppText variant="title">রসিদের হিসাব</AppText>
-        <AppText variant="caption" className="mt-1">
-          রসিদ থেকে পাওয়া তথ্য
-        </AppText>
-      </View>
+      <ScreenHeader
+        title="রসিদের হিসাব"
+        subtitle="ছবি থেকে খরচ — চাইলে বাংলায় শুনুন"
+      />
 
       <ScrollView
         className="flex-1"
@@ -53,7 +52,7 @@ export default function ReceiptResultScreen() {
           icon={<Ionicons name="receipt" size={22} color={colors.primary} />}
           footer={
             <ListenButton
-              label="সারাংশ শুনুন"
+              label="সারাংশ বাংলায় শুনুন"
               onPlay={() => speak({ textBn: summary.summaryBn })}
               onPause={() => {}}
             />

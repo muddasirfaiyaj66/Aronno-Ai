@@ -14,7 +14,7 @@
     "android": {
       "package": "app.aronno.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#D1FAE5",
+        "backgroundColor": "#F6F3EA",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -34,7 +34,7 @@
           "image": "./assets/images/logo-mark.png",
           "imageWidth": 220,
           "resizeMode": "contain",
-          "backgroundColor": "#F9FAFB"
+          "backgroundColor": "#F6F3EA"
         }
       ],
       [

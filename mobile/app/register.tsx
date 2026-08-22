@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Pressable, ScrollView, TextInput, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useRouter, type Href } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { AppText, IconPickerRow, PrimaryButton } from "@/components/ui";
+import { AppText, FieldInput, IconPickerRow, PrimaryButton } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import { useGetProfessionsQuery, useRegisterMutation } from "@/services/api";
 
@@ -43,48 +44,52 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top", "bottom"]}>
+      <LinearGradient
+        colors={["#064E3B", "#047857"]}
+        style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 28 }}
+      >
+        <AppText variant="caption" className="font-bengali-bold text-leaf-300">
+          আরণ্য
+        </AppText>
+        <AppText variant="title" className="mt-3 text-white">
+          নতুন অ্যাকাউন্ট
+        </AppText>
+        <AppText variant="body" className="mt-1 text-secondary">
+          কৃষক, দোকান মালিক — যে পেশাই হোক, বড় অক্ষরে সহজ ফর্ম।
+        </AppText>
+      </LinearGradient>
+
       <ScrollView
-        contentContainerClassName="gap-6 px-6 py-8"
+        className="-mt-3 flex-1 rounded-t-[32px] bg-neutral"
+        contentContainerClassName="gap-5 px-6 pb-10 pt-8"
         keyboardShouldPersistTaps="handled"
       >
-        <View className="gap-2">
-          <AppText variant="title">নতুন অ্যাকাউন্ট</AppText>
-          <AppText variant="body" className="text-muted">
-            কৃষক, দোকান মালিক বা অন্য পেশা বেছে নিন
-          </AppText>
-        </View>
-
-        <TextInput
+        <FieldInput
+          label="আপনার নাম"
           value={displayName}
           onChangeText={setDisplayName}
-          placeholder="আপনার নাম"
-          placeholderTextColor={colors.muted}
-          accessibilityLabel="নাম"
-          className="min-h-touch-lg rounded-2xl bg-white px-4 font-bengali-medium text-body-lg text-ink"
+          placeholder="যেমন: করিম মিয়া"
         />
-        <TextInput
+        <FieldInput
+          label="ইমেইল"
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
           keyboardType="email-address"
-          placeholder="ইমেইল"
-          placeholderTextColor={colors.muted}
-          accessibilityLabel="ইমেইল"
-          className="min-h-touch-lg rounded-2xl bg-white px-4 font-bengali-medium text-body-lg text-ink"
+          placeholder="ইমেইল লিখুন"
         />
-        <TextInput
+        <FieldInput
+          label="পাসওয়ার্ড"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
-          placeholder="পাসওয়ার্ড (কমপক্ষে ১০ অক্ষর)"
-          placeholderTextColor={colors.muted}
-          accessibilityLabel="পাসওয়ার্ড"
-          className="min-h-touch-lg rounded-2xl bg-white px-4 font-bengali-medium text-body-lg text-ink"
+          hint="কমপক্ষে ১০ অক্ষর, বড় হাত, ছোট হাত, সংখ্যা ও চিহ্ন"
+          placeholder="নতুন পাসওয়ার্ড"
         />
 
         <View className="gap-3">
           <AppText variant="body" className="font-bengali-bold text-ink">
-            পেশা
+            পেশা বেছে নিন
           </AppText>
           <IconPickerRow
             options={professions.map((p) => ({
@@ -106,15 +111,15 @@ export default function RegisterScreen() {
         ) : null}
 
         <PrimaryButton
-          label="নিবন্ধন করুন"
+          label="অ্যাকাউন্ট তৈরি করুন"
           loading={isLoading}
           disabled={!email || !password || !displayName}
           onPress={handleSubmit}
         />
 
         <Link href="/login" asChild>
-          <Pressable accessibilityRole="button">
-            <AppText variant="body" className="text-center text-primary">
+          <Pressable accessibilityRole="button" className="min-h-touch items-center justify-center">
+            <AppText variant="bodyLg" className="font-bengali-bold text-primary">
               আগে থেকে অ্যাকাউন্ট আছে? লগইন
             </AppText>
           </Pressable>

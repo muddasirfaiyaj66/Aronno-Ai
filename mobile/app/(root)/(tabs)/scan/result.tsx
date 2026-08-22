@@ -8,12 +8,14 @@ import {
   AppText,
   ListenButton,
   PrimaryButton,
+  ScreenHeader,
   SecondaryButton,
   SeverityBadge,
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import { useSpeakMutation } from "@/services/api";
+import type { SeverityLevel } from "@/components/ui/SeverityBadge";
 
 function ConfidenceRing({ percent }: { percent: number }) {
   const size = 88;
@@ -77,12 +79,10 @@ export default function DiagnosisResultScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-neutral-200 bg-white px-5 py-4">
-        <AppText variant="title">রোগ নির্ণয়ের ফলাফল</AppText>
-        <AppText variant="caption" className="mt-1">
-          AI বিশ্লেষণের ভিত্তিতে প্রাপ্ত ফলাফল
-        </AppText>
-      </View>
+      <ScreenHeader
+        title="রোগের ফল"
+        subtitle="শুনুন, তারপর চিকিৎসা দেখুন"
+      />
 
       <View className="flex-1 px-5 py-5">
         <StructuredCard
@@ -97,7 +97,6 @@ export default function DiagnosisResultScreen() {
                   });
                 }}
                 onPause={() => {}}
-                className="bg-neutral"
               />
               {readOnly ? (
                 <SecondaryButton

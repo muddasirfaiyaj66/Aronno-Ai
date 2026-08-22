@@ -1,39 +1,34 @@
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { AppText, PrimaryButton } from "@/components/ui";
-import { colors } from "@/constants/theme";
+import { AppText, HeroChoiceCard, ScreenHeader } from "@/components/ui";
 
 export default function ReceiptScanScreen() {
   const router = useRouter();
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-neutral-200 bg-white px-5 py-4">
-        <AppText variant="title">রসিদ স্ক্যান</AppText>
-        <AppText variant="caption" className="mt-1">
-          কেনাকাটার রসিদের ছবি তুলে খরচের হিসাব রাখুন
-        </AppText>
-      </View>
+      <ScreenHeader
+        title="রসিদের খরচ"
+        subtitle="ছবি তুলুন — বাংলায় শুনুন কত খরচ হয়েছে"
+      />
 
-      <View className="flex-1 items-center justify-center gap-5 px-8">
-        <View className="h-20 w-20 items-center justify-center rounded-full bg-secondary">
-          <Ionicons name="receipt-outline" size={36} color={colors.primary} />
-        </View>
-        <AppText variant="body" className="text-center leading-6 text-muted">
-          রসিদটি সমতল জায়গায় রেখে পুরো লেখা স্পষ্টভাবে ফ্রেমে আনুন।
-        </AppText>
-        <PrimaryButton
-          label="ছবি তুলুন"
+      <View className="flex-1 gap-4 px-5 pt-5">
+        <HeroChoiceCard
+          tone="photo"
+          icon="camera"
+          title="রসিদের ছবি তুলুন"
+          subtitle="পুরো লেখা ফ্রেমে আনুন, সমতল জায়গায় রাখুন"
           onPress={() =>
             router.push({
               pathname: "/(root)/(tabs)/scan/photo",
               params: { flow: "receipt" },
             })
           }
-          icon={<Ionicons name="camera-outline" size={20} color={colors.white} />}
         />
+        <AppText variant="body" className="leading-8 text-muted">
+          স্ক্যানের পর ফলাফল পর্দায় বড় করে দেখাবে, আর চাইলে «শুনুন বাংলায়» চাপুন।
+        </AppText>
       </View>
     </SafeAreaView>
   );

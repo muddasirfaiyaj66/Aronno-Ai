@@ -1,26 +1,24 @@
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { AppText, BentoTile } from "@/components/ui";
+import { HeroChoiceCard, ScreenHeader } from "@/components/ui";
 
 export default function ToolIdentificationScreen() {
   const router = useRouter();
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-neutral-200 bg-white px-5 py-4">
-        <AppText variant="title">যন্ত্র চেনা</AppText>
-        <AppText variant="caption" className="mt-1">
-          যন্ত্রের ছবি তুলে অথবা কথা বলে জেনে নিন
-        </AppText>
-      </View>
+      <ScreenHeader
+        title="যন্ত্র খুঁজুন"
+        subtitle="ছবি তুলুন, বাংলায় বলুন, অথবা লিখুন"
+      />
 
-      <View className="flex-1 justify-center gap-4 px-5">
-        <BentoTile
-          size="lg"
-          icon="camera-outline"
-          label="ছবি তুলুন"
-          subtitle="যন্ত্রের ছবি তুলুন"
+      <View className="flex-1 gap-3 px-5 pt-5">
+        <HeroChoiceCard
+          tone="photo"
+          icon="camera"
+          title="যন্ত্রের ছবি তুলুন"
+          subtitle="কাছাকাছি ও অনলাইনে খুঁজে দেব"
           onPress={() =>
             router.push({
               pathname: "/(root)/(tabs)/scan/photo",
@@ -28,15 +26,27 @@ export default function ToolIdentificationScreen() {
             })
           }
         />
-        <BentoTile
-          size="lg"
-          icon="mic-outline"
-          label="কথা বলুন"
-          subtitle="আপনার কাজটি বলুন"
+        <HeroChoiceCard
+          tone="voice"
+          icon="mic"
+          title="কাজটি বাংলায় বলুন"
+          subtitle="যেমন: ঘাস কাটার যন্ত্র দরকার"
           onPress={() =>
             router.push({
               pathname: "/(root)/(tabs)/scan/voice",
               params: { flow: "tool" },
+            })
+          }
+        />
+        <HeroChoiceCard
+          tone="text"
+          icon="create-outline"
+          title="লিখে জানান"
+          subtitle="কথা না বলে কাজটি লিখুন"
+          onPress={() =>
+            router.push({
+              pathname: "/(root)/(tabs)/scan/voice",
+              params: { flow: "tool", mode: "text" },
             })
           }
         />

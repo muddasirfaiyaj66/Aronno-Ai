@@ -1,6 +1,7 @@
 import type { ComponentProps } from "react";
-import { Text } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Tabs } from "expo-router";
+import type { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, tabBar } from "@/constants/theme";
 
@@ -16,8 +17,6 @@ function tabIcon(name: IconName, focusedName: IconName) {
   );
 }
 
-// Bengali labels (esp. প্রোফাইল, স্ক্যান) can be wider than a 1/5-screen tab
-// column at 14px on narrow phones — shrink-to-fit instead of clipping.
 function tabLabel(title: string) {
   function TabLabel({ color }: { color: string }) {
     return (
@@ -27,9 +26,9 @@ function tabLabel(title: string) {
         minimumFontScale={0.7}
         style={{
           color,
-          fontFamily: "NotoSansBengali_600SemiBold",
+          fontFamily: "NotoSansBengali_700Bold",
           fontSize: tabBar.labelSize,
-          marginBottom: 6,
+          marginBottom: 4,
           textAlign: "center",
         }}
       >
@@ -38,6 +37,45 @@ function tabLabel(title: string) {
     );
   }
   return TabLabel;
+}
+
+function ScanTabButton({ onPress, accessibilityState }: BottomTabBarButtonProps) {
+  const focused = Boolean(accessibilityState?.selected);
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="স্ক্যান"
+      accessibilityState={{ selected: focused }}
+      className="-mt-6 items-center"
+    >
+      <View
+        className="h-[68px] w-[68px] items-center justify-center rounded-full"
+        style={{
+          backgroundColor: focused ? colors.harvest : colors.primary,
+          shadowColor: colors.primary,
+          shadowOpacity: 0.35,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 8,
+          borderWidth: 4,
+          borderColor: colors.neutral,
+        }}
+      >
+        <Ionicons name="camera" size={30} color={colors.white} />
+      </View>
+      <Text
+        style={{
+          marginTop: 4,
+          fontFamily: "NotoSansBengali_700Bold",
+          fontSize: tabBar.labelSize,
+          color: focused ? colors.primary : colors.muted,
+        }}
+      >
+        স্ক্যান
+      </Text>
+    </Pressable>
+  );
 }
 
 export default function TabLayout() {
@@ -49,13 +87,13 @@ export default function TabLayout() {
         tabBarInactiveTintColor: colors.muted,
         tabBarStyle: {
           height: tabBar.height,
-          paddingTop: 6,
+          paddingTop: 8,
           backgroundColor: colors.white,
           borderTopColor: colors.border,
           borderTopWidth: 1,
         },
         tabBarItemStyle: {
-          paddingVertical: 4,
+          paddingVertical: 2,
           paddingHorizontal: 2,
         },
       }}
@@ -69,19 +107,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="scan"
-        options={{
-          title: "স্ক্যান",
-          tabBarIcon: tabIcon("scan-outline", "scan"),
-          tabBarLabel: tabLabel("স্ক্যান"),
-        }}
-      />
-      <Tabs.Screen
         name="history"
         options={{
           title: "ইতিহাস",
           tabBarIcon: tabIcon("time-outline", "time"),
           tabBarLabel: tabLabel("ইতিহাস"),
+        }}
+      />
+      <Tabs.Screen
+        name="scan"
+        options={{
+          title: "স্ক্যান",
+          tabBarLabel: () => null,
+          tabBarIcon: () => null,
+          tabBarButton: (props) => <ScanTabButton {...props} />,
         }}
       />
       <Tabs.Screen
@@ -97,7 +136,7 @@ export default function TabLayout() {
         options={{
           title: "প্রোফাইল",
           tabBarIcon: tabIcon("person-outline", "person"),
-          tabBarLabel: tabLabel("প্রোফাইল"),
+          tabBarLabel: tabLabel("আমি"),
         }}
       />
     </Tabs>

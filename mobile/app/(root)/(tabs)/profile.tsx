@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import {
   AppText,
   LoanStatusCard,
+  ScreenHeader,
   SecondaryButton,
   StructuredCard,
 } from "@/components/ui";
@@ -19,12 +20,10 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-neutral-200 bg-white px-5 py-4">
-        <AppText variant="title">প্রোফাইল</AppText>
-        <AppText variant="caption" className="mt-1">
-          আপনার খামার ও অ্যাকাউন্ট
-        </AppText>
-      </View>
+      <ScreenHeader
+        title="আমি"
+        subtitle="আপনার খামার ও অ্যাকাউন্ট"
+      />
 
       <ScrollView
         className="flex-1"

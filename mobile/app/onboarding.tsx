@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
 import { AppText, PrimaryButton } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import { ONBOARDING_STORAGE_KEY } from "@/utils/onboarding";
@@ -13,19 +14,24 @@ type IconName = ComponentProps<typeof Ionicons>["name"];
 
 const STEPS: { icon: IconName; title: string; description: string }[] = [
   {
-    icon: "camera-outline",
-    title: "ছবি তুলুন বা কথা বলুন",
-    description: "ফসলের সমস্যা দেখান বা বাংলায় বলুন, বাকিটা আমরা করব।",
+    icon: "camera",
+    title: "পাতার ছবি তুলুন",
+    description: "রোগ শনাক্ত করুন মুহূর্তে। ফোনের ক্যামেরাই যথেষ্ট।",
   },
   {
-    icon: "medkit-outline",
-    title: "সুসংগঠিত পরিকল্পনা পান",
-    description: "ধাপে ধাপে চিকিৎসা ও খরচের পরামর্শ সহজ ভাষায় পান।",
+    icon: "mic",
+    title: "বাংলায় বলুন, অথবা লিখুন",
+    description: "কথা বলতে না পারলে লিখেও জানাতে পারবেন। দুটোই সহজ।",
   },
   {
-    icon: "trending-up-outline",
-    title: "ইতিহাস রাখুন, বুদ্ধিমানের মতো বিক্রি করুন",
-    description: "সব রেকর্ড এক জায়গায়, আর বাজারের সেরা দামে বিক্রি করুন।",
+    icon: "rainy-outline",
+    title: "আবহাওয়া মেনে স্প্রে",
+    description: "বৃষ্টি হলে সতর্কতা পাবেন — ওষুধ নষ্ট হবে না।",
+  },
+  {
+    icon: "volume-high",
+    title: "ফলাফল বাংলায় শুনুন",
+    description: "পড়া কষ্ট হলে «শুনুন বাংলায়» চাপুন। যন্ত্র ও রসিদও এভাবে।",
   },
 ];
 
@@ -36,8 +42,6 @@ export default function OnboardingScreen() {
   const current = STEPS[step];
 
   const finishOnboarding = async () => {
-    // TODO(nestjs): once accounts exist, also sync this flag to the user's
-    // profile so onboarding stays skipped across reinstalls/devices.
     await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, "true");
     router.replace("/login");
   };
@@ -52,59 +56,72 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top", "bottom"]}>
-      <View className="flex-row justify-end px-3 pt-2">
-        <Pressable
-          onPress={finishOnboarding}
-          accessibilityRole="button"
-          accessibilityLabel="পরিচিতি এড়িয়ে যান"
-          className="min-h-touch items-center justify-center px-4"
-        >
-          <AppText variant="body" className="font-bengali-bold text-muted">
-            এড়িয়ে যান
+      <LinearGradient
+        colors={["#064E3B", "#047857"]}
+        className="px-5 pb-8 pt-3"
+        style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 36 }}
+      >
+        <View className="flex-row items-center justify-between">
+          <AppText variant="caption" className="font-bengali-bold text-leaf-300">
+            আরণ্য
           </AppText>
-        </Pressable>
-      </View>
-
-      <View className="flex-1 items-center justify-center gap-6 px-8">
-        <View className="h-28 w-28 items-center justify-center rounded-full bg-secondary">
-          <Ionicons name={current.icon} size={56} color={colors.primary} />
+          <Pressable
+            onPress={finishOnboarding}
+            accessibilityRole="button"
+            accessibilityLabel="পরিচিতি এড়িয়ে যান"
+            className="min-h-touch items-center justify-center px-2"
+          >
+            <AppText variant="body" className="font-bengali-bold text-white">
+              এড়িয়ে যান
+            </AppText>
+          </Pressable>
         </View>
-        <AppText variant="title" className="text-center">
-          {current.title}
+        <AppText variant="display" className="mt-6 text-white">
+          ক্ষেতের সহজ সহচর
         </AppText>
-        <AppText variant="bodyLg" className="text-center text-muted">
-          {current.description}
+        <AppText variant="bodyLg" className="mt-2 text-secondary">
+          ফসলের রোগ চিনুন, ওষুধ জানুন, আবহাওয়া দেখে স্প্রে করুন।
         </AppText>
-      </View>
+      </LinearGradient>
 
-      <View className="items-center gap-6 px-8 pb-4">
-        <View
-          className="flex-row items-center gap-2"
-          accessibilityRole="text"
-          accessibilityLabel={`ধাপ ${step + 1} এর ৩`}
-        >
-          {STEPS.map((_, index) => (
-            <View
-              key={index}
-              className={`h-2 rounded-full ${
-                index === step ? "w-6 bg-primary" : "w-2 bg-neutral-200"
-              }`}
-            />
-          ))}
+      <View className="-mt-5 flex-1 rounded-t-[32px] bg-neutral px-8 pt-10">
+        <View className="flex-1 items-center justify-center gap-5">
+          <View className="h-28 w-28 items-center justify-center rounded-full bg-harvest-soft">
+            <Ionicons name={current.icon} size={52} color={colors.primary} />
+          </View>
+          <AppText variant="title" className="text-center">
+            {current.title}
+          </AppText>
+          <AppText variant="bodyLg" className="text-center leading-8 text-muted">
+            {current.description}
+          </AppText>
         </View>
 
-        <PrimaryButton
-          label={isLast ? "শুরু করুন" : "পরবর্তী"}
-          onPress={handleNext}
-          className="w-full"
-          icon={
-            <Ionicons
-              name={isLast ? "checkmark" : "arrow-forward"}
-              size={20}
-              color={colors.white}
-            />
-          }
-        />
+        <View className="items-center gap-6 pb-4">
+          <View className="flex-row items-center gap-2">
+            {STEPS.map((_, index) => (
+              <View
+                key={index}
+                className={`h-2.5 rounded-full ${
+                  index === step ? "w-8 bg-primary" : "w-2.5 bg-neutral-200"
+                }`}
+              />
+            ))}
+          </View>
+
+          <PrimaryButton
+            label={isLast ? "শুরু করুন" : "পরবর্তী"}
+            onPress={handleNext}
+            className="w-full"
+            icon={
+              <Ionicons
+                name={isLast ? "checkmark" : "arrow-forward"}
+                size={20}
+                color={colors.white}
+              />
+            }
+          />
+        </View>
       </View>
     </SafeAreaView>
   );

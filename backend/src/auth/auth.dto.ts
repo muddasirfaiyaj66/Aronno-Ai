@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeOtpCode } from './otp.util';
 
 const passwordSchema = z
   .string()
@@ -33,7 +34,10 @@ export const googleSchema = z
 export const otpSchema = z
   .object({
     email: z.string().email(),
-    code: z.string().regex(/^\d{6}$/),
+    code: z
+      .string()
+      .transform((value) => normalizeOtpCode(value))
+      .pipe(z.string().regex(/^\d{6}$/)),
   })
   .strict();
 
@@ -42,7 +46,10 @@ export const emailOnlySchema = z.object({ email: z.string().email() }).strict();
 export const resetPasswordSchema = z
   .object({
     email: z.string().email(),
-    code: z.string().regex(/^\d{6}$/),
+    code: z
+      .string()
+      .transform((value) => normalizeOtpCode(value))
+      .pipe(z.string().regex(/^\d{6}$/)),
     password: passwordSchema,
   })
   .strict();

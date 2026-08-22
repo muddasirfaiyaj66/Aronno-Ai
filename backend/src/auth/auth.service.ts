@@ -7,12 +7,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PasswordService } from './password.service';
 import { Errors } from '../common/errors';
 import { randomToken, sha256 } from '../common/crypto.util';
-import { ACCESS_TTL_SECONDS, LOCKOUT_MINUTES, LOCKOUT_THRESHOLD, REFRESH_TTL_SECONDS } from '../common/constants';
+import {
+  ACCESS_TTL_SECONDS,
+  LOCKOUT_MINUTES,
+  LOCKOUT_THRESHOLD,
+  REFRESH_TTL_SECONDS,
+} from '../common/constants';
 import { clearAuthCookies, setAuthCookies } from '../common/cookies';
 import { MailService } from '../mail/mail.service';
 import type { AuthUser } from './auth.types';
 import { EmailTokenPurpose } from '@prisma/client';
 import { randomInt } from 'node:crypto';
+import { normalizeOtpCode } from './otp.util';
 
 export type UserDto = {
   id: string;
@@ -85,22 +91,20 @@ export class AuthService {
     };
   }
 
-  async register(
-    input: {
-      email: string;
-      password: string;
-      displayName: string;
-      professionSlug?: string;
-    },
-    _res: Response,
-    _meta: { userAgent?: string; ip?: string },
-  ) {
+  async register(input: {
+    email: string;
+    password: string;
+    displayName: string;
+    professionSlug?: string;
+  }) {
     const existing = await this.prisma.user.findUnique({
       where: { email: input.email.toLowerCase() },
     });
     if (existing) throw Errors.conflict('এই ইমেইল ইতিমধ্যে ব্যবহৃত হয়েছে।');
 
-    const userRole = await this.prisma.role.findUnique({ where: { slug: 'USER' } });
+    const userRole = await this.prisma.role.findUnique({
+      where: { slug: 'USER' },
+    });
     if (!userRole) throw Errors.notFound('রোল পাওয়া যায়নি।');
 
     const profession = input.professionSlug
@@ -136,7 +140,8 @@ export class AuthService {
     if (!user || !user.passwordHash) throw Errors.invalidCredentials();
     if (!user.isActive) throw Errors.forbidden();
     if (!user.emailVerifiedAt) throw Errors.unverified();
-    if (user.lockedUntil && user.lockedUntil > new Date()) throw Errors.locked();
+    if (user.lockedUntil && user.lockedUntil > new Date())
+      throw Errors.locked();
 
     const ok = await this.passwords.verify(user.passwordHash, input.password);
     if (!ok) {
@@ -158,7 +163,12 @@ export class AuthService {
       data: { failedLoginCount: 0, lockedUntil: null },
     });
 
-    await this.issueSession(user.id, user.role.slug as AuthUser['role'], res, meta);
+    await this.issueSession(
+      user.id,
+      user.role.slug as AuthUser['role'],
+      res,
+      meta,
+    );
     return this.toDto(user);
   }
 
@@ -202,8 +212,16 @@ export class AuthService {
     return { ok: true };
   }
 
-  async resetPassword(input: { email: string; code: string; password: string }) {
-    const user = await this.consumeOtp(input.email, input.code, 'password_reset');
+  async resetPassword(input: {
+    email: string;
+    code: string;
+    password: string;
+  }) {
+    const user = await this.consumeOtp(
+      input.email,
+      input.code,
+      'password_reset',
+    );
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
@@ -264,13 +282,14 @@ export class AuthService {
       include: { role: true },
     });
     if (!user) throw Errors.otpInvalid();
+    const normalizedCode = normalizeOtpCode(code);
     const token = await this.prisma.emailToken.findFirst({
       where: {
         userId: user.id,
         purpose,
         usedAt: null,
         expiresAt: { gt: new Date() },
-        tokenHash: sha256(`${user.id}:${purpose}:${code}`),
+        tokenHash: sha256(`${user.id}:${purpose}:${normalizedCode}`),
       },
     });
     if (!token) throw Errors.otpInvalid();
@@ -289,7 +308,12 @@ export class AuthService {
     const clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
     if (!clientId) throw Errors.aiUnavailable();
 
-    let payload: { sub?: string; email?: string; email_verified?: boolean; name?: string };
+    let payload: {
+      sub?: string;
+      email?: string;
+      email_verified?: boolean;
+      name?: string;
+    };
     try {
       const ticket = await this.google.verifyIdToken({
         idToken,
@@ -302,11 +326,18 @@ export class AuthService {
 
     if (!payload.sub || !payload.email) throw Errors.unauthorized();
 
-    const userRole = await this.prisma.role.findUnique({ where: { slug: 'USER' } });
+    const userRole = await this.prisma.role.findUnique({
+      where: { slug: 'USER' },
+    });
     if (!userRole) throw Errors.notFound();
 
     let user = await this.prisma.user.findFirst({
-      where: { OR: [{ googleSub: payload.sub }, { email: payload.email.toLowerCase() }] },
+      where: {
+        OR: [
+          { googleSub: payload.sub },
+          { email: payload.email.toLowerCase() },
+        ],
+      },
       include: userInclude,
     });
 
@@ -324,7 +355,10 @@ export class AuthService {
     } else if (!user.googleSub) {
       user = await this.prisma.user.update({
         where: { id: user.id },
-        data: { googleSub: payload.sub, emailVerifiedAt: user.emailVerifiedAt ?? new Date() },
+        data: {
+          googleSub: payload.sub,
+          emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
+        },
         include: userInclude,
       });
     }
@@ -344,11 +378,20 @@ export class AuthService {
       },
     });
 
-    await this.issueSession(user.id, user.role.slug as AuthUser['role'], res, meta);
+    await this.issueSession(
+      user.id,
+      user.role.slug as AuthUser['role'],
+      res,
+      meta,
+    );
     return this.toDto(user);
   }
 
-  async refresh(refreshRaw: string | undefined, res: Response, meta: { userAgent?: string; ip?: string }) {
+  async refresh(
+    refreshRaw: string | undefined,
+    res: Response,
+    meta: { userAgent?: string; ip?: string },
+  ) {
     if (!refreshRaw) throw Errors.unauthorized();
     const tokenHash = sha256(refreshRaw);
     const stored = await this.prisma.refreshToken.findUnique({

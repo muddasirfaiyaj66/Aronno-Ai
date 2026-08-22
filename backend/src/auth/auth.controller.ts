@@ -6,7 +6,14 @@ import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ZodPipe } from '../common/pipes/zod.pipe';
 import { Body } from '@nestjs/common';
-import { emailOnlySchema, googleSchema, loginSchema, otpSchema, registerSchema, resetPasswordSchema } from './auth.dto';
+import {
+  emailOnlySchema,
+  googleSchema,
+  loginSchema,
+  otpSchema,
+  registerSchema,
+  resetPasswordSchema,
+} from './auth.dto';
 import type { AuthUser } from './auth.types';
 import { COOKIE } from '../common/constants';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -26,11 +33,10 @@ export class AuthController {
   @Public()
   @Post('register')
   register(
-    @Body(new ZodPipe(registerSchema)) body: ReturnType<typeof registerSchema.parse>,
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
+    @Body(new ZodPipe(registerSchema))
+    body: ReturnType<typeof registerSchema.parse>,
   ) {
-    return this.auth.register(body, res, this.meta(req));
+    return this.auth.register(body);
   }
 
   @Public()
@@ -46,7 +52,8 @@ export class AuthController {
   @Public()
   @Post('google')
   google(
-    @Body(new ZodPipe(googleSchema)) body: ReturnType<typeof googleSchema.parse>,
+    @Body(new ZodPipe(googleSchema))
+    body: ReturnType<typeof googleSchema.parse>,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
@@ -65,29 +72,39 @@ export class AuthController {
 
   @Public()
   @Post('resend-verification')
-  resend(@Body(new ZodPipe(emailOnlySchema)) body: ReturnType<typeof emailOnlySchema.parse>) {
+  resend(
+    @Body(new ZodPipe(emailOnlySchema))
+    body: ReturnType<typeof emailOnlySchema.parse>,
+  ) {
     return this.auth.resendVerification(body.email);
   }
 
   @Public()
   @Post('forgot-password')
-  forgot(@Body(new ZodPipe(emailOnlySchema)) body: ReturnType<typeof emailOnlySchema.parse>) {
+  forgot(
+    @Body(new ZodPipe(emailOnlySchema))
+    body: ReturnType<typeof emailOnlySchema.parse>,
+  ) {
     return this.auth.forgotPassword(body.email);
   }
 
   @Public()
   @Post('reset-password')
-  reset(@Body(new ZodPipe(resetPasswordSchema)) body: ReturnType<typeof resetPasswordSchema.parse>) {
+  reset(
+    @Body(new ZodPipe(resetPasswordSchema))
+    body: ReturnType<typeof resetPasswordSchema.parse>,
+  ) {
     return this.auth.resetPassword(body);
   }
 
   @Public()
   @Post('refresh')
-  refresh(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    return this.auth.refresh(req.cookies?.[COOKIE.REFRESH], res, this.meta(req));
+  refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.auth.refresh(
+      req.cookies?.[COOKIE.REFRESH],
+      res,
+      this.meta(req),
+    );
   }
 
   @Public()

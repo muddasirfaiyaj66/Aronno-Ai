@@ -10,6 +10,7 @@ import {
   ListenButton,
   PrimaryButton,
   RetryCard,
+  ScreenHeader,
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
@@ -40,16 +41,16 @@ export default function CropPlanningScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-neutral-200 bg-white px-5 py-4">
-        <AppText variant="title">আবহাওয়া–ফসল পরিকল্পনা</AppText>
-        <AppText variant="caption" className="mt-1">
-          আগামী ৬ মাসের পূর্বাভাস অনুযায়ী চাষের পরামর্শ
-        </AppText>
-      </View>
+      <ScreenHeader
+        title="আবহাওয়া–ফসল পরিকল্পনা"
+        subtitle="আগামী ৬ মাসের পূর্বাভাস অনুযায়ী চাষের পরামর্শ"
+      />
 
       <ScrollView
         className="flex-1"
-        contentContainerClassName="gap-4 px-5 py-5"
+        contentContainerClassName="gap-5 px-5 py-5 pb-16"
+        showsVerticalScrollIndicator
+        keyboardShouldPersistTaps="handled"
       >
         {planError ? (
           <RetryCard message={planError} onRetry={requestPlan} />
@@ -61,7 +62,7 @@ export default function CropPlanningScreen() {
         ) : isLoading || generating ? (
           <AIGeneratingShimmer
             label="পরিকল্পনা তৈরি হচ্ছে"
-            lines={4}
+            lines={6}
             className="w-full"
           />
         ) : !plan ? (
@@ -75,30 +76,30 @@ export default function CropPlanningScreen() {
           <>
             <ForecastTimelineCard
               title="৬ মাসের পূর্বাভাস"
-              subtitle="মাসভিত্তিক আবহাওয়া ও সুপারিশকৃত ফসল"
+              subtitle="প্রতি মাসের আবহাওয়া, তাপমাত্রা, বৃষ্টি ও সুপারিশকৃত ফসল"
               months={plan.months.map((month, index) => ({
                 id: `${month.month}-${index}`,
                 monthLabel: month.month,
                 weatherIcon: month.weatherIcon,
                 cropLabel: month.recommendedCropBn,
                 tempC: month.tempC,
+                precipMm: month.precipMm,
               }))}
             />
 
             <StructuredCard
-              title="AI সুপারিশ"
+              title="চাষের পরামর্শ"
               icon={<Ionicons name="sparkles" size={22} color={colors.primary} />}
-              footer={
-              <ListenButton
-                label="সুপারিশ শুনুন"
-                textBn={plan.recommendationBn}
-              />
-              }
             >
-              <AppText variant="body" className="leading-6 text-ink">
+              <AppText variant="body" className="leading-8 text-ink">
                 {plan.recommendationBn}
               </AppText>
             </StructuredCard>
+
+            <ListenButton
+              label="সুপারিশ শুনুন"
+              textBn={plan.recommendationBn}
+            />
 
             <PrimaryButton label="আবার তৈরি করুন" onPress={requestPlan} />
           </>

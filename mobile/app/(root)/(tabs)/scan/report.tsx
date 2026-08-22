@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +16,8 @@ import {
 import { WeatherAdvisoryCard } from "@/components/treatment/WeatherAdvisoryCard";
 import { colors } from "@/constants/theme";
 import type { SeverityLevel } from "@/types/diagnosis";
+import { reportHtml, saveAndSharePdf } from "@/lib/reportPdf";
+import { useAppSelector } from "@/store";
 import {
   useCreateReportMutation,
   useDownloadReportPdfMutation,
@@ -30,6 +32,7 @@ export default function ReportPreviewScreen() {
     severity?: SeverityLevel;
     diagnosisId?: string;
   }>();
+  const farmerName = useAppSelector((s) => s.auth.user?.displayName);
   const { data: plan } = useGetTreatmentPlanQuery(params.diagnosisId ?? "", {
     skip: !params.diagnosisId,
   });
@@ -51,8 +54,14 @@ export default function ReportPreviewScreen() {
     [],
   );
 
+  useEffect(() => {
+    if (!toastVisible) return;
+    const id = setTimeout(() => setToastVisible(false), 2400);
+    return () => clearTimeout(id);
+  }, [toastVisible]);
+
   const handleDownload = async () => {
-    if (!params.diagnosisId) return;
+    if (!params.diagnosisId || !plan) return;
     setDownloadError(false);
     setDownloading(true);
     try {
@@ -60,9 +69,29 @@ export default function ReportPreviewScreen() {
         reportId ??
         (await createReport({ diagnosisId: params.diagnosisId }).unwrap()).id;
       setReportId(created);
-      await downloadPdf(created).unwrap();
+
+      let pdfBase64: string | undefined;
+      try {
+        const pdf = await downloadPdf(created).unwrap();
+        pdfBase64 = pdf.pdfBase64;
+      } catch {
+        // local HTML PDF still works
+      }
+
+      await saveAndSharePdf({
+        pdfBase64,
+        filename: `aronno-report-${created.slice(-8)}.pdf`,
+        htmlFallback: reportHtml({
+          farmerName: farmerName ?? undefined,
+          dateLabel,
+          diseaseNameBn: params.diseaseNameBn ?? plan.diseaseNameBn,
+          diseaseNameEn: params.diseaseNameEn,
+          confidence: params.confidence,
+          severity: params.severity,
+          plan,
+        }),
+      });
       setToastVisible(true);
-      setTimeout(() => setToastVisible(false), 2200);
     } catch {
       setDownloadError(true);
     } finally {
@@ -184,7 +213,7 @@ export default function ReportPreviewScreen() {
           className="absolute bottom-32 left-5 right-5 items-center rounded-2xl bg-ink px-4 py-3"
         >
           <AppText variant="caption" className="text-center text-white">
-            রিপোর্ট সফলভাবে ডাউনলোড হয়েছে।
+            রিপোর্ট তৈরি হয়েছে — সংরক্ষণ বা শেয়ার করুন।
           </AppText>
         </Animated.View>
       ) : null}

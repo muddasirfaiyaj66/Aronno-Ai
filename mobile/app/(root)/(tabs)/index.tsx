@@ -106,10 +106,14 @@ export default function HomeScreen() {
             <AppText variant="caption" className="font-bengali-semibold text-primary">
               {t("আরণ্য", "Aronno")}
             </AppText>
-            <AppText variant="title" className="mt-1 text-ink" numberOfLines={1}>
-              {t("আসসালামু আলাইকুম", "Welcome")}
-              {name ? `, ${name}` : ""}
+            <AppText variant="title" className="mt-1 text-ink">
+              {t("স্বাগতম", "Welcome")}
             </AppText>
+            {name ? (
+              <AppText variant="display" className="mt-1 text-primary" numberOfLines={2}>
+                {name}
+              </AppText>
+            ) : null}
           </View>
           <View className="flex-row items-center gap-2">
             <LanguageToggle />

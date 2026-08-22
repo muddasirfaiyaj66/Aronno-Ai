@@ -49,3 +49,4 @@ export { ScreenHeader } from "./ScreenHeader";
 export type { ScreenHeaderProps } from "./ScreenHeader";
 export { HeroChoiceCard } from "./HeroChoiceCard";
 export type { HeroChoiceCardProps } from "./HeroChoiceCard";
+export { TiltPressable } from "./TiltPressable";

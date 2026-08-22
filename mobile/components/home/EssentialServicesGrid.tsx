@@ -1,13 +1,9 @@
 import type { ComponentProps } from "react";
-import { Dimensions, Pressable, StyleSheet, View } from "react-native";
+import { Dimensions, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, {
-  FadeInUp,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
+import Animated, { FadeInUp } from "react-native-reanimated";
 import { AppText } from "@/components/ui/AppText";
+import { TiltPressable } from "@/components/ui/TiltPressable";
 import { colors } from "@/constants/theme";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
@@ -40,12 +36,7 @@ function ServiceTile({
   index: number;
   delay: number;
 }) {
-  const scale = useSharedValue(1);
   const accent = item.accent ?? colors.secondary;
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
 
   return (
     <Animated.View
@@ -55,36 +46,29 @@ function ServiceTile({
         .damping(15)}
       style={{ width: TILE_WIDTH }}
     >
-      <Pressable
+      <TiltPressable
         onPress={item.onPress}
-        onPressIn={() => {
-          scale.value = withSpring(0.95, { damping: 16, stiffness: 320 });
-        }}
-        onPressOut={() => {
-          scale.value = withSpring(1, { damping: 14, stiffness: 220 });
-        }}
         accessibilityRole="button"
         accessibilityLabel={`${item.title}. ${item.subtitle}`}
+        contentStyle={styles.tile}
       >
-        <Animated.View style={[styles.tile, animatedStyle]}>
-          <View
-            className="h-11 w-11 items-center justify-center rounded-2xl"
-            style={{ backgroundColor: accent }}
-          >
-            <Ionicons name={item.icon} size={22} color={colors.primary} />
-          </View>
-          <AppText
-            variant="body"
-            numberOfLines={1}
-            className="mt-3 font-bengali-bold text-ink"
-          >
-            {item.title}
-          </AppText>
-          <AppText variant="caption" numberOfLines={2} className="mt-1 leading-5">
-            {item.subtitle}
-          </AppText>
-        </Animated.View>
-      </Pressable>
+        <View
+          className="h-11 w-11 items-center justify-center rounded-2xl"
+          style={{ backgroundColor: accent }}
+        >
+          <Ionicons name={item.icon} size={22} color={colors.primary} />
+        </View>
+        <AppText
+          variant="body"
+          numberOfLines={1}
+          className="mt-3 font-bengali-bold text-ink"
+        >
+          {item.title}
+        </AppText>
+        <AppText variant="caption" numberOfLines={2} className="mt-1 leading-5">
+          {item.subtitle}
+        </AppText>
+      </TiltPressable>
     </Animated.View>
   );
 }

@@ -294,7 +294,10 @@ export const api = createApi({
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Report"],
     }),
-    downloadReportPdf: builder.mutation<{ downloadUrl: string | null }, string>({
+    downloadReportPdf: builder.mutation<
+      { filename: string; pdfBase64: string; downloadUrl: string | null },
+      string
+    >({
       query: (id) => ({ url: `/reports/${id}/pdf`, method: "POST" }),
       transformResponse: (r) => unwrap(r),
     }),

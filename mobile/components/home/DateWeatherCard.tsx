@@ -2,7 +2,15 @@ import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  FadeInDown,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 import { AppText } from "@/components/ui/AppText";
 import { colors } from "@/constants/theme";
 import { WeatherMood } from "@/components/home/WeatherMood";
@@ -35,11 +43,47 @@ export function DateWeatherCard({
   const kind = weather?.kind ?? "partly";
   const needsPermission = locationStatus === "denied" || locationStatus === "off";
   const place = weather?.locationBn || locationLabel;
+  const float = useSharedValue(0);
+  const shine = useSharedValue(0);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    float.value = withRepeat(
+      withTiming(1, { duration: 3400, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true,
+    );
+    shine.value = withRepeat(
+      withTiming(1, { duration: 4200, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      false,
+    );
+  }, [float, shine]);
+
+  const orbStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: interpolate(float.value, [0, 1], [0, -10]) },
+      { translateX: interpolate(float.value, [0, 1], [0, 8]) },
+      { scale: interpolate(float.value, [0, 1], [1, 1.08]) },
+    ],
+  }));
+
+  const icon3d = useAnimatedStyle(() => ({
+    transform: [
+      { perspective: 700 },
+      { rotateY: `${interpolate(float.value, [0, 1], [-10, 10])}deg` },
+      { translateY: interpolate(float.value, [0, 1], [0, -4]) },
+    ],
+  }));
+
+  const shineStyle = useAnimatedStyle(() => ({
+    opacity: 0.18,
+    transform: [{ translateX: interpolate(shine.value, [0, 1], [-160, 320]) }],
+  }));
 
   return (
     <Animated.View entering={FadeInDown.delay(60).duration(480).springify()}>
@@ -50,6 +94,18 @@ export function DateWeatherCard({
           end={{ x: 1, y: 1 }}
           style={styles.card}
         >
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.orb, orbStyle]}
+          />
+          <Animated.View pointerEvents="none" style={[styles.shine, shineStyle]}>
+            <LinearGradient
+              colors={["transparent", "rgba(255,255,255,0.85)", "transparent"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ flex: 1 }}
+            />
+          </Animated.View>
           <View className="flex-row items-start justify-between">
             <View className="flex-1 pr-3">
               <AppText variant="caption" className="font-bengali-semibold text-primary">
@@ -71,7 +127,7 @@ export function DateWeatherCard({
               </View>
             </View>
 
-            <View className="items-center">
+            <Animated.View style={icon3d} className="items-center">
               <WeatherMood kind={kind} size={36} />
               {weather ? (
                 <AppText
@@ -86,7 +142,7 @@ export function DateWeatherCard({
                   {t("আনা হচ্ছে…", "Loading…")}
                 </AppText>
               )}
-            </View>
+            </Animated.View>
           </View>
 
           {weather ? (
@@ -161,5 +217,20 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(213,221,216,0.95)",
+  },
+  orb: {
+    position: "absolute",
+    right: -20,
+    top: -24,
+    height: 110,
+    width: 110,
+    borderRadius: 55,
+    backgroundColor: "rgba(47,125,98,0.12)",
+  },
+  shine: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: 70,
   },
 });

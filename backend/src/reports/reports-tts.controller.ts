@@ -12,6 +12,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { Errors } from '../common/errors';
 import type { AuthUser } from '../auth/auth.types';
 import { Throttle } from '@nestjs/throttler';
+import { buildReportPdf } from './report-pdf';
 
 const reportSchema = z.object({ diagnosisId: z.string().min(1) }).strict();
 const ttsSchema = z
@@ -101,13 +102,36 @@ export class ReportsTtsController {
 
   @Post('reports/:id/pdf')
   async pdf(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    const report = await this.prisma.report.findUnique({ where: { id } });
+    const report = await this.prisma.report.findUnique({
+      where: { id },
+      include: {
+        user: true,
+        diagnosis: { include: { crop: true } },
+      },
+    });
     if (!report) throw Errors.notFound();
     if (report.userId !== user.id && user.role === 'USER') throw Errors.forbidden();
-    // Stub PDF: minimal header bytes so the client can toast success.
-    // Vercel has no persistent disk. PDF generation stays a stub until
-    // a hosted renderer (Cloudinary raw / S3) is wired.
-    return { downloadUrl: null as string | null };
+
+    const plan = await this.treatment.getOrCreate(user, report.diagnosisId);
+    const bytes = await buildReportPdf({
+      farmerName: report.user.displayName,
+      cropNameBn: plan.cropNameBn,
+      diseaseNameBn: report.diagnosis.diseaseNameBn,
+      diseaseNameEn: report.diagnosis.diseaseNameEn,
+      confidence: report.diagnosis.confidence,
+      severity: report.diagnosis.severity,
+      pesticideNameBn: plan.pesticideNameBn,
+      dosagePerBigha: plan.dosagePerBigha,
+      followUpLabelBn: plan.followUpLabelBn,
+      weatherReasonBn: plan.weatherAdvisory.reasonBn,
+      steps: plan.steps,
+    });
+    const filename = `aronno-report-${id.slice(-8)}.pdf`;
+    return {
+      filename,
+      pdfBase64: bytes.toString('base64'),
+      downloadUrl: null as string | null,
+    };
   }
 
   @Throttle({ default: { ttl: 60000, limit: 10 } })

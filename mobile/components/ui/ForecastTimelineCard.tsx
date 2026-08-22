@@ -1,17 +1,16 @@
-import type { ComponentProps } from "react";
-import { FlatList, StyleSheet, View } from "react-native";
+import { View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "./AppText";
 import { WeatherMood } from "@/components/home/WeatherMood";
+import { colors } from "@/constants/theme";
 import { weatherKindFromIcon } from "@/types/weather";
-
-type IconName = ComponentProps<typeof Ionicons>["name"];
 
 export type ForecastMonthEntry = {
   id: string;
   monthLabel: string;
-  weatherIcon: IconName;
+  weatherIcon: string;
   tempC?: number;
+  precipMm?: number;
   cropLabel: string;
 };
 
@@ -29,67 +28,56 @@ export function ForecastTimelineCard({
   className = "",
 }: ForecastTimelineCardProps) {
   return (
-    <View
-      className={`overflow-hidden rounded-3xl bg-white ${className}`}
-      style={styles.card}
-    >
+    <View className={`rounded-3xl border border-neutral-200 bg-white ${className}`}>
       <View className="px-5 pt-5">
         <AppText variant="bodyLg" className="font-bengali-bold text-primary">
           {title}
         </AppText>
         {subtitle ? (
-          <AppText variant="caption" className="mt-1">
+          <AppText variant="caption" className="mt-1 leading-6">
             {subtitle}
           </AppText>
         ) : null}
       </View>
 
-      <FlatList
-        horizontal
-        data={months}
-        keyExtractor={(item) => item.id}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.row}
-        renderItem={({ item }) => (
-          <View className="w-24 items-center rounded-2xl bg-neutral px-3 py-4">
-            <AppText variant="caption" className="font-bengali-semibold text-ink">
-              {item.monthLabel}
-            </AppText>
-            <View className="my-2 h-10 w-10 items-center justify-center rounded-full bg-white">
-              <WeatherMood kind={weatherKindFromIcon(String(item.weatherIcon))} size={20} />
+      <View className="gap-3 px-4 py-4">
+        {months.map((item) => (
+          <View
+            key={item.id}
+            className="flex-row items-start gap-3 rounded-2xl bg-neutral px-3 py-3"
+          >
+            <View className="h-14 w-14 items-center justify-center rounded-2xl bg-white">
+              <WeatherMood kind={weatherKindFromIcon(String(item.weatherIcon))} size={22} />
             </View>
-            {item.tempC != null ? (
-              <AppText variant="caption" className="mb-1 text-muted">
-                {item.tempC}°
+            <View className="min-w-0 flex-1">
+              <AppText variant="body" className="font-bengali-bold text-ink">
+                {item.monthLabel}
               </AppText>
-            ) : null}
-            <View className="rounded-full bg-secondary px-2.5 py-1">
-              <AppText
-                variant="caption"
-                numberOfLines={1}
-                className="font-bengali-semibold text-primary"
-              >
+              <AppText variant="bodyLg" className="mt-1 font-bengali-bold text-primary">
                 {item.cropLabel}
               </AppText>
+              <View className="mt-2 flex-row flex-wrap gap-2">
+                {item.tempC != null ? (
+                  <View className="flex-row items-center gap-1 rounded-full bg-white px-2.5 py-1">
+                    <Ionicons name="thermometer-outline" size={14} color={colors.primary} />
+                    <AppText variant="caption" className="font-bengali-semibold text-ink">
+                      {item.tempC}°
+                    </AppText>
+                  </View>
+                ) : null}
+                {item.precipMm != null ? (
+                  <View className="flex-row items-center gap-1 rounded-full bg-white px-2.5 py-1">
+                    <Ionicons name="water-outline" size={14} color={colors.primary} />
+                    <AppText variant="caption" className="font-bengali-semibold text-ink">
+                      {item.precipMm} মিমি
+                    </AppText>
+                  </View>
+                ) : null}
+              </View>
             </View>
           </View>
-        )}
-      />
+        ))}
+      </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    shadowColor: "#064E3B",
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 2,
-  },
-  row: {
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-});

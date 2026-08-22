@@ -63,6 +63,12 @@ const httpUrl = z.preprocess((value) => {
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }, z.string().min(8));
 
+const listingThumb = z.preprocess((value) => {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  return /^https?:\/\//i.test(trimmed) ? trimmed : '';
+}, z.string());
+
 const toolsSchema = z.object({
   toolNameBn: bn.min(2),
   toolNameEn: bn.min(2),
@@ -71,13 +77,13 @@ const toolsSchema = z.object({
     .array(
       z.object({
         sourceName: bn.min(1),
-        thumbnailUrl: z.string().optional().default(''),
+        thumbnailUrl: listingThumb.optional().default(''),
         priceBn: z.string().optional(),
         externalUrl: httpUrl,
       }),
     )
-    .min(1)
-    .max(4),
+    .max(4)
+    .default([]),
 });
 
 const receiptSchema = z.object({
@@ -92,7 +98,7 @@ const receiptSchema = z.object({
       }),
     )
     .min(1)
-    .max(12),
+    .max(16),
 });
 
 const fertilizerSchema = z.object({
@@ -119,6 +125,36 @@ const yieldSchema = z.object({
   }, z.enum(['up', 'down', 'flat'])),
   changePercent: num,
 });
+
+function shopListings(toolNameEn: string): ToolResult['listings'] {
+  const q = encodeURIComponent(toolNameEn);
+  return [
+    {
+      sourceName: 'দারাজ',
+      thumbnailUrl: '',
+      priceBn: 'অনলাইনে দেখুন',
+      externalUrl: `https://www.daraz.com.bd/catalog/?q=${q}`,
+    },
+    {
+      sourceName: 'গুগল শপিং',
+      thumbnailUrl: '',
+      priceBn: 'দাম তুলনা',
+      externalUrl: `https://www.google.com/search?tbm=shop&q=${q}+bangladesh`,
+    },
+    {
+      sourceName: 'স্থানীয় দোকান',
+      thumbnailUrl: '',
+      priceBn: 'কাছাকাছি খুঁজুন',
+      externalUrl: `https://www.google.com/search?q=${q}+কৃষি+যন্ত্র+বাংলাদেশ`,
+    },
+  ];
+}
+
+function takaFromPrice(priceBn: string): number {
+  const digits = priceBn.replace(/[^\d.]/g, '');
+  const n = Number(digits);
+  return Number.isFinite(n) ? n : 0;
+}
 
 function failAi(logger: Logger, label: string, err: unknown): never {
   logger.warn(`${label} failed: ${String(err)}`);
@@ -178,13 +214,17 @@ export class GeminiToolsAdapter implements AiToolsPort {
   async identify(input: VisionInput): Promise<ToolResult> {
     try {
       const raw = await this.gemini.generateJson<unknown>(
-        `Suggest one farm tool sold in Bangladesh for this photo or Bangla task.
+        `You are a Bangladesh farm-tool expert. Identify ONE tool from the photo and/or Bangla task.
 Task: ${input.transcriptBn ?? '(photo of a tool or field task)'}
-JSON:
-{"toolNameBn":"...","toolNameEn":"...","reasonBn":"...","listings":[{"sourceName":"দারাজ","thumbnailUrl":"","priceBn":"৳ ...","externalUrl":"https://www.daraz.com.bd/"}]}`,
+Prefer tools actually sold in Bangladesh (power tiller, sprayer, weeder, sickle, pump, thresher).
+Return JSON only:
+{"toolNameBn":"...","toolNameEn":"...","reasonBn":"2-3 short Bangla sentences why this tool fits","listings":[{"sourceName":"দারাজ","thumbnailUrl":"","priceBn":"৳ ...","externalUrl":"https://www.daraz.com.bd/catalog/?q=..."}]}
+Give 2-3 listings with real https search URLs on daraz.com.bd or google.com. If unsure of price, use "দাম দেখুন".`,
         { imageUrl: input.imageUrl, imageBuffer: input.imageBuffer },
       );
-      return toolsSchema.parse(raw);
+      const parsed = toolsSchema.parse(raw);
+      const listings = parsed.listings.length >= 1 ? parsed.listings : shopListings(parsed.toolNameEn);
+      return { ...parsed, listings };
     } catch (err) {
       failAi(this.logger, 'Tools', err);
     }
@@ -199,12 +239,17 @@ export class GeminiReceiptAdapter implements AiReceiptPort {
   async scan(input: { imageUrl?: string; imageBuffer?: Buffer }): Promise<ReceiptResult> {
     try {
       const raw = await this.gemini.generateJson<unknown>(
-        `Read this Bangladeshi shop receipt (Bangla or English). Extract line items and total in BDT.
-JSON:
-{"totalBdt":3200,"summaryBn":"মোট ... টাকা খরচ হয়েছে।","items":[{"nameBn":"...","quantity":"...","priceBn":"৳ ..."}]}`,
+        `Read this Bangladeshi shop/agro receipt (Bangla or English handwriting or print).
+Extract every line item. Quantities like "২ কেজি" or "1 pcs". Prices in BDT.
+JSON only:
+{"totalBdt":3200,"summaryBn":"মোট ৩২০০ টাকা খরচ হয়েছে। প্রধান খরচ: ...","items":[{"nameBn":"...","quantity":"...","priceBn":"৳ 1200"}]}
+totalBdt must be a number (not a string). If the printed total is missing, sum the line items.`,
         { imageUrl: input.imageUrl, imageBuffer: input.imageBuffer },
       );
-      return receiptSchema.parse(raw);
+      const parsed = receiptSchema.parse(raw);
+      const summed = parsed.items.reduce((acc, item) => acc + takaFromPrice(item.priceBn), 0);
+      const totalBdt = parsed.totalBdt > 0 ? parsed.totalBdt : summed;
+      return { ...parsed, totalBdt };
     } catch (err) {
       failAi(this.logger, 'Receipt', err);
     }

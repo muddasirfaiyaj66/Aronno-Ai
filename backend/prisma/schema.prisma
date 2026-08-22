@@ -414,6 +414,8 @@ model MonthForecast {
   monthBn           String
   weatherIcon       String
   recommendedCropBn String
+  tempC             Int?
+  precipMm          Int?
   sortOrder         Int
   cropPlan          CropPlan @relation(fields: [cropPlanId], references: [id])
 

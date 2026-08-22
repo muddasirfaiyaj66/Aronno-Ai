@@ -1,4 +1,4 @@
-import { View } from "react-native";
+import { ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { HeroChoiceCard, ScreenHeader } from "@/components/ui";
@@ -13,7 +13,10 @@ export default function ToolIdentificationScreen() {
         subtitle="ছবি তুলুন, বাংলায় বলুন, অথবা লিখুন"
       />
 
-      <View className="flex-1 gap-3 px-5 pt-5">
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="gap-3 px-5 py-5 pb-10"
+      >
         <HeroChoiceCard
           tone="photo"
           icon="camera"
@@ -50,7 +53,7 @@ export default function ToolIdentificationScreen() {
             })
           }
         />
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

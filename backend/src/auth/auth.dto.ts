@@ -56,6 +56,14 @@ export const patchMeSchema = z
   })
   .strict();
 
+export const createAdminSchema = z
+  .object({
+    email: z.string().email(),
+    password: passwordSchema,
+    displayName: z.string().min(2).max(80),
+  })
+  .strict();
+
 export const patchRoleSchema = z
   .object({
     roleSlug: z.enum(['SUPERADMIN', 'ADMIN', 'USER']),

@@ -25,26 +25,3 @@ export function formatHomeTime(date: Date, locale: Locale) {
   }).format(date);
   return formatted;
 }
-
-export type WeatherMock = {
-  conditionBn: string;
-  conditionEn: string;
-  tempC: number;
-  humidity: number;
-  windKph: number;
-  locationBn: string;
-  locationEn: string;
-  icon: "sunny" | "partly" | "rainy" | "cloudy";
-};
-
-/** Mock field weather until API is wired */
-export const MOCK_WEATHER: WeatherMock = {
-  conditionBn: "আংশিক মেঘলা",
-  conditionEn: "Partly cloudy",
-  tempC: 31,
-  humidity: 72,
-  windKph: 12,
-  locationBn: "যশোর",
-  locationEn: "Jashore",
-  icon: "partly",
-};

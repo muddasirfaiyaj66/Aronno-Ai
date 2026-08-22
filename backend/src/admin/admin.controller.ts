@@ -1,8 +1,12 @@
-import { Controller, Get, Param, Patch, Query, Body } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ZodPipe } from '../common/pipes/zod.pipe';
-import { patchActiveSchema, patchRoleSchema } from '../auth/auth.dto';
+import {
+  createAdminSchema,
+  patchActiveSchema,
+  patchRoleSchema,
+} from '../auth/auth.dto';
 import type { AuthUser } from '../auth/auth.types';
 import { AdminService } from './admin.service';
 import { z } from 'zod';
@@ -21,6 +25,15 @@ export class AdminController {
   @Get('users')
   listUsers(@Query('cursor') cursor?: string, @Query('limit') limit?: string) {
     return this.admin.listUsers(cursor, Number(limit) || 20);
+  }
+
+  @Post('users')
+  createAdmin(
+    @CurrentUser() actor: AuthUser,
+    @Body(new ZodPipe(createAdminSchema))
+    body: ReturnType<typeof createAdminSchema.parse>,
+  ) {
+    return this.admin.createAdmin(actor, body);
   }
 
   @Patch('users/:id/role')

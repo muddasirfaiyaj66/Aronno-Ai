@@ -134,6 +134,7 @@ export const api = createApi({
     "Market",
     "Loan",
     "Report",
+    "AdminUsers",
   ],
   endpoints: (builder) => ({
     getProfessions: builder.query<{ slug: string; nameBn: string; nameEn: string }[], void>({
@@ -328,12 +329,17 @@ export const api = createApi({
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Yield", "History"],
     }),
+    getLatestYield: builder.query<(YieldEstimate & { id: string }) | null, void>({
+      query: () => "/yield/latest",
+      transformResponse: (r) => unwrap(r),
+      providesTags: ["Yield"],
+    }),
     generateCropPlan: builder.mutation<CropPlan & { id: string }, void>({
       query: () => ({ url: "/crop-plans/generate", method: "POST" }),
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["CropPlan"],
     }),
-    getLatestCropPlan: builder.query<CropPlan & { id: string }, void>({
+    getLatestCropPlan: builder.query<(CropPlan & { id: string }) | null, void>({
       query: () => "/crop-plans/latest",
       transformResponse: (r) => unwrap(r),
       providesTags: ["CropPlan"],
@@ -402,6 +408,31 @@ export const api = createApi({
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Loan", "History"],
     }),
+    getAdminUsers: builder.query<AuthUser[], void>({
+      query: () => "/admin/users?limit=50",
+      transformResponse: (r) => unwrap(r),
+      providesTags: ["AdminUsers"],
+    }),
+    createAdmin: builder.mutation<
+      AuthUser,
+      { email: string; password: string; displayName: string }
+    >({
+      query: (body) => ({ url: "/admin/users", method: "POST", body }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["AdminUsers"],
+    }),
+    patchAdminRole: builder.mutation<
+      AuthUser,
+      { id: string; roleSlug: "ADMIN" | "USER" }
+    >({
+      query: ({ id, roleSlug }) => ({
+        url: `/admin/users/${id}/role`,
+        method: "PATCH",
+        body: { roleSlug },
+      }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["AdminUsers"],
+    }),
   }),
 });
 
@@ -435,6 +466,7 @@ export const {
   useGetReceiptQuery,
   useRecommendFertilizerMutation,
   usePredictYieldMutation,
+  useGetLatestYieldQuery,
   useGenerateCropPlanMutation,
   useGetLatestCropPlanQuery,
   useGetMarketPricesQuery,
@@ -444,4 +476,7 @@ export const {
   useGetHeatmapQuery,
   useGetCurrentLoanQuery,
   useApplyLoanMutation,
+  useGetAdminUsersQuery,
+  useCreateAdminMutation,
+  usePatchAdminRoleMutation,
 } = api;

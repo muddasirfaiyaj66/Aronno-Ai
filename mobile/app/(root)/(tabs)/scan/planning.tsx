@@ -1,29 +1,28 @@
-import { useEffect } from "react";
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {
   AIGeneratingShimmer,
   AppText,
+  EmptyState,
   ForecastTimelineCard,
   ListenButton,
+  PrimaryButton,
   RetryCard,
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import {
   useGenerateCropPlanMutation,
+  useGetLatestCropPlanQuery,
   useSpeakMutation,
 } from "@/services/api";
 
 export default function CropPlanningScreen() {
-  const [generate, { data: plan, isLoading, isError }] =
-    useGenerateCropPlanMutation();
+  const { data: latest, isLoading, isError, refetch } = useGetLatestCropPlanQuery();
+  const [generate, { isLoading: generating }] = useGenerateCropPlanMutation();
   const [speak] = useSpeakMutation();
-
-  useEffect(() => {
-    generate();
-  }, [generate]);
+  const plan = latest;
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
@@ -41,13 +40,20 @@ export default function CropPlanningScreen() {
         {isError ? (
           <RetryCard
             message="পরিকল্পনা তৈরি করা যায়নি। আবার চেষ্টা করুন।"
-            onRetry={() => generate()}
+            onRetry={() => refetch()}
           />
-        ) : isLoading || !plan ? (
+        ) : isLoading || generating ? (
           <AIGeneratingShimmer
             label="পরিকল্পনা তৈরি হচ্ছে"
             lines={4}
             className="w-full"
+          />
+        ) : !plan ? (
+          <EmptyState
+            icon={<Ionicons name="calendar-outline" size={32} color={colors.primary} />}
+            message="এখনো কোনো ফসল পরিকল্পনা নেই। তৈরি করতে চাপুন।"
+            ctaLabel="পরিকল্পনা তৈরি করুন"
+            onCta={() => generate()}
           />
         ) : (
           <>
@@ -76,6 +82,8 @@ export default function CropPlanningScreen() {
                 {plan.recommendationBn}
               </AppText>
             </StructuredCard>
+
+            <PrimaryButton label="আবার তৈরি করুন" onPress={() => generate()} />
           </>
         )}
       </ScrollView>

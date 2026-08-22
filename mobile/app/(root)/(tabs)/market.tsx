@@ -293,7 +293,7 @@ export default function MarketScreen() {
                     color={colors.primary}
                   />
                 }
-                message="এই ফিল্টারে কোনো দামের তথ্য মেলেনি।"
+                message="এখনো কোনো বাজার দাম নেই।"
                 ctaLabel="ফিল্টার পরিষ্কার করুন"
                 onCta={() => {
                   setPriceCrop("all");
@@ -361,20 +361,22 @@ export default function MarketScreen() {
               );
             })}
 
-            <StructuredCard
-              title="আনুমানিক আয়"
-              tone="soft"
-              icon={
-                <Ionicons name="cash-outline" size={20} color={colors.primary} />
-              }
-              footer={
-                <AppText variant="caption">
-                  সেরা বাজার দাম থেকে আনুমানিক আয়
-                </AppText>
-              }
-            >
-              <AppText variant="hero">৳ {estimatedRevenue}</AppText>
-            </StructuredCard>
+            {filteredPrices.length > 0 ? (
+              <StructuredCard
+                title="আনুমানিক আয়"
+                tone="soft"
+                icon={
+                  <Ionicons name="cash-outline" size={20} color={colors.primary} />
+                }
+                footer={
+                  <AppText variant="caption">
+                    সেরা বাজার দাম থেকে আনুমানিক আয়
+                  </AppText>
+                }
+              >
+                <AppText variant="hero">৳ {estimatedRevenue}</AppText>
+              </StructuredCard>
+            ) : null}
           </>
         ) : null}
 
@@ -455,6 +457,12 @@ export default function MarketScreen() {
             <AppText variant="caption" className="text-muted">
               এলাকাভিত্তিক আভাস — পূর্ণ মানচিত্র শীঘ্রই আসছে
             </AppText>
+
+            {(heatmap?.regions ?? []).length === 0 ? (
+              <AppText variant="body" className="text-center text-muted">
+                এখনো কোনো হিট ম্যাপ তথ্য নেই।
+              </AppText>
+            ) : null}
 
             <View className="flex-row flex-wrap gap-3">
               {(heatmap?.regions ?? []).map((region) => {

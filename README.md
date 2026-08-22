@@ -50,7 +50,9 @@ Set Cloudinary keys in `mobile/.env` before using the camera. Details: [SETUP.md
 
 Health check: [http://localhost:3000/api/health](http://localhost:3000/api/health)
 
-Demo login (seeded, already verified): `superadmin@aronno.local` / `ChangeMe_Admin1!`
+Demo farmer (seeded farm data, already verified): `demo@gmail.com` / `demo1234`
+
+Superadmin comes from `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` in `backend/.env`. After that login, create more admins from **আমি → অ্যাডমিন তৈরি**. Admins can create further admins.
 
 ## What is finished
 

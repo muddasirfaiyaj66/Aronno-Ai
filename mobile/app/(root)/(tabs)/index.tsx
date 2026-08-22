@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -14,43 +15,55 @@ import { InsightHeroCard, type InsightItem } from "@/components/home/InsightHero
 import { useLocale } from "@/context/locale";
 import { useAppSelector } from "@/store";
 import { colors } from "@/constants/theme";
+import { useGetCurrentLoanQuery, useGetHistoryQuery } from "@/services/api";
 
 export default function HomeScreen() {
   const router = useRouter();
   const { t } = useLocale();
   const name = useAppSelector((s) => s.auth.user?.displayName);
+  const { data: history } = useGetHistoryQuery();
+  const { data: loan } = useGetCurrentLoanQuery();
 
-  const insights: InsightItem[] = [
-    {
-      id: "weather",
-      kind: "weather",
-      icon: "rainy-outline",
-      message: t(
-        "আজ বিকেলে বৃষ্টি হতে পারে — স্প্রে করবেন না",
-        "Rain this afternoon — skip spraying",
-      ),
-    },
-    {
-      id: "yield",
-      kind: "yield",
-      icon: "trending-up-outline",
-      message: t(
-        "এই মৌসুমের ফলন পূর্বাভাস আপডেট হয়েছে",
-        "This season's yield forecast is updated",
-      ),
-      heroNumber: t("৪.২", "4.2"),
-      heroUnit: t("টন/একর", "tons/acre"),
-    },
-    {
-      id: "loan",
-      kind: "loan",
-      icon: "cash-outline",
-      message: t(
-        "ঋণের পরবর্তী কিস্তি আগামী সপ্তাহে",
-        "Your next loan installment is due next week",
-      ),
-    },
-  ];
+  const insights = useMemo(() => {
+    const items: InsightItem[] = [];
+    const disease = history?.find((entry) => entry.kind === "disease");
+    if (disease?.kind === "disease") {
+      items.push({
+        id: disease.id,
+        kind: "disease",
+        icon: "leaf-outline",
+        message: `${disease.cropNameBn} — ${disease.diseaseNameBn}`,
+      });
+    }
+    const yieldEntry = history?.find((entry) => entry.kind === "yield");
+    if (yieldEntry?.kind === "yield") {
+      items.push({
+        id: yieldEntry.id,
+        kind: "yield",
+        icon: "trending-up-outline",
+        message: t(
+          "এই মৌসুমের ফলন পূর্বাভাস আপডেট হয়েছে",
+          "This season's yield forecast is updated",
+        ),
+        heroNumber: String(yieldEntry.yieldValue),
+        heroUnit: yieldEntry.yieldUnitBn,
+      });
+    }
+    if (loan) {
+      items.push({
+        id: loan.id,
+        kind: "loan",
+        icon: "cash-outline",
+        message: loan.nextPaymentDateBn
+          ? t(
+              `ঋণের পরবর্তী কিস্তি ${loan.nextPaymentDateBn}`,
+              `Next loan installment: ${loan.nextPaymentDateBn}`,
+            )
+          : t("আপনার কৃষি ঋণ চলমান", "Your farm loan is active"),
+      });
+    }
+    return items;
+  }, [history, loan, t]);
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
@@ -156,13 +169,16 @@ export default function HomeScreen() {
             </View>
           </HomeSection>
 
-          <InsightHeroCard
-            insights={insights}
-            onPress={(item) => {
-              if (item.kind === "weather") router.push("/(root)/(tabs)/scan");
-              else if (item.kind === "loan") router.push("/(root)/(tabs)/profile");
-            }}
-          />
+          {insights.length > 0 ? (
+            <InsightHeroCard
+              insights={insights}
+              onPress={(item) => {
+                if (item.kind === "disease") router.push("/(root)/(tabs)/history");
+                else if (item.kind === "yield") router.push("/(root)/(tabs)/scan/yield");
+                else if (item.kind === "loan") router.push("/(root)/loan/overview");
+              }}
+            />
+          ) : null}
 
           <HomeSection
             title={t("আরও সহায়তা", "More help")}

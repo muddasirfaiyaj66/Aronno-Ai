@@ -1,10 +1,16 @@
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { AppText, AIGeneratingShimmer, StructuredCard } from "@/components/ui";
+import {
+  AppText,
+  AIGeneratingShimmer,
+  EmptyState,
+  PrimaryButton,
+  RetryCard,
+  StructuredCard,
+} from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { usePredictYieldMutation } from "@/services/api";
-import { useEffect } from "react";
+import { useGetLatestYieldQuery, usePredictYieldMutation } from "@/services/api";
 
 function ReadOnlyRow({ label, value }: { label: string; value: string }) {
   return (
@@ -18,15 +24,41 @@ function ReadOnlyRow({ label, value }: { label: string; value: string }) {
 }
 
 export default function YieldPredictionScreen() {
-  const [predict, { data, isLoading }] = usePredictYieldMutation();
-  useEffect(() => {
-    predict();
-  }, [predict]);
-  const estimate = data;
-  if (isLoading || !estimate) {
+  const { data: latest, isLoading, isError, refetch } = useGetLatestYieldQuery();
+  const [predict, { isLoading: predicting }] = usePredictYieldMutation();
+  const estimate = latest;
+
+  if (isLoading || predicting) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-neutral px-6">
         <AIGeneratingShimmer label="ফলন হিসাব হচ্ছে" lines={4} className="w-full" />
+      </SafeAreaView>
+    );
+  }
+
+  if (isError) {
+    return (
+      <SafeAreaView className="flex-1 bg-neutral px-5 py-5">
+        <RetryCard message="ফলন তথ্য আনা যায়নি। আবার চেষ্টা করুন।" onRetry={() => refetch()} />
+      </SafeAreaView>
+    );
+  }
+
+  if (!estimate) {
+    return (
+      <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
+        <View className="border-b border-neutral-200 bg-white px-5 py-4">
+          <AppText variant="title">ফলন পূর্বাভাস</AppText>
+          <AppText variant="caption" className="mt-1">
+            আপনার জমি ও আবহাওয়ার তথ্যের ভিত্তিতে
+          </AppText>
+        </View>
+        <EmptyState
+          icon={<Ionicons name="stats-chart-outline" size={32} color={colors.primary} />}
+          message="এখনো কোনো ফলন পূর্বাভাস নেই। হিসাব করতে চাপুন।"
+          ctaLabel="ফলন হিসাব করুন"
+          onCta={() => predict()}
+        />
       </SafeAreaView>
     );
   }
@@ -106,6 +138,8 @@ export default function YieldPredictionScreen() {
             </View>
           </View>
         </StructuredCard>
+
+        <PrimaryButton label="আবার হিসাব করুন" onPress={() => predict()} />
       </ScrollView>
     </SafeAreaView>
   );

@@ -3,7 +3,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AI_PLANNING } from '../ai/ai.tokens';
 import type { AiPlanningPort } from '../ai/ports';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Errors } from '../common/errors';
 import type { AuthUser } from '../auth/auth.types';
 
 @Controller('crop-plans')
@@ -41,8 +40,7 @@ export class PlanningController {
       orderBy: { createdAt: 'desc' },
       include: { months: { orderBy: { sortOrder: 'asc' } } },
     });
-    if (!row) throw Errors.notFound();
-    return this.dto(row);
+    return row ? this.dto(row) : null;
   }
 
   private dto(row: {

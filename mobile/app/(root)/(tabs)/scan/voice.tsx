@@ -10,19 +10,12 @@ import {
 } from "@/components/ui";
 import { useLocale } from "@/context/locale";
 
-const FLOW_CONTENT: Record<
-  string,
-  { subtitle: string; mockTranscript: string }
-> = {
+const FLOW_CONTENT: Record<string, { subtitle: string }> = {
   disease: {
     subtitle: "ফসলের সমস্যাটি বাংলায় বলুন, অথবা নিচে লিখুন",
-    mockTranscript:
-      "আমার ধানের পাতায় বাদামি দাগ দেখা যাচ্ছে, পাতাগুলো ধীরে ধীরে শুকিয়ে যাচ্ছে।",
   },
   tool: {
     subtitle: "আপনার কাজটি বাংলায় বলুন, অথবা নিচে লিখুন",
-    mockTranscript:
-      "আমার জমিতে ঘাস কাটার জন্য একটা যন্ত্র দরকার, হাত দিয়ে কাটতে অনেক কষ্ট হচ্ছে।",
   },
 };
 
@@ -56,8 +49,11 @@ export default function VoiceCaptureScreen() {
 
     setIsRecording(true);
     timeoutRef.current = setTimeout(() => {
-      setTranscript((prev) => (prev.trim() ? prev : content.mockTranscript));
       setIsRecording(false);
+      setTranscript((prev) => {
+        if (!prev.trim()) setMode("text");
+        return prev;
+      });
     }, 1600);
   };
 

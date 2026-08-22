@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { PasswordService } from '../auth/password.service';
+import { DEMO_EMAIL, DEMO_NAME, DEMO_PASSWORD } from './demo-account';
 
 const ROLES = [
   { slug: 'SUPERADMIN', nameBn: 'সুপার অ্যাডমিন', nameEn: 'Superadmin' },
@@ -91,8 +92,8 @@ export class SeedService implements OnModuleInit {
     }
 
     await this.seedSuperadmin();
-    await this.seedMarket();
-    await this.logger.log('Lookup seed complete');
+    await this.seedDemoUser();
+    this.logger.log('Lookup seed complete');
   }
 
   private async seedSuperadmin() {
@@ -106,18 +107,19 @@ export class SeedService implements OnModuleInit {
     });
     if (existingRoleUser) return;
 
-    const email = this.config.get<string>(
-      'SUPERADMIN_EMAIL',
-      'superadmin@aronno.local',
-    ).toLowerCase();
+    const email = this.config.get<string>('SUPERADMIN_EMAIL')?.trim().toLowerCase();
+    const password = this.config.get<string>('SUPERADMIN_PASSWORD');
+    if (!email || !password) {
+      this.logger.warn(
+        'SUPERADMIN_EMAIL / SUPERADMIN_PASSWORD missing in env — skipped superadmin seed',
+      );
+      return;
+    }
     const existingEmail = await this.prisma.user.findUnique({ where: { email } });
     if (existingEmail) return;
 
-    const password = this.config.get<string>(
-      'SUPERADMIN_PASSWORD',
-      'ChangeMe_Admin1!',
-    );
-    const name = this.config.get<string>('SUPERADMIN_NAME', 'Aronno Superadmin');
+    const name =
+      this.config.get<string>('SUPERADMIN_NAME')?.trim() || 'Aronno Superadmin';
     const farmer = await this.prisma.profession.findUnique({
       where: { slug: 'farmer' },
     });
@@ -139,81 +141,234 @@ export class SeedService implements OnModuleInit {
     this.logger.log(`Seeded SUPERADMIN ${email}`);
   }
 
-  private async seedMarket() {
-    const districts = await this.prisma.district.findMany();
-    const crops = await this.prisma.crop.findMany();
-    if (!districts.length || !crops.length) return;
+  private async seedDemoUser() {
+    const userRole = await this.prisma.role.findUnique({ where: { slug: 'USER' } });
+    const farmer = await this.prisma.profession.findUnique({ where: { slug: 'farmer' } });
+    const jashore = await this.prisma.district.findUnique({ where: { slug: 'jashore' } });
+    const rice = await this.prisma.crop.findUnique({ where: { slug: 'rice' } });
+    const potato = await this.prisma.crop.findUnique({ where: { slug: 'potato' } });
+    const seedPurpose = await this.prisma.loanPurpose.findUnique({ where: { slug: 'fertilizer' } });
+    if (!userRole || !farmer || !jashore || !rice || !potato || !seedPurpose) return;
 
-    const marketNames: Record<string, string> = {
-      jashore: 'যশোর বাজার',
-      munshiganj: 'মুন্সিগঞ্জ বাজার',
-      bogura: 'বগুড়া বাজার',
-      rangpur: 'রংপুর বাজার',
-      comilla: 'কুমিল্লা বাজার',
-    };
-
-    for (const d of districts) {
-      const existing = await this.prisma.market.findFirst({
-        where: { districtId: d.id },
+    let user = await this.prisma.user.findUnique({ where: { email: DEMO_EMAIL } });
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          email: DEMO_EMAIL,
+          passwordHash: await this.passwords.hash(DEMO_PASSWORD),
+          displayName: DEMO_NAME,
+          roleId: userRole.id,
+          professionId: farmer.id,
+          districtId: jashore.id,
+          emailVerifiedAt: new Date(),
+        },
       });
-      if (!existing) {
-        await this.prisma.market.create({
-          data: { nameBn: marketNames[d.slug] ?? d.nameBn, districtId: d.id },
-        });
-      }
-      const heat = await this.prisma.heatMapStat.findFirst({
-        where: { districtId: d.id },
-      });
-      if (!heat) {
-        await this.prisma.heatMapStat.create({
+      this.logger.log(`Seeded demo farmer ${DEMO_EMAIL}`);
+    } else {
+      const passwordOk = user.passwordHash
+        ? await this.passwords.verify(user.passwordHash, DEMO_PASSWORD).catch(() => false)
+        : false;
+      if (!passwordOk || !user.emailVerifiedAt) {
+        user = await this.prisma.user.update({
+          where: { id: user.id },
           data: {
-            districtId: d.id,
-            diseaseIntensity: Math.round((0.2 + Math.random() * 0.6) * 100) / 100,
-            priceIntensity: Math.round((0.2 + Math.random() * 0.6) * 100) / 100,
+            ...(!passwordOk
+              ? { passwordHash: await this.passwords.hash(DEMO_PASSWORD) }
+              : {}),
+            emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
           },
         });
       }
     }
 
-    const priceCount = await this.prisma.marketPrice.count();
-    if (priceCount === 0) {
-      const markets = await this.prisma.market.findMany({ include: { district: true } });
-      const seedPrices: { crop: string; district: string; price: number }[] = [
-        { crop: 'rice', district: 'jashore', price: 1180 },
-        { crop: 'rice', district: 'bogura', price: 1120 },
-        { crop: 'rice', district: 'rangpur', price: 1095 },
-        { crop: 'potato', district: 'munshiganj', price: 640 },
-        { crop: 'potato', district: 'comilla', price: 590 },
-        { crop: 'tomato', district: 'bogura', price: 980 },
-        { crop: 'tomato', district: 'jashore', price: 910 },
-        { crop: 'vegetable', district: 'comilla', price: 720 },
-        { crop: 'onion', district: 'rangpur', price: 1450 },
-        { crop: 'onion', district: 'munshiganj', price: 1380 },
-        { crop: 'corn', district: 'bogura', price: 860 },
-        { crop: 'corn', district: 'rangpur', price: 905 },
-        { crop: 'lentil', district: 'jashore', price: 2150 },
-        { crop: 'lentil', district: 'comilla', price: 2260 },
-      ];
-      for (const row of seedPrices) {
-        const crop = crops.find((c) => c.slug === row.crop);
-        const market = markets.find((m) => m.district.slug === row.district);
-        if (!crop || !market) continue;
-        await this.prisma.marketPrice.create({
-          data: {
-            marketId: market.id,
-            cropId: crop.id,
-            pricePerMon: row.price,
-            capturedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
-          },
-        });
-        await this.prisma.marketPrice.create({
-          data: {
-            marketId: market.id,
-            cropId: crop.id,
-            pricePerMon: row.price,
-          },
-        });
-      }
-    }
+    const existing = await this.prisma.diagnosis.count({ where: { userId: user.id } });
+    if (existing > 0) return;
+
+    const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+
+    const diagnosis = await this.prisma.diagnosis.create({
+      data: {
+        userId: user.id,
+        cropId: rice.id,
+        source: 'photo',
+        diseaseNameBn: 'বাদামি দাগ রোগ',
+        diseaseNameEn: 'Brown Spot Disease',
+        confidence: 87,
+        severity: 'medium',
+        createdAt: daysAgo(8),
+      },
+    });
+    await this.prisma.historyEvent.create({
+      data: {
+        userId: user.id,
+        kind: 'disease',
+        sourceId: diagnosis.id,
+        occurredAt: daysAgo(8),
+      },
+    });
+
+    const plan = await this.prisma.treatmentPlan.create({
+      data: {
+        diagnosisId: diagnosis.id,
+        userId: user.id,
+        pesticideNameBn: 'প্রোপিকোনাজল ২৫% ইসি',
+        dosagePerBigha: '৫০ মিলি/বিঘা',
+        followUpLabelBn: '৭ দিন পর আবার দেখুন',
+      },
+    });
+    await this.prisma.weatherAdvisory.create({
+      data: {
+        treatmentPlanId: plan.id,
+        level: 'caution',
+        reasonBn: 'আজ বিকেলে হালকা বৃষ্টির সম্ভাবনা আছে, সকালে স্প্রে করুন।',
+      },
+    });
+    await this.prisma.treatmentStep.createMany({
+      data: [
+        { treatmentPlanId: plan.id, step: 1, instructionBn: '১৬ লিটার পানির সাথে ৫০ মিলি ওষুধ মেশান।' },
+        { treatmentPlanId: plan.id, step: 2, instructionBn: 'মিশ্রণটি ভালোভাবে ঝাঁকিয়ে নিন।' },
+        { treatmentPlanId: plan.id, step: 3, instructionBn: 'বিকেলে রোদ কম থাকা অবস্থায় পুরো পাতায় স্প্রে করুন।' },
+        { treatmentPlanId: plan.id, step: 4, instructionBn: 'স্প্রে করার পর হাত ও মুখ ভালোভাবে ধুয়ে ফেলুন।' },
+      ],
+    });
+    await this.prisma.safetyItem.createMany({
+      data: [
+        { treatmentPlanId: plan.id, labelBn: 'হাতে গ্লাভস পরুন', sortOrder: 0 },
+        { treatmentPlanId: plan.id, labelBn: 'মুখে মাস্ক পরুন', sortOrder: 1 },
+        { treatmentPlanId: plan.id, labelBn: 'শিশুদের ক্ষেত থেকে দূরে রাখুন', sortOrder: 2 },
+      ],
+    });
+
+    await this.prisma.receipt.create({
+      data: {
+        userId: user.id,
+        imageObjectKey: 'https://res.cloudinary.com/demo/image/upload/sample.jpg',
+        totalBdt: 3200,
+        summaryBn: 'মোট ৩,২০০ টাকা খরচ হয়েছে, যার মধ্যে সার ২,০০০ টাকা।',
+        items: {
+          create: [
+            { nameBn: 'ইউরিয়া সার', quantity: '২ ব্যাগ', priceBn: '৳ ২,০০০', sortOrder: 0 },
+            { nameBn: 'কীটনাশক', quantity: '১ বোতল', priceBn: '৳ ৮০০', sortOrder: 1 },
+            { nameBn: 'বীজ', quantity: '৫ কেজি', priceBn: '৳ ৪০০', sortOrder: 2 },
+          ],
+        },
+      },
+    });
+
+    await this.prisma.toolIdentification.create({
+      data: {
+        userId: user.id,
+        source: 'voice',
+        transcriptBn: 'ঘাস কাটার যন্ত্র দরকার',
+        toolNameBn: 'ব্রাশ কাটার',
+        toolNameEn: 'Brush Cutter',
+        reasonBn: 'ঘাস ও ছোট ঝোপ হাতে কাটার চেয়ে অনেক কম সময়ে পরিষ্কার করা যায়।',
+        listings: {
+          create: [
+            {
+              sourceName: 'দারাজ',
+              thumbnailUrl: '',
+              priceBn: '৳ ৪,৫০০',
+              externalUrl: 'https://www.daraz.com.bd/',
+            },
+            {
+              sourceName: 'স্থানীয় কৃষি দোকান',
+              thumbnailUrl: '',
+              priceBn: '৳ ৪,২০০',
+              externalUrl: 'https://example.com/local-shop',
+            },
+          ],
+        },
+      },
+    });
+
+    await this.prisma.fertilizerAdvice.create({
+      data: {
+        userId: user.id,
+        cropId: rice.id,
+        growthStage: 'vegetative',
+        soilColor: 'medium',
+        soilMoisture: 'moist',
+        fertilizerNameBn: 'ইউরিয়া ও টিএসপি মিশ্রণ',
+        dosagePerBigha: '১৫ কেজি ইউরিয়া + ১০ কেজি টিএসপি প্রতি বিঘা',
+        applicationMethodBn: 'মাটির সাথে সমানভাবে মিশিয়ে সারিতে প্রয়োগ করুন।',
+        timingBn: 'রোপণের ১৫–২০ দিন পর সকালে প্রয়োগ করুন।',
+        warningBn: 'অতিরিক্ত ইউরিয়া প্রয়োগ করবেন না।',
+      },
+    });
+
+    const yieldRow = await this.prisma.yieldEstimate.create({
+      data: {
+        userId: user.id,
+        cropId: rice.id,
+        landSizeBn: '২ বিঘা',
+        weatherSummaryBn: 'স্বাভাবিক বৃষ্টিপাত প্রত্যাশিত',
+        estimatedMinMon: 32,
+        estimatedMaxMon: 38,
+        lastSeasonMon: 30,
+        trend: 'up',
+        changePercent: 15,
+        createdAt: daysAgo(5),
+      },
+    });
+    await this.prisma.historyEvent.create({
+      data: {
+        userId: user.id,
+        kind: 'yield',
+        sourceId: yieldRow.id,
+        occurredAt: daysAgo(5),
+      },
+    });
+
+    await this.prisma.cropPlan.create({
+      data: {
+        userId: user.id,
+        recommendationBn:
+          'শ্রাবণ ও ভাদ্রে আমন ধান উপযুক্ত। আশ্বিনে শাকসবজি, শীতে আলু, পৌষে সরিষা চাষ করা যায়।',
+        months: {
+          create: [
+            { monthBn: 'শ্রাবণ', weatherIcon: 'rainy-outline', recommendedCropBn: 'আমন ধান', sortOrder: 0 },
+            { monthBn: 'ভাদ্র', weatherIcon: 'rainy-outline', recommendedCropBn: 'আমন ধান', sortOrder: 1 },
+            { monthBn: 'আশ্বিন', weatherIcon: 'partly-sunny-outline', recommendedCropBn: 'শাকসবজি', sortOrder: 2 },
+            { monthBn: 'কার্তিক', weatherIcon: 'sunny-outline', recommendedCropBn: 'আলু', sortOrder: 3 },
+            { monthBn: 'অগ্রহায়ণ', weatherIcon: 'sunny-outline', recommendedCropBn: 'আলু', sortOrder: 4 },
+            { monthBn: 'পৌষ', weatherIcon: 'cloudy-outline', recommendedCropBn: 'সরিষা', sortOrder: 5 },
+          ],
+        },
+      },
+    });
+
+    const loan = await this.prisma.loanApplication.create({
+      data: {
+        userId: user.id,
+        amountBdt: 50000,
+        purposeId: seedPurpose.id,
+        repaymentPeriod: 'SIX_MONTHS',
+        status: 'repaying',
+        nextPaymentDue: daysAgo(-20),
+        createdAt: daysAgo(12),
+      },
+    });
+    await this.prisma.historyEvent.create({
+      data: {
+        userId: user.id,
+        kind: 'loan',
+        sourceId: loan.id,
+        occurredAt: daysAgo(12),
+      },
+    });
+
+    await this.prisma.listing.create({
+      data: {
+        sellerUserId: user.id,
+        cropId: potato.id,
+        districtId: jashore.id,
+        quantityBn: '৫০০ কেজি',
+        askingPricePerKg: 32,
+        isActive: true,
+      },
+    });
+
+    this.logger.log(`Seeded demo farm records for ${DEMO_EMAIL}`);
   }
 }

@@ -8,7 +8,7 @@ import { colors } from "@/constants/theme";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
-export type InsightKind = "weather" | "yield" | "loan";
+export type InsightKind = "weather" | "yield" | "loan" | "disease";
 
 export type InsightItem = {
   id: string;

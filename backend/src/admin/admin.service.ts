@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { LoanStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
+import { PasswordService } from '../auth/password.service';
 import { Errors } from '../common/errors';
 import type { AuthUser } from '../auth/auth.types';
 
@@ -10,7 +11,46 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auth: AuthService,
+    private readonly passwords: PasswordService,
   ) {}
+
+  async createAdmin(
+    actor: AuthUser,
+    input: { email: string; password: string; displayName: string },
+  ) {
+    if (actor.role !== 'SUPERADMIN' && actor.role !== 'ADMIN') {
+      throw Errors.forbidden();
+    }
+
+    const email = input.email.toLowerCase();
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) throw Errors.conflict('এই ইমেইল ইতিমধ্যে ব্যবহৃত হয়েছে।');
+
+    const adminRole = await this.prisma.role.findUnique({ where: { slug: 'ADMIN' } });
+    if (!adminRole) throw Errors.notFound('রোল পাওয়া যায়নি।');
+
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        passwordHash: await this.passwords.hash(input.password),
+        displayName: input.displayName,
+        roleId: adminRole.id,
+        emailVerifiedAt: new Date(),
+      },
+      include: { role: true, profession: true, district: true },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: actor.id,
+        action: 'ADMIN_CREATED',
+        target: user.id,
+        metadata: { email: user.email },
+      },
+    });
+
+    return this.auth.toDto(user);
+  }
 
   async listUsers(cursor?: string, limit = 20) {
     const users = await this.prisma.user.findMany({
@@ -24,6 +64,14 @@ export class AdminService {
   }
 
   async patchRole(actor: AuthUser, userId: string, roleSlug: string) {
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: true },
+    });
+    if (!target) throw Errors.notFound();
+    if (target.role.slug === 'SUPERADMIN' && actor.role !== 'SUPERADMIN') {
+      throw Errors.forbidden();
+    }
     if (roleSlug === 'SUPERADMIN' && actor.role !== 'SUPERADMIN') {
       throw Errors.forbidden();
     }
@@ -42,6 +90,14 @@ export class AdminService {
   }
 
   async patchActive(actor: AuthUser, userId: string, isActive: boolean) {
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: true },
+    });
+    if (!target) throw Errors.notFound();
+    if (target.role.slug === 'SUPERADMIN' && actor.role !== 'SUPERADMIN') {
+      throw Errors.forbidden();
+    }
     await this.prisma.user.update({ where: { id: userId }, data: { isActive } });
     await this.prisma.auditLog.create({
       data: {

@@ -235,9 +235,9 @@ JWT_REFRESH_SECRET=PASTE_SECOND_NODE_SECRET_HERE
 JWT_ACCESS_TTL=15m
 JWT_REFRESH_TTL=7d
 COOKIE_SECURE=false
-SUPERADMIN_EMAIL=superadmin@aronno.local
-SUPERADMIN_PASSWORD=ChangeMe_Admin1!
-SUPERADMIN_NAME=Aronno Superadmin
+SUPERADMIN_EMAIL=
+SUPERADMIN_PASSWORD=
+SUPERADMIN_NAME=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 THROTTLE_TTL=60
@@ -257,7 +257,7 @@ SMTP_FROM=Aronno <noreply@aronno.local>
 |-----|---------|
 | `COOKIE_SECURE=false` | Required on `http://localhost`. Set `true` only behind HTTPS. |
 | `CORS_ORIGIN` | Comma-separated Expo / web origins. Add `http://192.168.x.x:8081` if the phone is on Wi‑Fi. |
-| `SUPERADMIN_*` | First boot creates this **already verified** user. Change the password after first login. |
+| `SUPERADMIN_*` | First boot creates this **already verified** superadmin from `backend/.env`. Do not commit those values. After login they can create admins; admins can create more admins. |
 
 Password rules for **new** farmer accounts: at least 10 characters, with upper, lower, number, and a symbol (example: `FarmHelp_2026!`).
 
@@ -317,8 +317,7 @@ On first boot the server also creates:
 
 - Roles: `SUPERADMIN`, `ADMIN`, `USER`
 - Professions, districts, crops, loan purposes
-- Sample market prices
-- Superadmin user (if none exists)
+- Superadmin from `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` in `.env` (if none exists yet)
 
 Check health in a browser: [http://localhost:3000/api/health](http://localhost:3000/api/health)
 
@@ -351,12 +350,16 @@ The first screen is **onboarding**, then **login**.
 
 ## 10. First login (does it work?)
 
-**Built-in admin (already email-verified):**
+**Demo farmer (already email-verified, with sample farm records):**
 
 | Field | Value |
 |-------|--------|
-| Email | `superadmin@aronno.local` |
-| Password | `ChangeMe_Admin1!` (or whatever you set in `.env`) |
+| Email | `demo@gmail.com` |
+| Password | `demo1234` |
+
+A new registered account starts empty until that farmer uses the APIs. Sample diagnoses, yield, loan, and listings are attached only to the demo farmer.
+
+**Superadmin** — use the email and password you set in `backend/.env` (`SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD`). After login open **আমি → অ্যাডমিন তৈরি** to add staff. Those admins can create further admins the same way.
 
 **New farmer account**
 
@@ -615,7 +618,8 @@ Public POSTs do not need CSRF. Logged-in POSTs/PATCHes need cookie + `X-CSRF-Tok
 | GET | `/auth/me` | cookie | |
 | GET/PATCH | `/users/me` | cookie | |
 | GET | `/admin/users` | ADMIN+ | |
-| PATCH | `/admin/users/:id/role` | ADMIN+ | |
+| POST | `/admin/users` | ADMIN+ | Create a verified `ADMIN` (`{ email, password, displayName }`) |
+| PATCH | `/admin/users/:id/role` | ADMIN+ | Admins cannot grant or change `SUPERADMIN` |
 | PATCH | `/admin/users/:id/active` | ADMIN+ | |
 | PATCH | `/admin/loans/:id/status` | ADMIN+ | |
 | POST | `/diagnoses/photo` | cookie | `{ imageUrl }` |

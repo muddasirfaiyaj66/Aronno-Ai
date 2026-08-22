@@ -1,7 +1,7 @@
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import {
   AppText,
   LoanStatusCard,
@@ -66,6 +66,16 @@ export default function ProfileScreen() {
             }
           />
         </View>
+
+        {me?.role.slug === "ADMIN" || me?.role.slug === "SUPERADMIN" ? (
+          <SecondaryButton
+            label="অ্যাডমিন তৈরি"
+            onPress={() => router.push("/(root)/admin" as unknown as Href)}
+            icon={
+              <Ionicons name="people-outline" size={20} color={colors.ink} />
+            }
+          />
+        ) : null}
 
         <SecondaryButton
           label="লগ আউট"

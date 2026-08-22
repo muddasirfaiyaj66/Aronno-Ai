@@ -27,28 +27,6 @@ export type LoanApplication = {
   nextPaymentDateBn?: string;
 };
 
-// TODO(nestjs): replace with a real GET /loan/current call once the
-// backend is wired — a new farmer with no loan history yet would get
-// `null` back, which is why the type below is nullable even though the
-// mock value is always present.
-export const MOCK_LOAN_APPLICATION: LoanApplication | null = {
-  id: "loan-1",
-  amountBdt: 50000,
-  amountBn: "৳ ৫০,০০০",
-  purpose: "fertilizer",
-  repaymentPeriod: "6m",
-  status: "repaying",
-  submittedDateBn: "১০ আগস্ট, ২০২৬",
-  nextPaymentDateBn: "১৫ সেপ্টেম্বর, ২০২৬",
-};
-
-/**
- * Confirms LoanApplication is shape-compatible with History's
- * LoanHistoryEntry ({ title, amount, status, nextPaymentDate }) — used by
- * the extended CropHealthHistoryScreen timeline from Sprint 3. Not wired
- * into MOCK_HISTORY_ENTRIES yet; that's live-data wiring, out of scope
- * here.
- */
 export function toLoanHistoryFields(application: LoanApplication) {
   return {
     title: `কৃষি ঋণ — ${LOAN_PURPOSE_LABELS[application.purpose]}`,

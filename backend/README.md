@@ -21,7 +21,7 @@ npx prisma db push
 npm run start:dev
 ```
 
-On boot the API upserts roles, professions, districts, crops, loan purposes, and seeds a **SUPERADMIN** if none exists (`SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD`).
+On boot the API upserts roles, professions, districts, crops, loan purposes, and seeds a **SUPERADMIN** if none exists (from `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` in `.env`). Superadmin and admin can `POST /api/admin/users` to create more verified admins.
 
 API base: `http://localhost:3000/api`
 
@@ -41,6 +41,7 @@ Tokens are **never** accepted as `Authorization: Bearer`. The client must send c
 | GET/PATCH | `/users/me` | cookie | Profile |
 | GET | `/lookups/professions` | public | Profession chips |
 | GET | `/admin/users` | ADMIN+ | List users |
+| POST | `/admin/users` | ADMIN+ | Create a verified ADMIN |
 
 Feature routes (cookie auth): `/diagnoses`, `/treatment-plans`, `/cost-estimates`, `/history`, `/reports`, `/tts`, `/tools`, `/receipts`, `/fertilizer`, `/yield`, `/crop-plans`, `/market`, `/loans`.
 

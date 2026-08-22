@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Errors } from '../common/errors';
 
 /** Always the free Flash-Lite family — never Pro. */
 const FREE_GEMINI_MODEL = 'gemini-2.5-flash-lite';
@@ -25,6 +26,8 @@ export class GeminiClient {
     this.model = resolveFreeGeminiModel(this.config.get<string>('GEMINI_MODEL'));
     if (this.isEnabled()) {
       this.logger.log(`Gemini enabled — free model ${this.model} (Pro never used)`);
+    } else {
+      this.logger.warn('GEMINI_API_KEY missing — AI endpoints will return AI_UNAVAILABLE');
     }
   }
 
@@ -36,7 +39,7 @@ export class GeminiClient {
     prompt: string,
     opts?: { imageUrl?: string; imageBuffer?: Buffer },
   ): Promise<T> {
-    if (!this.isEnabled()) throw new Error('GEMINI_API_KEY missing');
+    if (!this.isEnabled()) throw Errors.aiUnavailable();
 
     const parts: GeminiPart[] = [{ text: prompt }];
     const image = await this.imagePart(opts?.imageUrl, opts?.imageBuffer);
@@ -62,7 +65,7 @@ export class GeminiClient {
     const raw = await res.text();
     if (!res.ok) {
       this.logger.warn(`Gemini ${this.model} HTTP ${res.status}`);
-      throw new Error(`Gemini HTTP ${res.status}`);
+      throw Errors.aiUnavailable();
     }
 
     let payload: {
@@ -71,12 +74,16 @@ export class GeminiClient {
     try {
       payload = JSON.parse(raw) as typeof payload;
     } catch {
-      throw new Error('Gemini response was not JSON');
+      throw Errors.aiUnavailable();
     }
 
     const text = payload.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
     const cleaned = text.replace(/```json|```/g, '').trim();
-    return JSON.parse(cleaned) as T;
+    try {
+      return JSON.parse(cleaned) as T;
+    } catch {
+      throw Errors.aiUnavailable();
+    }
   }
 
   private async imagePart(

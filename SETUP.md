@@ -42,7 +42,7 @@ This document is written so someone who is **not a developer** can clone the pro
 - Identify a **tool**, scan a **receipt**, get **fertilizer** advice, **yield** and **crop planning**
 - See **market prices**, post a **listing**, apply for a **loan**
 
-**Honest status:** the screens and APIs are connected. With `GEMINI_API_KEY` set, disease, treatment, tools, receipts, fertilizer, and yield call **gemini-2.5-flash-lite** (free). If the key is missing or a call fails, the API falls back to mock Bangla payloads. Crop plans use **Open-Meteo** (no key). TTS is still a stub. Photos **are** uploaded for real: the phone sends them to **Cloudinary**, then the API stores the HTTPS URL.
+**Honest status:** the screens and APIs are connected. Disease, treatment, tools, receipts, fertilizer, and yield call **gemini-2.5-flash-lite** (free). If the key is missing or Gemini fails, the API returns `AI_UNAVAILABLE` — it does **not** invent mock answers. Crop plans use **Open-Meteo** (no key). TTS is still a stub. Photos **are** uploaded for real: the phone sends them to **Cloudinary**, then the API stores the HTTPS URL.
 
 ---
 
@@ -165,17 +165,17 @@ Leave `GOOGLE_CLIENT_ID` empty if you only use email/password.
 3. Backend: `GOOGLE_CLIENT_ID=....apps.googleusercontent.com`
 4. Mobile: `EXPO_PUBLIC_GOOGLE_CLIENT_ID=` same value (or the Expo iOS/Android client if you split them later).
 
-### 4.5 Gemini / TTS / S3 (optional — not required to run)
+### 4.5 Gemini / TTS / S3
 
 | Variable | Free source | Used today? |
 |----------|-------------|-------------|
-| `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | **Yes** — disease, treatment, tools, receipts, fertilizer, yield use **gemini-2.5-flash-lite** (free). |
+| `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | **Required for AI screens** — disease, treatment, tools, receipts, fertilizer, yield use **gemini-2.5-flash-lite** (free). Failures return `AI_UNAVAILABLE`, not mock data. |
 | `TTS_PROVIDER_KEY` | Provider of your choice | **No** — mock WAV |
 | `S3_BUCKET` | Cloudflare R2 / AWS | **No** — images go to Cloudinary |
 
 Weather uses **[Open-Meteo](https://open-meteo.com)** (no API key): current conditions + a 6-month seasonal outlook for the farmer GPS or saved district. If seasonal data is unavailable, Bangladesh monthly rainfall normals are used.
 
-You can leave these blank.
+TTS and S3 can stay blank. Without `GEMINI_API_KEY`, diagnosis and related AI endpoints return an error.
 
 ### 4.6 Expo (only when building an APK)
 
@@ -457,7 +457,7 @@ iOS installable builds need a Mac and an Apple Developer account. This repo is d
 
 ### Still mocked or local
 
-TTS (WAV stub) and PDF generation stay mocked. Cost estimates are a local formula (not Gemini). Crop plans come from Open-Meteo, not Gemini. If `GEMINI_API_KEY` is empty, disease / treatment / tools / receipts / fertilizer / yield use mock adapters.
+TTS (WAV stub) and PDF generation stay mocked. Cost estimates are a local formula (not Gemini). Crop plans come from Open-Meteo, not Gemini. If Gemini is down or `GEMINI_API_KEY` is empty, disease / treatment / tools / receipts / fertilizer / yield return `AI_UNAVAILABLE` instead of fake data.
 
 ### Intentionally not on Vercel disk
 

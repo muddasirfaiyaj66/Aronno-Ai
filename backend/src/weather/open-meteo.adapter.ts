@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { SprayLevel } from '@prisma/client';
+import { Errors } from '../common/errors';
 import type { GeoPoint } from './coords';
 import {
   conditionBn,
@@ -70,7 +71,7 @@ export class OpenMeteoWeatherAdapter implements WeatherPort {
       return value;
     } catch (err) {
       this.logger.warn(`Open-Meteo current failed: ${String(err)}`);
-      return fallbackCurrent(point);
+      throw Errors.weatherUnavailable();
     }
   }
 
@@ -210,22 +211,6 @@ function cropFor(monthIdx: number, precipMm: number, tempC: number): string {
   if (precipMm < 70 && tempC > 23) return 'পেঁয়াজ';
   if (tempC <= 24) return 'মসুর ডাল';
   return 'সবজি';
-}
-
-function fallbackCurrent(point: GeoPoint): CurrentWeather {
-  return {
-    tempC: 30,
-    humidity: 72,
-    windKph: 10,
-    weatherCode: 2,
-    kind: 'partly',
-    conditionBn: conditionBn('partly'),
-    conditionEn: conditionEn('partly'),
-    precipitationMm: 0,
-    precipProb: 20,
-    locationBn: point.locationBn,
-    source: 'fallback',
-  };
 }
 
 function round(n: number) {

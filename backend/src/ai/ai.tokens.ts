@@ -4,7 +4,6 @@ export const AI_TOOLS = 'AI_TOOLS';
 export const AI_RECEIPT = 'AI_RECEIPT';
 export const AI_FERTILIZER = 'AI_FERTILIZER';
 export const AI_YIELD = 'AI_YIELD';
-export const AI_PLANNING = 'AI_PLANNING';
 export const AI_TTS = 'AI_TTS';
 export const WEATHER = 'WEATHER';
 export const COST_ESTIMATE = 'COST_ESTIMATE';

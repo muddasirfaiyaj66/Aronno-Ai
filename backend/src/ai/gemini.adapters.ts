@@ -1,14 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { GeminiClient } from './gemini.client';
-import {
-  MockFertilizerAdapter,
-  MockReceiptAdapter,
-  MockToolsAdapter,
-  MockTreatmentAdapter,
-  MockVisionAdapter,
-  MockYieldAdapter,
-} from './mock.adapters';
+import { ApiError, Errors } from '../common/errors';
 import type {
   AiFertilizerPort,
   AiReceiptPort,
@@ -93,13 +86,16 @@ const yieldSchema = z.object({
   changePercent: z.number(),
 });
 
+function failAi(logger: Logger, label: string, err: unknown): never {
+  logger.warn(`${label} failed: ${String(err)}`);
+  if (err instanceof ApiError) throw err;
+  throw Errors.aiUnavailable();
+}
+
 @Injectable()
 export class GeminiVisionAdapter implements AiVisionPort {
   private readonly logger = new Logger(GeminiVisionAdapter.name);
-  constructor(
-    private readonly gemini: GeminiClient,
-    private readonly fallback: MockVisionAdapter,
-  ) {}
+  constructor(private readonly gemini: GeminiClient) {}
 
   async diagnose(input: VisionInput): Promise<VisionResult> {
     try {
@@ -113,8 +109,7 @@ If the leaf looks healthy, say so. Confidence must reflect image quality.`,
       );
       return visionSchema.parse(raw);
     } catch (err) {
-      this.logger.warn(`Vision fallback: ${String(err)}`);
-      return this.fallback.diagnose(input);
+      failAi(this.logger, 'Vision', err);
     }
   }
 }
@@ -122,10 +117,7 @@ If the leaf looks healthy, say so. Confidence must reflect image quality.`,
 @Injectable()
 export class GeminiTreatmentAdapter implements AiTreatmentPort {
   private readonly logger = new Logger(GeminiTreatmentAdapter.name);
-  constructor(
-    private readonly gemini: GeminiClient,
-    private readonly fallback: MockTreatmentAdapter,
-  ) {}
+  constructor(private readonly gemini: GeminiClient) {}
 
   async plan(diseaseNameBn: string, severity: 'low' | 'medium' | 'high'): Promise<TreatmentResult> {
     try {
@@ -138,8 +130,7 @@ JSON:
       );
       return treatmentSchema.parse(raw);
     } catch (err) {
-      this.logger.warn(`Treatment fallback: ${String(err)}`);
-      return this.fallback.plan(diseaseNameBn, severity);
+      failAi(this.logger, 'Treatment', err);
     }
   }
 }
@@ -147,10 +138,7 @@ JSON:
 @Injectable()
 export class GeminiToolsAdapter implements AiToolsPort {
   private readonly logger = new Logger(GeminiToolsAdapter.name);
-  constructor(
-    private readonly gemini: GeminiClient,
-    private readonly fallback: MockToolsAdapter,
-  ) {}
+  constructor(private readonly gemini: GeminiClient) {}
 
   async identify(input: VisionInput): Promise<ToolResult> {
     try {
@@ -163,8 +151,7 @@ JSON:
       );
       return toolsSchema.parse(raw);
     } catch (err) {
-      this.logger.warn(`Tools fallback: ${String(err)}`);
-      return this.fallback.identify(input);
+      failAi(this.logger, 'Tools', err);
     }
   }
 }
@@ -172,10 +159,7 @@ JSON:
 @Injectable()
 export class GeminiReceiptAdapter implements AiReceiptPort {
   private readonly logger = new Logger(GeminiReceiptAdapter.name);
-  constructor(
-    private readonly gemini: GeminiClient,
-    private readonly fallback: MockReceiptAdapter,
-  ) {}
+  constructor(private readonly gemini: GeminiClient) {}
 
   async scan(input: { imageUrl?: string; imageBuffer?: Buffer }): Promise<ReceiptResult> {
     try {
@@ -187,8 +171,7 @@ JSON:
       );
       return receiptSchema.parse(raw);
     } catch (err) {
-      this.logger.warn(`Receipt fallback: ${String(err)}`);
-      return this.fallback.scan(input);
+      failAi(this.logger, 'Receipt', err);
     }
   }
 }
@@ -196,10 +179,7 @@ JSON:
 @Injectable()
 export class GeminiFertilizerAdapter implements AiFertilizerPort {
   private readonly logger = new Logger(GeminiFertilizerAdapter.name);
-  constructor(
-    private readonly gemini: GeminiClient,
-    private readonly fallback: MockFertilizerAdapter,
-  ) {}
+  constructor(private readonly gemini: GeminiClient) {}
 
   async recommend(input: {
     cropSlug: string;
@@ -215,8 +195,7 @@ Doses per bigha. Bangla. JSON:
       );
       return fertilizerSchema.parse(raw);
     } catch (err) {
-      this.logger.warn(`Fertilizer fallback: ${String(err)}`);
-      return this.fallback.recommend(input);
+      failAi(this.logger, 'Fertilizer', err);
     }
   }
 }
@@ -224,10 +203,7 @@ Doses per bigha. Bangla. JSON:
 @Injectable()
 export class GeminiYieldAdapter implements AiYieldPort {
   private readonly logger = new Logger(GeminiYieldAdapter.name);
-  constructor(
-    private readonly gemini: GeminiClient,
-    private readonly fallback: MockYieldAdapter,
-  ) {}
+  constructor(private readonly gemini: GeminiClient) {}
 
   async predict(cropSlug: string): Promise<YieldResult> {
     try {
@@ -238,8 +214,7 @@ JSON:
       );
       return yieldSchema.parse(raw);
     } catch (err) {
-      this.logger.warn(`Yield fallback: ${String(err)}`);
-      return this.fallback.predict(cropSlug);
+      failAi(this.logger, 'Yield', err);
     }
   }
 }

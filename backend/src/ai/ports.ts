@@ -86,15 +86,6 @@ export interface AiYieldPort {
   predict(cropSlug: string): Promise<YieldResult>;
 }
 
-export type PlanResult = {
-  recommendationBn: string;
-  months: { monthBn: string; weatherIcon: string; recommendedCropBn: string }[];
-};
-
-export interface AiPlanningPort {
-  generate(): Promise<PlanResult>;
-}
-
 export interface TtsPort {
   synthesize(textBn: string): Promise<Buffer>;
 }

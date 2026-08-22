@@ -38,6 +38,12 @@ export const Errors = {
     new ApiError('CSRF', 'নিরাপত্তা টোকেন মিলছে না।', HttpStatus.FORBIDDEN),
   aiUnavailable: () =>
     new ApiError('AI_UNAVAILABLE', 'AI সেবা এখন কাজ করছে না।', HttpStatus.SERVICE_UNAVAILABLE),
+  weatherUnavailable: () =>
+    new ApiError(
+      'WEATHER_UNAVAILABLE',
+      'আবহাওয়ার তথ্য পাওয়া যায়নি। কিছুক্ষণ পর চেষ্টা করুন।',
+      HttpStatus.SERVICE_UNAVAILABLE,
+    ),
   unverified: () =>
     new ApiError(
       'EMAIL_UNVERIFIED',

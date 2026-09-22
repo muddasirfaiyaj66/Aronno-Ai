@@ -10,9 +10,12 @@ import {
   VoiceInputWidget,
 } from "@/components/ui";
 import { useLocale } from "@/context/locale";
+import { useIsOnline } from "@/hooks/useIsOnline";
 import { mimeFromAudioUri, readFileBase64 } from "@/lib/readFileBase64";
 import { enablePlaybackAudio, SPEECH_RECORDING } from "@/lib/speechRecording";
 import { getApiError, useTranscribeMutation } from "@/services/api";
+import { isSTTReady, startListening } from "@/lib/offlineVoice/sttEngine";
+import { logMetric } from "@/lib/offline/metrics";
 
 const FLOW_CONTENT: Record<string, { subtitle: string }> = {
   disease: {
@@ -28,6 +31,7 @@ type Mode = "voice" | "text";
 export default function VoiceCaptureScreen() {
   const router = useRouter();
   const { t } = useLocale();
+  const online = useIsOnline();
   const { flow, mode: modeParam } = useLocalSearchParams<{
     flow?: string;
     mode?: string;
@@ -38,18 +42,56 @@ export default function VoiceCaptureScreen() {
   const [transcribing, setTranscribing] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [offlineStt, setOfflineStt] = useState(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
+  const stopOfflineRef = useRef<(() => void) | null>(null);
   const startedAtRef = useRef(0);
   const [transcribe] = useTranscribeMutation();
 
   useEffect(() => {
+    void isSTTReady().then(setOfflineStt);
+  }, []);
+
+  useEffect(() => {
+    if (!online && !offlineStt && mode === "voice") {
+      setMode("text");
+      setError(
+        "অফলাইনে কণ্ঠ মডেল নেই — লিখে জানান, অথবা মডেল ম্যানেজার থেকে বাংলা STT ডাউনলোড করুন।",
+      );
+    }
+  }, [online, offlineStt, mode]);
+
+  useEffect(() => {
     return () => {
       void recordingRef.current?.stopAndUnloadAsync().catch(() => undefined);
+      stopOfflineRef.current?.();
     };
   }, []);
 
   const handleToggleRecording = async () => {
     setError(null);
+
+    // Offline streaming STT when sherpa model + native bridge are ready
+    if (!online && offlineStt) {
+      if (isRecording) {
+        stopOfflineRef.current?.();
+        stopOfflineRef.current = null;
+        setIsRecording(false);
+        return;
+      }
+      setIsRecording(true);
+      logMetric("voice.offline.stt");
+      stopOfflineRef.current = startListening(
+        (partial) => setTranscript(partial),
+        (finalText) => {
+          setTranscript(finalText.trim());
+          setIsRecording(false);
+          stopOfflineRef.current = null;
+        },
+      );
+      return;
+    }
+
     if (isRecording) {
       const rec = recordingRef.current;
       recordingRef.current = null;
@@ -89,6 +131,14 @@ export default function VoiceCaptureScreen() {
       } finally {
         setTranscribing(false);
       }
+      return;
+    }
+
+    if (!online) {
+      setMode("text");
+      setError(
+        "অফলাইনে ক্লাউড STT কাজ করে না। লিখে জানান অথবা STT মডেল ডাউনলোড করুন।",
+      );
       return;
     }
 
@@ -135,6 +185,15 @@ export default function VoiceCaptureScreen() {
         contentContainerClassName="gap-5 px-5 py-5"
         keyboardShouldPersistTaps="handled"
       >
+        {!online ? (
+          <AppText variant="caption" className="rounded-xl bg-harvestSoft px-3 py-2 text-center">
+            অফলাইন মোড
+            {offlineStt
+              ? " — ফোনের বাংলা STT ব্যবহার হবে"
+              : " — টাইপ করুন অথবা মডেল ডাউনলোড করুন"}
+          </AppText>
+        ) : null}
+
         <View className="flex-row rounded-2xl bg-white p-1">
           {(
             [

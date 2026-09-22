@@ -1,7 +1,8 @@
 /**
  * @deprecated Prefer `lib/modelManager` for all downloads (STT/TTS/LLM).
- * Thin bridge kept so older Sprint 0 import paths still resolve.
+ * Thin bridge + readiness hook for older import paths.
  */
+import { useCallback, useEffect, useState } from "react";
 import { catalogByKind } from "@/lib/modelManager/catalog";
 import {
   downloadModel,
@@ -45,14 +46,32 @@ export function useOfflineModelsReady(): {
   refreshing: boolean;
   refresh: () => Promise<void>;
 } {
-  // Full hook lands with Model Manager UI; stub keeps imports compiling.
-  return {
-    ready: false,
-    sttReady: false,
-    ttsReady: false,
-    refreshing: false,
-    refresh: async () => {
+  const [sttReady, setSttReady] = useState(false);
+  const [ttsReady, setTtsReady] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const stt = catalogByKind("stt")[0];
+      const tts = catalogByKind("tts")[0];
+      setSttReady(stt ? await isInstalled(stt) : false);
+      setTtsReady(tts ? await isInstalled(tts) : false);
       await listInstalled();
-    },
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  return {
+    ready: sttReady && ttsReady,
+    sttReady,
+    ttsReady,
+    refreshing,
+    refresh,
   };
 }

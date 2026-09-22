@@ -354,6 +354,13 @@ export default function ProfileScreen() {
                 <Ionicons name="cloud-download-outline" size={20} color={colors.ink} />
               }
             />
+            <SecondaryButton
+              label="অফলাইন ডিবাগ"
+              onPress={() => router.push("/(root)/offline-debug")}
+              icon={
+                <Ionicons name="pulse-outline" size={20} color={colors.ink} />
+              }
+            />
           </View>
 
           <View className="gap-3">

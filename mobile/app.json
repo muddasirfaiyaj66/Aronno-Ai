@@ -79,6 +79,14 @@
         {
           "microphonePermission": "আরণ্যকে বাংলায় কথা শুনে রোগ ও কাজ বুঝতে মাইক ব্যবহারের অনুমতি দিন।"
         }
+      ],
+      "llama.rn",
+      [
+        "react-native-fast-tflite",
+        {
+          "enableCoreMLDelegate": true,
+          "enableAndroidGpuLibraries": true
+        }
       ]
     ],
     "experiments": {

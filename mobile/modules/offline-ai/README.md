@@ -1,10 +1,11 @@
-# Offline AI native module (Expo config plugin + sherpa-onnx bridge)
+# Offline AI native module (sherpa-onnx)
 
-Sprint 1 will add:
+Sprint 1 wiring in JS is ready (`lib/offlineVoice/sttEngine.ts`, `ttsEngine.ts`).
 
-- Android: prebuilt sherpa-onnx `.aar` / JNI wrappers under `android/`
-- iOS: `.xcframework` / Swift package under `ios/`
-- Expo config plugin entry so `expo-dev-client` prebuilds pick this up
+Native bridge still needed for real streaming STT/TTS:
 
-Until then this folder is a stub so the repo layout matches the offline architecture plan.
-Do **not** implement exploit/PoC code here — only legitimate STT/TTS native bindings.
+1. Add sherpa-onnx Android `.aar` / iOS xcframework under `android/` and `ios/`
+2. Expose `NativeModules.SherpaSTT` and `SherpaTTS` with `init`, `startStreaming`, `stopStreaming`, `speak`, and events `partialResult` / `finalResult`
+3. Rebuild expo-dev-client
+
+Until then: offline voice capture falls back to **typing**; TTS uses **expo-speech**.

@@ -50,6 +50,7 @@ assets/models/tts/**/*
 !assets/models/tts/**/.gitkeep
 assets/models/vision/*
 !assets/models/vision/.gitkeep
+!assets/models/vision/class_names.json
 !assets/models/vision/README.md
 *.tflite
 *.onnx

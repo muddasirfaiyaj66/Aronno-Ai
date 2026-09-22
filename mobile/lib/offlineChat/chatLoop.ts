@@ -5,6 +5,7 @@ import { startListening } from "@/lib/offlineVoice/sttEngine";
 import { streamOffline } from "@/lib/offlineVoice/ttsEngine";
 import { retrieveContext } from "@/lib/offlineNlu/retrieve";
 import { isLlmReady, streamLlmReply } from "@/lib/modelManager/llmEngine";
+import { logMetric, markStart } from "@/lib/offline/metrics";
 
 export const SYSTEM_PROMPT_BN =
   "তুমি আরণ্য, বাংলাদেশের কৃষকদের জন্য একজন সহায়ক কৃষি সহকারী। " +
@@ -33,6 +34,46 @@ export type ChatTurnHandlers = {
   onError?: (err: unknown) => void;
 };
 
+async function runLlmTurn(
+  userTextBn: string,
+  onTextChunk: (token: string) => void,
+): Promise<void> {
+  const end = markStart("chat.llm");
+  const prompt = buildGroundedPrompt(userTextBn);
+  let sentenceBuffer = "";
+  await streamLlmReply(prompt, (token) => {
+    sentenceBuffer += token;
+    onTextChunk(token);
+    if (/[।.!?]/.test(token)) {
+      void streamOffline(sentenceBuffer);
+      sentenceBuffer = "";
+    }
+  });
+  if (sentenceBuffer.trim()) {
+    void streamOffline(sentenceBuffer);
+  }
+  end("ok");
+}
+
+/** Typed (or already-final) user message → grounded LLM stream. */
+export async function replyToText(
+  userTextBn: string,
+  handlers: Pick<ChatTurnHandlers, "onTextChunk" | "onDone" | "onError">,
+): Promise<void> {
+  if (!isLlmReady()) {
+    handlers.onError?.(new Error("llm-not-ready"));
+    handlers.onDone();
+    return;
+  }
+  try {
+    await runLlmTurn(userTextBn.trim(), handlers.onTextChunk);
+  } catch (err) {
+    handlers.onError?.(err);
+  } finally {
+    handlers.onDone();
+  }
+}
+
 /**
  * Starts mic listening; on final STT runs the LLM and streams TTS per sentence.
  * Returns a stop function.
@@ -48,19 +89,8 @@ export function startChatTurn(handlers: ChatTurnHandlers): () => void {
         return;
       }
       try {
-        const prompt = buildGroundedPrompt(finalTextBn);
-        let sentenceBuffer = "";
-        await streamLlmReply(prompt, (token) => {
-          sentenceBuffer += token;
-          handlers.onTextChunk(token);
-          if (/[।.!?]/.test(token)) {
-            void streamOffline(sentenceBuffer);
-            sentenceBuffer = "";
-          }
-        });
-        if (sentenceBuffer.trim()) {
-          void streamOffline(sentenceBuffer);
-        }
+        logMetric("chat.voice.final");
+        await runLlmTurn(finalTextBn, handlers.onTextChunk);
       } catch (err) {
         handlers.onError?.(err);
       } finally {

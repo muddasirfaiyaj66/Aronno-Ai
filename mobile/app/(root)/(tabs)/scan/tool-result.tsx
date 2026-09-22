@@ -16,10 +16,34 @@ import { useGetToolQuery } from "@/services/api";
 
 export default function ToolIdentificationResultScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: result, isLoading } = useGetToolQuery(id!, { skip: !id });
+  const params = useLocalSearchParams<{
+    id?: string;
+    offline?: string;
+    toolNameBn?: string;
+    toolNameEn?: string;
+    reasonBn?: string;
+  }>();
+  const offline = params.offline === "1";
+  const { data: remote, isLoading } = useGetToolQuery(params.id!, {
+    skip: !params.id || offline,
+  });
 
-  if (isLoading) {
+  const result = offline
+    ? {
+        toolNameBn: params.toolNameBn ?? "",
+        toolNameEn: params.toolNameEn ?? "",
+        reasonBn: params.reasonBn ?? "",
+        listings: [] as {
+          id: string;
+          sourceName: string;
+          thumbnailUrl: string;
+          price?: string;
+          externalUrl: string;
+        }[],
+      }
+    : remote;
+
+  if (!offline && isLoading) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-neutral px-6" edges={["top"]}>
         <AIGeneratingShimmer label="যন্ত্রের তথ্য আনা হচ্ছে" lines={4} className="w-full" />
@@ -27,7 +51,7 @@ export default function ToolIdentificationResultScreen() {
     );
   }
 
-  if (!result) {
+  if (!result || !result.toolNameBn) {
     return (
       <SafeAreaView
         className="flex-1 items-center justify-center bg-neutral px-6"
@@ -49,7 +73,11 @@ export default function ToolIdentificationResultScreen() {
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       <ScreenHeader
         title="যন্ত্র শনাক্ত হয়েছে"
-        subtitle="Gemini বিশ্লেষণ — কোথায় পাবেন তা নিচে"
+        subtitle={
+          offline
+            ? "অফলাইন বিশ্লেষণ — বাজার তালিকা ইন্টারনেট লাগবে"
+            : "Gemini বিশ্লেষণ — কোথায় পাবেন তা নিচে"
+        }
       />
 
       <ScrollView
@@ -71,24 +99,35 @@ export default function ToolIdentificationResultScreen() {
           </View>
         </StructuredCard>
 
-        <ListenButton label="কারণ শুনুন" textBn={`${result.toolNameBn}. ${result.reasonBn}`} />
+        <ListenButton
+          label="কারণ শুনুন"
+          textBn={`${result.toolNameBn}. ${result.reasonBn}`}
+        />
 
         <View className="gap-3">
           <AppText variant="body" className="font-bengali-bold text-ink">
             কোথায় পাবেন
           </AppText>
-          {result.listings.map((listing) => (
-            <ListingCard
-              key={listing.id}
-              layout="row"
-              sourceName={listing.sourceName}
-              thumbnailUrl={listing.thumbnailUrl}
-              price={listing.price}
-              onPressLink={() => {
-                if (listing.externalUrl) void Linking.openURL(listing.externalUrl);
-              }}
-            />
-          ))}
+          {result.listings.length === 0 ? (
+            <AppText variant="caption" className="leading-6">
+              {offline
+                ? "অফলাইনে দোকানের তালিকা দেখানো যায় না। অনলাইনে আবার স্ক্যান করলে বাজার লিংক আসবে।"
+                : "এখন কোনো তালিকা নেই।"}
+            </AppText>
+          ) : (
+            result.listings.map((listing) => (
+              <ListingCard
+                key={listing.id}
+                layout="row"
+                sourceName={listing.sourceName}
+                thumbnailUrl={listing.thumbnailUrl}
+                price={listing.price}
+                onPressLink={() => {
+                  if (listing.externalUrl) void Linking.openURL(listing.externalUrl);
+                }}
+              />
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

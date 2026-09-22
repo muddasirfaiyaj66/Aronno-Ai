@@ -13,24 +13,12 @@ export default function CaptureLauncherScreen() {
       <ScreenHeader
         title={t("স্ক্যান", "Scan")}
         subtitle={t(
-          "পাতার ছবি, বাংলা কণ্ঠ, অথবা লেখা — যেটা সহজ",
-          "Leaf photo, Bangla voice, or text — whatever is easier",
+          "বাংলা কণ্ঠ অথবা লেখা — ছবির জন্য হোমের একমাত্র বাটন ব্যবহার করুন",
+          "Bangla voice or text — use the single home photo button for leaves",
         )}
       />
 
       <View className="flex-1 gap-3 px-5 pt-5">
-        <HeroChoiceCard
-          tone="photo"
-          icon="camera"
-          title={t("পাতার ছবি তুলুন", "Photograph a leaf")}
-          subtitle={t("রোগ শনাক্ত করুন মুহূর্তে", "Identify the disease instantly")}
-          onPress={() =>
-            router.push({
-              pathname: "/(root)/(tabs)/scan/photo",
-              params: { flow: "disease" },
-            })
-          }
-        />
         <HeroChoiceCard
           tone="voice"
           icon="mic"
@@ -58,8 +46,8 @@ export default function CaptureLauncherScreen() {
 
         <AppText variant="caption" className="mt-4 text-center leading-6">
           {t(
-            "আবহাওয়া খারাপ হলে স্প্রে করার আগে সতর্কতা দেখানো হবে।",
-            "You will get a spray warning if rain is likely.",
+            "পাতার ছবি তুলতে হোম স্ক্রিনের «পাতার ছবি তুলুন» চাপুন — একটাই বাটন।",
+            "To photograph a leaf, use the single «Photograph a leaf» button on Home.",
           )}
         </AppText>
       </View>

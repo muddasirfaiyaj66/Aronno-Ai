@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {
   AppText,
+  FieldInput,
   IconPickerRow,
   ListenButton,
   PrimaryButton,
@@ -56,8 +57,23 @@ const MOISTURE_OPTIONS: {
   { id: "dry", label: "শুকনো", icon: "sunny-outline" },
 ];
 
+const DISEASE_OPTIONS: {
+  id: "yes" | "no" | "unsure";
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { id: "yes", label: "আছে", icon: "warning-outline" },
+  { id: "no", label: "নেই", icon: "checkmark-circle-outline" },
+  { id: "unsure", label: "জানি না", icon: "help-circle-outline" },
+];
+
 export default function FertilizerRecommendationScreen() {
   const [crop, setCrop] = useState<CropType | null>(null);
+  const [landSizeBigha, setLandSizeBigha] = useState("");
+  const [cropAgeDays, setCropAgeDays] = useState("");
+  const [hasDisease, setHasDisease] = useState<"yes" | "no" | "unsure" | null>(
+    null,
+  );
   const [stage, setStage] = useState<GrowthStage | null>(null);
   const [soilColor, setSoilColor] = useState<SoilColor | null>(null);
   const [soilMoisture, setSoilMoisture] = useState<SoilMoisture | null>(null);
@@ -66,14 +82,26 @@ export default function FertilizerRecommendationScreen() {
   const [recommend, { isLoading }] = useRecommendFertilizerMutation();
   const [aiError, setAiError] = useState<string | null>(null);
 
-  const canSubmit = !!crop && !!stage && !!soilColor && !!soilMoisture;
+  const landNum = Number(landSizeBigha.replace(/,/g, "."));
+  const ageNum = Number(cropAgeDays);
+  const landOk = Number.isFinite(landNum) && landNum > 0;
+  const ageOk = Number.isFinite(ageNum) && ageNum >= 0 && ageNum <= 400;
+
+  const canSubmit =
+    !!crop &&
+    landOk &&
+    ageOk &&
+    !!hasDisease &&
+    !!stage &&
+    !!soilColor &&
+    !!soilMoisture;
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       <View className="border-b border-neutral-200 bg-white px-5 py-4">
         <AppText variant="title">সার সুপারিশ</AppText>
         <AppText variant="caption" className="mt-1">
-          ফসল ও মাটির তথ্য দিয়ে সঠিক সারের পরামর্শ নিন
+          জমির পরিমাণ, ফসলের বয়স ও রোগের তথ্য দিয়ে মাত্রা ঠিক করুন
         </AppText>
       </View>
 
@@ -94,6 +122,37 @@ export default function FertilizerRecommendationScreen() {
             }))}
             value={crop}
             onChange={(id) => setCrop(id as CropType)}
+          />
+        </View>
+
+        <FieldInput
+          label="জমির পরিমাণ (বিঘা)"
+          value={landSizeBigha}
+          onChangeText={setLandSizeBigha}
+          placeholder="যেমন: ২ অথবা ১.৫"
+          keyboardType="decimal-pad"
+        />
+
+        <FieldInput
+          label="ফসল কত দিনের"
+          value={cropAgeDays}
+          onChangeText={setCropAgeDays}
+          placeholder="যেমন: ৩০"
+          keyboardType="number-pad"
+        />
+
+        <View className="gap-3">
+          <AppText variant="body" className="font-bengali-bold text-ink">
+            ফসলে কোনো রোগ আছে?
+          </AppText>
+          <IconPickerRow
+            options={DISEASE_OPTIONS.map((d) => ({
+              id: d.id,
+              label: d.label,
+              icon: <Ionicons name={d.icon} size={22} color={colors.primary} />,
+            }))}
+            value={hasDisease}
+            onChange={(id) => setHasDisease(id as "yes" | "no" | "unsure")}
           />
         </View>
 
@@ -154,7 +213,17 @@ export default function FertilizerRecommendationScreen() {
         <PrimaryButton
           label="সুপারিশ দেখুন"
           onPress={async () => {
-            if (!crop || !stage || !soilColor || !soilMoisture) return;
+            if (
+              !crop ||
+              !stage ||
+              !soilColor ||
+              !soilMoisture ||
+              !hasDisease ||
+              !landOk ||
+              !ageOk
+            ) {
+              return;
+            }
             setAiError(null);
             try {
               const data = await recommend({
@@ -162,6 +231,9 @@ export default function FertilizerRecommendationScreen() {
                 growthStage: stage,
                 soilColor,
                 soilMoisture,
+                landSizeBigha: landNum,
+                cropAgeDays: Math.round(ageNum),
+                hasDisease,
               }).unwrap();
               setAdvice(data);
               setShowResult(true);
@@ -188,7 +260,12 @@ export default function FertilizerRecommendationScreen() {
             footer={
               <ListenButton
                 label="সুপারিশ শুনুন"
-                textBn={advice.fertilizerNameBn}
+                textBn={[
+                  advice.fertilizerNameBn,
+                  advice.dosagePerBigha,
+                  advice.applicationMethodBn,
+                  advice.timingBn,
+                ].join("। ")}
               />
             }
           >

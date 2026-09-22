@@ -14,7 +14,9 @@
         "NSLocationWhenInUseUsageDescription": "আরণ্যকে আপনার ক্ষেতের আবহাওয়া দেখাতে অবস্থান ব্যবহারের অনুমতি দিন।",
         "NSMicrophoneUsageDescription": "আরণ্যকে বাংলায় কথা শুনে রোগ ও কাজ বুঝতে মাইক ব্যবহারের অনুমতি দিন।",
         "NSPhotoLibraryUsageDescription": "আরণ্যকে প্রোফাইল ও ফসলের ছবি বাছাই করতে গ্যালারি ব্যবহারের অনুমতি দিন।",
-        "NSCameraUsageDescription": "আরণ্যকে প্রোফাইল ও ফসলের ছবি তুলতে ক্যামেরা ব্যবহারের অনুমতি দিন।"
+        "NSCameraUsageDescription": "আরণ্যকে প্রোফাইল ও ফসলের ছবি তুলতে ক্যামেরা ব্যবহারের অনুমতি দিন।",
+        "NSBluetoothAlwaysUsageDescription": "আরণ্যকে মাটির সেন্সর থেকে ব্লুটুথে তথ্য নিতে ব্লুটুথ ব্যবহারের অনুমতি দিন।",
+        "NSBluetoothPeripheralUsageDescription": "আরণ্যকে মাটির সেন্সরের সাথে সংযুক্ত হতে ব্লুটুথ ব্যবহারের অনুমতি দিন।"
       }
     },
     "android": {
@@ -27,11 +29,19 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
+      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.CHANGE_WIFI_STATE"
       ]
     },
     "web": {
@@ -89,7 +99,15 @@
         }
       ],
       "@siteed/sherpa-onnx.rn",
-      "expo-document-picker"
+      "expo-document-picker",
+      [
+        "@sfourdrinier/react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "modes": ["central"],
+          "bluetoothAlwaysPermission": "আরণ্যকে মাটির সেন্সর থেকে ব্লুটুথে তথ্য নিতে ব্লুটুথ ব্যবহারের অনুমতি দিন।"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

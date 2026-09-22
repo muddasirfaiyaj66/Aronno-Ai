@@ -347,6 +347,9 @@ export const api = createApi({
         growthStage: string;
         soilColor: string;
         soilMoisture: string;
+        landSizeBigha: number;
+        cropAgeDays: number;
+        hasDisease: "yes" | "no" | "unsure";
       }
     >({
       query: (body) => ({ url: "/fertilizer/recommend", method: "POST", body }),

@@ -17,7 +17,6 @@ import { useAppSelector } from "@/store";
 import { colors } from "@/constants/theme";
 import { useFarmLocation } from "@/hooks/useFarmLocation";
 import {
-  useGetCurrentLoanQuery,
   useGetHistoryQuery,
   useGetWeatherQuery,
 } from "@/services/api";
@@ -27,7 +26,6 @@ export default function HomeScreen() {
   const { t } = useLocale();
   const name = useAppSelector((s) => s.auth.user?.displayName);
   const { data: history } = useGetHistoryQuery();
-  const { data: loan } = useGetCurrentLoanQuery();
   const location = useFarmLocation();
   const { data: weather } = useGetWeatherQuery(location.coords ?? {}, {
     skip: location.status === "loading",
@@ -64,35 +62,8 @@ export default function HomeScreen() {
         message: `${disease.cropNameBn} — ${disease.diseaseNameBn}`,
       });
     }
-    const yieldEntry = history?.find((entry) => entry.kind === "yield");
-    if (yieldEntry?.kind === "yield") {
-      items.push({
-        id: yieldEntry.id,
-        kind: "yield",
-        icon: "trending-up-outline",
-        message: t(
-          "এই মৌসুমের ফলন পূর্বাভাস আপডেট হয়েছে",
-          "This season's yield forecast is updated",
-        ),
-        heroNumber: String(yieldEntry.yieldValue),
-        heroUnit: yieldEntry.yieldUnitBn,
-      });
-    }
-    if (loan) {
-      items.push({
-        id: loan.id,
-        kind: "loan",
-        icon: "cash-outline",
-        message: loan.nextPaymentDateBn
-          ? t(
-              `ঋণের পরবর্তী কিস্তি ${loan.nextPaymentDateBn}`,
-              `Next loan installment: ${loan.nextPaymentDateBn}`,
-            )
-          : t("আপনার কৃষি ঋণ চলমান", "Your farm loan is active"),
-      });
-    }
     return items;
-  }, [history, loan, t, weather]);
+  }, [history, t, weather]);
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
@@ -140,46 +111,23 @@ export default function HomeScreen() {
 
           <HomeSection
             title={t("রোগ চিনুন", "Identify disease")}
-            subtitle={t("ছবি, কণ্ঠ, অথবা লেখা", "Photo, voice, or text")}
+            subtitle={t(
+              "একবার চাপুন — পাতার ছবি তুলুন",
+              "One tap — photograph a leaf",
+            )}
           >
-            <View className="gap-3">
-              <HeroChoiceCard
-                tone="photo"
-                icon="camera"
-                title={t("পাতার ছবি তুলুন", "Photograph a leaf")}
-                subtitle={t("রোগ শনাক্ত করুন", "Identify the disease")}
-                onPress={() =>
-                  router.push({
-                    pathname: "/(root)/(tabs)/scan/photo",
-                    params: { flow: "disease" },
-                  })
-                }
-              />
-              <HeroChoiceCard
-                tone="voice"
-                icon="mic"
-                title={t("বাংলায় বলুন", "Speak in Bangla")}
-                subtitle={t("সমস্যাটি কণ্ঠে বর্ণনা করুন", "Describe the problem")}
-                onPress={() =>
-                  router.push({
-                    pathname: "/(root)/(tabs)/scan/voice",
-                    params: { flow: "disease" },
-                  })
-                }
-              />
-              <HeroChoiceCard
-                tone="text"
-                icon="create-outline"
-                title={t("লিখে জানান", "Type it")}
-                subtitle={t("কথা বলতে না পারলে এখানে লিখুন", "Write if you prefer")}
-                onPress={() =>
-                  router.push({
-                    pathname: "/(root)/(tabs)/scan/voice",
-                    params: { flow: "disease", mode: "text" },
-                  })
-                }
-              />
-            </View>
+            <HeroChoiceCard
+              tone="photo"
+              icon="camera"
+              title={t("পাতার ছবি তুলুন", "Photograph a leaf")}
+              subtitle={t("রোগ শনাক্ত করুন", "Identify the disease")}
+              onPress={() =>
+                router.push({
+                  pathname: "/(root)/(tabs)/scan/photo",
+                  params: { flow: "disease" },
+                })
+              }
+            />
           </HomeSection>
 
           {insights.length > 0 ? (
@@ -188,31 +136,32 @@ export default function HomeScreen() {
               onPress={(item) => {
                 if (item.kind === "weather") router.push("/(root)/(tabs)/scan/planning");
                 else if (item.kind === "disease") router.push("/(root)/(tabs)/history");
-                else if (item.kind === "yield") router.push("/(root)/(tabs)/scan/yield");
-                else if (item.kind === "loan") router.push("/(root)/loan/overview");
               }}
             />
           ) : null}
 
           <HomeSection
             title={t("আরও সহায়তা", "More help")}
-            subtitle={t("সার, ফলন, যন্ত্র, রসিদ, বাজার", "Fertilizer, yield, tools, receipts, market")}
+            subtitle={t(
+              "সার, মাটি, যন্ত্র, রসিদ, পরিকল্পনা, বাজার",
+              "Fertilizer, soil, tools, receipts, plan, market",
+            )}
           >
             <EssentialServicesGrid
               items={[
                 {
                   id: "fertilizer",
                   title: t("সার", "Fertilizer"),
-                  subtitle: t("কী দেবেন, কতটা", "What and how much"),
+                  subtitle: t("জমির তথ্য দিয়ে পরামর্শ", "Advice from field details"),
                   icon: "flask-outline",
                   onPress: () => router.push("/(root)/(tabs)/scan/fertilizer"),
                 },
                 {
-                  id: "yield",
-                  title: t("ফলন", "Yield"),
-                  subtitle: t("এবার কত হতে পারে", "Season forecast"),
-                  icon: "stats-chart-outline",
-                  onPress: () => router.push("/(root)/(tabs)/scan/yield"),
+                  id: "soil",
+                  title: t("মাটি", "Soil"),
+                  subtitle: t("ব্লুটুথ / ওয়াই‑ফাই সেন্সর", "Bluetooth / Wi‑Fi sensor"),
+                  icon: "hardware-chip-outline",
+                  onPress: () => router.push("/(root)/(tabs)/scan/soil-sensor"),
                 },
                 {
                   id: "tool",
@@ -241,6 +190,13 @@ export default function HomeScreen() {
                   subtitle: t("দাম দেখুন, বিক্রি করুন", "Prices and selling"),
                   icon: "storefront-outline",
                   onPress: () => router.push("/(root)/(tabs)/market"),
+                },
+                {
+                  id: "assistant",
+                  title: t("চ্যাট", "Chat"),
+                  subtitle: t("লেখা বা কণ্ঠে জিজ্ঞাসা", "Ask by text or voice"),
+                  icon: "chatbubbles-outline",
+                  onPress: () => router.push("/(root)/(tabs)/assistant"),
                 },
               ]}
             />

@@ -89,7 +89,9 @@ export function HeroChoiceCard({
       }}
     >
       <View className="min-h-[92px] flex-row items-center gap-4 px-4 py-4">
+        {/* Decorative only — whole card is the single tap target */}
         <Animated.View
+          pointerEvents="none"
           style={[
             iconStyle,
             {
@@ -104,7 +106,7 @@ export function HeroChoiceCard({
         >
           <Ionicons name={icon} size={32} color={palette.icon} />
         </Animated.View>
-        <View className="flex-1">
+        <View className="flex-1" pointerEvents="none">
           <AppText variant="bodyLg" className="font-bengali-bold text-ink">
             {title}
           </AppText>
@@ -112,7 +114,6 @@ export function HeroChoiceCard({
             {subtitle}
           </AppText>
         </View>
-        <Ionicons name="chevron-forward" size={22} color={colors.muted} />
         <Animated.View pointerEvents="none" style={[{ position: "absolute", top: 0, bottom: 0, width: 70 }, shineStyle]}>
           <LinearGradient
             colors={["transparent", "rgba(255,255,255,0.7)", "transparent"]}

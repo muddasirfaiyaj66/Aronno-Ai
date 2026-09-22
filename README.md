@@ -1,6 +1,6 @@
 # Aronno (আরণ্য)
 
-**Bangla-first AI farming assistant** for Bangladesh — photograph a crop, hear advice in Bangla, check market prices, and apply for loans. This monorepo ships a Nest.js API and an Expo (React Native) mobile app, fully wired end to end.
+**Bangla-first AI farming assistant** for Bangladesh — photograph a crop, hear advice in Bangla, check market prices, and chat in Bangla. This monorepo ships a Nest.js API and an Expo (React Native) mobile app, fully wired end to end.
 
 | Folder | Responsibility | Primary stack |
 |--------|----------------|---------------|
@@ -30,10 +30,13 @@ Aronno helps farmers and agri stakeholders in Bangladesh:
 
 - Diagnose crop disease from a **photo** or **voice** description
 - Receive a **treatment plan**, **cost estimate**, and a **Bangla PDF report**
-- Identify farm **tools**, scan shop **receipts**, get **fertilizer** and **yield** advice
+- Identify farm **tools**, scan shop **receipts**, get **context-aware fertilizer** advice
 - Plan crops with a **6-month weather outlook** across **64 districts**
-- Browse **market prices**, post **listings**, and submit **loan applications**
+- Browse **market prices** and post **listings**
+- Chat with an on-device / online **Bangla assistant** (text + voice when models are installed)
 - Use a Bangla-first UI with on-device **listen** (text-to-speech)
+
+Product scope changes (yield/loan removal, market overhaul, heat map, etc.): **[docs/product_corrections.md](docs/product_corrections.md)**.
 
 AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. When offline, the app can use **on-device Gemma**, Bangla STT/TTS, and optional TFLite vision — see **[docs/offline_ai/README.md](docs/offline_ai/README.md)**. Weather uses **Open-Meteo** (no API key). Photos upload to **Cloudinary** from the phone; the API stores HTTPS URLs only. If Gemini is unavailable, the API returns a clear error — it does **not** invent mock diagnoses. Offline scan can still answer from on-device models or the local knowledge base when those are installed.
 
@@ -118,24 +121,28 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
 | Bangla PDF report | Done | `pdf-lib` + `@pdf-lib/fontkit` + Noto Sans Bengali | Report screen / share |
 | On-device Bangla “listen” (TTS) | Done (client) | Server TTS remains a WAV stub | `expo-speech` (`lib/speakBangla.ts`) |
 
-### Tools, receipts, fertilizer, yield & planning
+### Tools, receipts, fertilizer & planning
 
 | Capability | Status | Backend | Mobile / client |
 |------------|--------|---------|-----------------|
 | Farm tool identification | Done | Gemini tools adapter | Tools + tool-result screens |
-| Receipt OCR / line items | Done | Gemini receipt adapter | Receipt + receipt-result screens |
-| Fertilizer recommendation | Done | Gemini fertilizer adapter | Fertilizer screen |
-| Yield prediction | Done | Gemini yield adapter + weather context | Yield screen |
-| 6-month crop plan | Done | Open-Meteo seasonal / forecast APIs | Planning screen |
+| Receipt OCR / line items | Done (needs Bangla OCR upgrade) | Gemini receipt adapter | Receipt + receipt-result screens |
+| Fertilizer recommendation | Done | Gemini fertilizer adapter (land size, crop age, disease) | Fertilizer screen |
+| 6-month crop plan | Done (needs cost + specificity) | Open-Meteo seasonal / forecast APIs | Planning screen |
+| Yield prediction | Removed from farmer UI | API retained dormant | Hidden — see product corrections |
+| Offline / voice chat assistant | Done (baseline) | — | Assistant tab + Gemma/sherpa when installed |
+| Soil sensor (Bluetooth + Wi‑Fi) | Done (app wiring) | — | Home → মাটি; demo + live; [hardware doc](docs/hardware_soil_sensor.md) |
 
-### Market & loans
+### Market
 
 | Capability | Status | Backend | Mobile / client |
 |------------|--------|---------|-----------------|
 | Market prices by district / crop | Done | Market module, Prisma | Market tab |
 | Create listing (optional photo) | Done | Listings + Cloudinary URL | Market UI |
-| Heatmap / district stats | Done | `HeatMapStat` | Market UI |
-| Loan application | Done | Loans module + purposes seed | Loan overview / application |
+| Full marketplace (orders, buyer/seller roles) | Planned | — | See [product corrections](docs/product_corrections.md) |
+| District heat-map stats (prices) | Done | `HeatMapStat` | Market UI |
+| Disease outbreak heat map | Planned | — | See [product corrections](docs/product_corrections.md) |
+| Loan application | Removed from farmer UI | API retained dormant | Hidden — banking scope deferred |
 
 ### Home, UX & platform
 
@@ -261,6 +268,8 @@ After superadmin login, create more admins from **আমি → অ্যাড�
 |----------|----------|
 | [SETUP.md](SETUP.md) | Environment variables, SMTP, Cloudinary, Gemini, APK / EAS build, ERD, API tester notes |
 | [docs/offline_ai/README.md](docs/offline_ai/README.md) | **Offline AI:** setup, usage, code map, system prompts, token optimization, model catalog |
+| [docs/product_corrections.md](docs/product_corrections.md) | Product feedback tracker — what shipped vs next (market, heat map, OCR, …) |
+| [docs/hardware_soil_sensor.md](docs/hardware_soil_sensor.md) | **Soil probe:** BLE + Wi‑Fi protocol, JSON payload, app test modes |
 | [docs/model_cards/](docs/model_cards/) | Per-model accuracy, limits, licenses |
 | [ml/README.md](ml/README.md) | Train disease / tool TFLite models |
 | [backend/README.md](backend/README.md) | API auth model, route overview, scripts |

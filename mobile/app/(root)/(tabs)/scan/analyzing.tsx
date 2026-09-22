@@ -155,19 +155,25 @@ export default function AnalyzingScreen() {
       try {
         onlineRef.current = await fetchIsOnline();
 
+        // Prefer on-device TFLite when available — much faster than Cloudinary + Gemini.
+        if (flow === "disease") {
+          const localOk = await runOfflineDisease();
+          if (localOk) return;
+        }
+        if (flow === "tool") {
+          const localOk = await runOfflineTool();
+          if (localOk) return;
+        }
+
         if (!onlineRef.current) {
           if (flow === "receipt") {
             throw new Error("অফলাইনে রসিদ স্ক্যান এখনো চালু নেই। ইন্টারনেট লাগবে।");
           }
           if (flow === "tool") {
-            const ok = await runOfflineTool();
-            if (ok) return;
             throw new Error(
               "অফলাইনে হাতিয়ার শনাক্ত হয়নি। মডেল কপি করুন অথবা নাম বলে/লিখে আবার চেষ্টা করুন।",
             );
           }
-          const ok = await runOfflineDisease();
-          if (ok) return;
           throw new Error(
             "অফলাইনে রোগ শনাক্ত হয়নি। crop_disease_int8.tflite কপি করুন, অথবা রোগের নাম বলে/লিখে চেষ্টা করুন।",
           );

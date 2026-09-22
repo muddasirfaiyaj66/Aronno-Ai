@@ -14,6 +14,9 @@ const schema = z
     growthStage: z.enum(['seedling', 'vegetative', 'flowering', 'maturity']),
     soilColor: z.enum(['dark', 'medium', 'light']),
     soilMoisture: z.enum(['wet', 'moist', 'dry']),
+    landSizeBigha: z.number().positive().max(500),
+    cropAgeDays: z.number().int().min(0).max(400),
+    hasDisease: z.enum(['yes', 'no', 'unsure']),
   })
   .strict();
 
@@ -38,7 +41,12 @@ export class FertilizerController {
       data: {
         userId: user.id,
         cropId: crop.id,
-        ...body,
+        growthStage: body.growthStage,
+        soilColor: body.soilColor,
+        soilMoisture: body.soilMoisture,
+        landSizeBigha: body.landSizeBigha,
+        cropAgeDays: body.cropAgeDays,
+        hasDisease: body.hasDisease,
         ...ai,
       },
     });

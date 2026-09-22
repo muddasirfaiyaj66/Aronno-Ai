@@ -373,6 +373,9 @@ model FertilizerAdvice {
   growthStage          GrowthStage
   soilColor            SoilColor
   soilMoisture         SoilMoisture
+  landSizeBigha        Float?
+  cropAgeDays          Int?
+  hasDisease           String?
   fertilizerNameBn     String
   dosagePerBigha       String
   applicationMethodBn  String

@@ -285,11 +285,23 @@ export class GeminiFertilizerAdapter implements AiFertilizerPort {
     growthStage: string;
     soilColor: string;
     soilMoisture: string;
+    landSizeBigha: number;
+    cropAgeDays: number;
+    hasDisease: 'yes' | 'no' | 'unsure';
   }): Promise<FertilizerResult> {
     try {
+      const diseaseNote =
+        input.hasDisease === 'yes'
+          ? 'Crop currently has disease — avoid excess nitrogen; prefer balanced/safer doses and warn about spray timing.'
+          : input.hasDisease === 'unsure'
+            ? 'Disease status unknown — give cautious dosage and suggest leaf scan if leaves look unhealthy.'
+            : 'No known disease.';
       const raw = await this.gemini.generateJson<unknown>(
-        `Recommend fertilizer for a Bangladeshi farmer. Crop slug: ${input.cropSlug}. Stage: ${input.growthStage}. Soil colour: ${input.soilColor}. Moisture: ${input.soilMoisture}.
-Doses per bigha. Bangla. JSON:
+        `Recommend fertilizer for a Bangladeshi farmer.
+Crop slug: ${input.cropSlug}. Growth stage: ${input.growthStage}. Soil colour: ${input.soilColor}. Moisture: ${input.soilMoisture}.
+Land size: ${input.landSizeBigha} bigha. Crop age: ${input.cropAgeDays} days. ${diseaseNote}
+Scale total dose to the given land size (also show per-bigha). Keep Bangla simple for farmers.
+JSON:
 {"fertilizerNameBn":"...","dosagePerBigha":"...","applicationMethodBn":"...","timingBn":"...","warningBn":"..."}`,
       );
       return fertilizerSchema.parse(raw);

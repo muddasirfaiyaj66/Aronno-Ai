@@ -18,7 +18,6 @@ import {
   DistrictPicker,
   FieldInput,
   IconPickerRow,
-  LoanStatusCard,
   PrimaryButton,
   ScreenHeader,
   SecondaryButton,
@@ -26,7 +25,6 @@ import {
 import { colors } from "@/constants/theme";
 import {
   getApiError,
-  useGetCurrentLoanQuery,
   useGetDistrictsQuery,
   useGetMeQuery,
   useGetProfessionsQuery,
@@ -51,7 +49,6 @@ const PROFESSION_ICONS: Record<string, IconName> = {
 export default function ProfileScreen() {
   const router = useRouter();
   const { data: me } = useGetMeQuery();
-  const { data: loan } = useGetCurrentLoanQuery();
   const { data: professions = [] } = useGetProfessionsQuery();
   const { data: districts = [] } = useGetDistrictsQuery();
   const [logout] = useLogoutMutation();
@@ -359,30 +356,6 @@ export default function ProfileScreen() {
               onPress={() => router.push("/(root)/offline-debug")}
               icon={
                 <Ionicons name="pulse-outline" size={20} color={colors.ink} />
-              }
-            />
-          </View>
-
-          <View className="gap-3">
-            <AppText variant="body" className="font-bengali-bold text-ink">
-              কৃষি ঋণ
-            </AppText>
-            {loan ? (
-              <LoanStatusCard
-                title="কৃষি ঋণ"
-                amount={loan.amountBn}
-                status={loan.status}
-                nextPaymentLabel="পরবর্তী কিস্তি"
-                nextPaymentDate={loan.nextPaymentDateBn}
-              />
-            ) : (
-              <AppText variant="caption">এখনো কোনো ঋণ নেই।</AppText>
-            )}
-            <SecondaryButton
-              label="নতুন আবেদন"
-              onPress={() => router.push("/(root)/loan/overview")}
-              icon={
-                <Ionicons name="add-circle-outline" size={20} color={colors.ink} />
               }
             />
           </View>

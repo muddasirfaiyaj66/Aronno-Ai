@@ -24,7 +24,7 @@ export default function PhotoCaptureScreen() {
     if (!cameraRef.current || capturing) return;
     setCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.45 });
       if (photo?.uri) setPhotoUri(photo.uri);
     } finally {
       setCapturing(false);

@@ -27,8 +27,6 @@ type FilterValue = "all" | HistoryEntryKind;
 const FILTERS: { id: FilterValue; label: string }[] = [
   { id: "all", label: "সব" },
   { id: "disease", label: "রোগ" },
-  { id: "yield", label: "ফলন" },
-  { id: "loan", label: "ঋণ" },
 ];
 
 function RowShell({
@@ -180,9 +178,10 @@ export default function CropHealthHistoryScreen() {
 
   const filteredEntries = useMemo(
     () =>
-      filter === "all"
+      (filter === "all"
         ? sortedEntries
-        : sortedEntries.filter((entry) => entry.kind === filter),
+        : sortedEntries.filter((entry) => entry.kind === filter)
+      ).filter((entry) => entry.kind === "disease"),
     [sortedEntries, filter],
   );
 
@@ -191,7 +190,7 @@ export default function CropHealthHistoryScreen() {
       <View className="border-b border-neutral-200 bg-white px-5 py-4">
         <AppText variant="title">ইতিহাস</AppText>
         <AppText variant="caption" className="mt-1">
-          স্ক্যান, ফলন পূর্বাভাস ও ঋণের রেকর্ড
+          স্ক্যান ও রোগ শনাক্তের রেকর্ড
         </AppText>
         <SegmentedTabs
           className="mt-4"

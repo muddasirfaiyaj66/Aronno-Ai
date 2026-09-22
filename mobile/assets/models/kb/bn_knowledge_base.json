@@ -1,75 +1,189 @@
 {
   "diseases": [
     {
-      "id": "tomato_early_blight",
-      "diseaseNameBn": "টমেটোর আগাম ধ্বসা রোগ",
-      "diseaseNameEn": "Tomato Early Blight",
-      "symptomsBn": "পাতায় বাদামী গোল দাগ, দাগের চারপাশে হলুদ বলয়",
-      "treatmentBn": "আক্রান্ত পাতা সরিয়ে ফেলুন, প্রতি লিটার পানিতে ২ গ্রাম ম্যানকোজেব মিশিয়ে স্প্রে করুন, ৭-১০ দিন পর পর পুনরাবৃত্তি করুন।",
-      "preventionBn": "ফসল আবর্তন করুন, সেচের সময় পাতা ভেজানো এড়িয়ে চলুন।",
+      "id": "Pepper__bell___Bacterial_spot",
+      "diseaseNameBn": "ক্যাপসিকাম/মরিচের ব্যাকটেরিয়াল স্পট",
+      "diseaseNameEn": "Pepper Bell Bacterial Spot",
+      "symptomsBn": "পাতায় ছোট গাঢ় বাদামী/কালো দাগ, দাগের চারপাশে হলুদ বলয়; ফলেও দাগ পড়তে পারে",
+      "treatmentBn": "আক্রান্ত পাতা সরিয়ে ফেলুন; কপার-ভিত্তিক ছত্রাকনাশক/ব্যাকটেরিসাইড কৃষি সম্প্রসারণ অফিসের নির্দেশিত মাত্রায় স্প্রে করুন; সেচের সময় পাতা ভেজানো এড়ান।",
+      "preventionBn": "রোগমুক্ত বীজ/চারা ব্যবহার; ফসল আবর্তন; ঘন রোপণ এড়িয়ে চলুন; কাজের সরঞ্জাম জীবাণুমুক্ত রাখুন।",
       "severity": "moderate"
     },
     {
-      "id": "tomato_late_blight",
+      "id": "Pepper__bell___healthy",
+      "diseaseNameBn": "ক্যাপসিকাম/মরিচ — সুস্থ পাতা",
+      "diseaseNameEn": "Pepper Bell Healthy",
+      "symptomsBn": "স্পষ্ট রোগের লক্ষণ নেই",
+      "treatmentBn": "কোনো চিকিৎসা প্রয়োজন নেই।",
+      "preventionBn": "নিয়মিত পর্যবেক্ষণ ও সুষম সার-সেচ চালিয়ে যান।",
+      "severity": "low"
+    },
+    {
+      "id": "Potato___Early_blight",
+      "diseaseNameBn": "আলুর আগাম ধ্বসা",
+      "diseaseNameEn": "Potato Early Blight",
+      "symptomsBn": "পাতায় গাঢ় বাদামী কেন্দ্রবিশিষ্ট দাগ, বৃত্তাকার বলয় (লক্ষ্যবোর্ড আকৃতি)",
+      "treatmentBn": "আক্রান্ত পাতা অপসারণ; ম্যানকোজেব বা ক্লোরোথ্যালোনিল নির্দেশিত মাত্রায় ৭–১০ দিন পর পর স্প্রে করুন।",
+      "preventionBn": "পরিষ্কার বীজ আলু ব্যবহার; ফসল আবর্তন; অতিরিক্ত নাইট্রোজেন এড়ান।",
+      "severity": "moderate"
+    },
+    {
+      "id": "Potato___Late_blight",
+      "diseaseNameBn": "আলুর নাবী ধ্বসা",
+      "diseaseNameEn": "Potato Late Blight",
+      "symptomsBn": "পাতায় জলভেজা ধূসর-সবুজ দাগ, দ্রুত কালো হয়ে শুকিয়ে যায়; আর্দ্র আবহাওয়ায় ছড়ায়",
+      "treatmentBn": "আক্রান্ত গাছ সরিয়ে পুড়িয়ে/মিতে ফেলুন; অনুমোদিত ছত্রাকনাশক (যেমন মেটালাক্সিল+ম্যানকোজেব মিশ্রণ) নির্দেশিত মাত্রায় ব্যবহার করুন।",
+      "preventionBn": "প্রতিরোধী জাত; নিবিড় পর্যবেক্ষণ বর্ষাকালে; ঘন কুয়াশা/বৃষ্টির পর স্প্রে পরিকল্পনা।",
+      "severity": "high"
+    },
+    {
+      "id": "Potato___healthy",
+      "diseaseNameBn": "আলু — সুস্থ পাতা",
+      "diseaseNameEn": "Potato Healthy",
+      "symptomsBn": "স্পষ্ট রোগের লক্ষণ নেই",
+      "treatmentBn": "কোনো চিকিৎসা প্রয়োজন নেই।",
+      "preventionBn": "নিয়মিত পর্যবেক্ষণ; ভালো নিকাশ ও সুষম সার ব্যবহার করুন।",
+      "severity": "low"
+    },
+    {
+      "id": "Tomato_Bacterial_spot",
+      "diseaseNameBn": "টমেটোর ব্যাকটেরিয়াল স্পট",
+      "diseaseNameEn": "Tomato Bacterial Spot",
+      "symptomsBn": "পাতায় ছোট পানিতে ভেজা দাগ যা বাদামী/কালো হয়; ফলে খসখসে দাগ",
+      "treatmentBn": "আক্রান্ত অংশ সরিয়ে ফেলুন; কপার স্প্রে নির্দেশিত মাত্রায়; সেচের সময় পাতা ভেজাবেন না।",
+      "preventionBn": "রোগমুক্ত বীজ; ফসল আবর্তন; ভেজা অবস্থায় গাছ স্পর্শ/কাজ এড়ান।",
+      "severity": "moderate"
+    },
+    {
+      "id": "Tomato_Early_blight",
+      "diseaseNameBn": "টমেটোর আগাম ধ্বসা রোগ",
+      "diseaseNameEn": "Tomato Early Blight",
+      "symptomsBn": "পাতায় বাদামী গোল দাগ, দাগের চারপাশে হলুদ বলয়",
+      "treatmentBn": "আক্রান্ত পাতা সরিয়ে ফেলুন; প্রতি লিটার পানিতে ২ গ্রাম ম্যানকোজেব মিশিয়ে স্প্রে করুন, ৭–১০ দিন পর পর পুনরাবৃত্তি করুন।",
+      "preventionBn": "ফসল আবর্তন করুন; সেচের সময় পাতা ভেজানো এড়িয়ে চলুন; মাটির স্প্ল্যাশ কমাতে মালচ ব্যবহার।",
+      "severity": "moderate"
+    },
+    {
+      "id": "Tomato_Late_blight",
       "diseaseNameBn": "টমেটোর নাবী ধ্বসা রোগ",
       "diseaseNameEn": "Tomato Late Blight",
-      "symptomsBn": "পাতায় জলভেজা দাগ, দ্রুত পাতা শুকিয়ে যায়",
-      "treatmentBn": "আক্রান্ত গাছ সরিয়ে ফেলুন; কপার-ভিত্তিক ছত্রাকনাশক নির্দেশিত মাত্রায় ব্যবহার করুন।",
+      "symptomsBn": "পাতায় জলভেজা দাগ, দ্রুত পাতা শুকিয়ে যায়; কাণ্ড ও ফলেও দাগ",
+      "treatmentBn": "আক্রান্ত গাছ সরিয়ে ফেলুন; কপার বা অনুমোদিত ছত্রাকনাশক নির্দেশিত মাত্রায় ব্যবহার করুন।",
       "preventionBn": "আর্দ্র আবহাওয়ায় নিবিড় পর্যবেক্ষণ; ঘন রোপণ এড়িয়ে চলুন।",
       "severity": "high"
     },
     {
-      "id": "potato_early_blight",
-      "diseaseNameBn": "আলুর আগাম ধ্বসা",
-      "diseaseNameEn": "Potato Early Blight",
-      "symptomsBn": "পাতায় গাঢ় বাদামী দাগ, বৃত্তাকার বলয়",
-      "treatmentBn": "ম্যানকোজেব বা ক্লোরোথ্যালোনিল নির্দেশিত মাত্রায় স্প্রে করুন।",
-      "preventionBn": "পরিষ্কার বীজ আলু ব্যবহার করুন; আক্রান্ত পাতা অপসারণ করুন।",
+      "id": "Tomato_Leaf_Mold",
+      "diseaseNameBn": "টমেটোর পাতার ছাঁচ (লিফ মোল্ড)",
+      "diseaseNameEn": "Tomato Leaf Mold",
+      "symptomsBn": "পাতার নিচে জলপাই-সবুজ/ধূসর ছাঁচের আবরণ; উপরের দিকে হলুদ দাগ",
+      "treatmentBn": "বায়ু চলাচল বাড়ান; আক্রান্ত পাতা সরান; অনুমোদিত ছত্রাকনাশক নির্দেশিত মাত্রায় স্প্রে করুন।",
+      "preventionBn": "গ্রিনহাউস/পলিহাউসে আর্দ্রতা কমান; ঘন পাতা ছেঁটে দিন।",
       "severity": "moderate"
     },
     {
-      "id": "rice_blast",
-      "diseaseNameBn": "ধানের ব্লাস্ট রোগ",
-      "diseaseNameEn": "Rice Blast",
-      "symptomsBn": "পাতায় হীরকাকৃতির ধূসর দাগ",
-      "treatmentBn": "প্রতিরোধী জাত ব্যবহার; অনুমোদিত ছত্রাকনাশক কৃষি সম্প্রসারণ অফিসের পরামর্শ অনুযায়ী।",
-      "preventionBn": "সঠিক নাইট্রোজেন মাত্রা; ঘন রোপণ এড়িয়ে চলুন।",
+      "id": "Tomato_Septoria_leaf_spot",
+      "diseaseNameBn": "টমেটোর সেপ্টোরিয়া পাতাদাগ",
+      "diseaseNameEn": "Tomato Septoria Leaf Spot",
+      "symptomsBn": "ছোট গোল দাগ, কেন্দ্র ধূসর/সাদাটে, চারপাশে গাঢ় বলয়; নিচের পাতা থেকে ওপরে ছড়ায়",
+      "treatmentBn": "নিচের আক্রান্ত পাতা সরান; ম্যানকোজেব/ক্লোরোথ্যালোনিল নির্দেশিত মাত্রায় স্প্রে করুন।",
+      "preventionBn": "ফসল আবর্তন; মাটির স্প্ল্যাশ কমাতে মালচ; সেচের সময় পাতা ভেজাবেন না।",
+      "severity": "moderate"
+    },
+    {
+      "id": "Tomato_Spider_mites_Two_spotted_spider_mite",
+      "diseaseNameBn": "টমেটোতে মাকড়সা মাইট (টু-স্পটেড)",
+      "diseaseNameEn": "Tomato Two-Spotted Spider Mite",
+      "symptomsBn": "পাতায় সূক্ষ্ম হলুদ বিন্দু/ঝলসানি, নিচে মাকড়সার জাল; পাতা শুকিয়ে যায়",
+      "treatmentBn": "পাতার নিচসহ পানি স্প্রে করে ধুয়ে দিন; প্রয়োজনে অনুমোদিত অ্যাকারিসাইড কৃষি অফিসের পরামর্শ অনুযায়ী।",
+      "preventionBn": "ধুলাবালি কমান; উপকারী পোকা সংরক্ষণ; অতিরিক্ত নাইট্রোজেন এড়ান।",
+      "severity": "moderate"
+    },
+    {
+      "id": "Tomato__Target_Spot",
+      "diseaseNameBn": "টমেটোর টার্গেট স্পট",
+      "diseaseNameEn": "Tomato Target Spot",
+      "symptomsBn": "পাতায় বৃত্তাকার দাগ (লক্ষ্যবোর্ড আকৃতি); ফলেও দাগ পড়তে পারে",
+      "treatmentBn": "আক্রান্ত পাতা সরান; অনুমোদিত ছত্রাকনাশক নির্দেশিত মাত্রায় ঘুরিয়ে ফিরিয়ে স্প্রে করুন।",
+      "preventionBn": "বায়ু চলাচল ভালো রাখুন; ভেজা পাতা কমান; ফসল আবর্তন।",
+      "severity": "moderate"
+    },
+    {
+      "id": "Tomato__Tomato_YellowLeaf__Curl_Virus",
+      "diseaseNameBn": "টমেটোর হলুদ পাতা কুঁচকানো ভাইরাস (TYLCV)",
+      "diseaseNameEn": "Tomato Yellow Leaf Curl Virus",
+      "symptomsBn": "পাতা হলুদ ও উপরের দিকে কুঁকড়ে যায়; গাছের বৃদ্ধি ব্যাহত; ফল কম হয়",
+      "treatmentBn": "ভাইরাসের সরাসরি ওষুধ নেই — সাদামাছী (হোয়াইটফ্লাই) নিয়ন্ত্রণ করুন; আক্রান্ত গাছ সরিয়ে ফেলুন; প্রতিরোধী জাত লাগান।",
+      "preventionBn": "নার্সারিতে জাল; আগাছা পরিষ্কার; সাদামাছী মনিটরিং ও হলুদ স্টিকি ট্র্যাপ।",
       "severity": "high"
     },
     {
-      "id": "healthy_leaf",
-      "diseaseNameBn": "সুস্থ পাতা",
-      "diseaseNameEn": "Healthy Leaf",
+      "id": "Tomato__Tomato_mosaic_virus",
+      "diseaseNameBn": "টমেটোর মোজাইক ভাইরাস",
+      "diseaseNameEn": "Tomato Mosaic Virus",
+      "symptomsBn": "পাতায় হালকা-গাঢ় সবুজ মোজাইক দাগ; পাতা বিকৃত/সরু হতে পারে",
+      "treatmentBn": "ভাইরাসের ওষুধ নেই — আক্রান্ত গাছ সরিয়ে ফেলুন; হাত ও সরঞ্জাম সাবান/ব্লিচ দ্রবণে পরিষ্কার করুন।",
+      "preventionBn": "রোগমুক্ত বীজ; তামাক/সিগারেট নিয়ে ক্ষেতে ঢুকবেন না; সংক্রমিত সরঞ্জাম ব্যবহার করবেন না।",
+      "severity": "high"
+    },
+    {
+      "id": "Tomato_healthy",
+      "diseaseNameBn": "টমেটো — সুস্থ পাতা",
+      "diseaseNameEn": "Tomato Healthy",
       "symptomsBn": "স্পষ্ট রোগের লক্ষণ নেই",
       "treatmentBn": "কোনো চিকিৎসা প্রয়োজন নেই।",
-      "preventionBn": "নিয়মিত পর্যবেক্ষণ ও সুষম সার ব্যবহার চালিয়ে যান।",
+      "preventionBn": "নিয়মিত পর্যবেক্ষণ ও সুষম সার-সেচ চালিয়ে যান।",
       "severity": "low"
     }
   ],
   "tools": [
     {
-      "id": "sickle",
-      "toolNameBn": "কাস্তে",
-      "toolNameEn": "Sickle",
-      "usageBn": "ধান বা গম কাটার জন্য ব্যবহৃত হাতিয়ার।"
+      "id": "ARROSOIR",
+      "toolNameBn": "ঝাঁঝরি / পানি দেওয়ার ক্যান",
+      "toolNameEn": "Watering can (Arrosoir)",
+      "usageBn": "চারা ও সবজি গাছে নিয়ন্ত্রিতভাবে পানি দেওয়ার জন্য ব্যবহৃত।"
     },
     {
-      "id": "hoe",
-      "toolNameBn": "কোদাল",
-      "toolNameEn": "Hoe",
-      "usageBn": "মাটি আলগা করা ও আগাছা পরিষ্কারের জন্য ব্যবহৃত।"
+      "id": "BROUETTE",
+      "toolNameBn": "ঠেলাগাড়ি",
+      "toolNameEn": "Wheelbarrow (Brouette)",
+      "usageBn": "মাটি, সার, ফসল বা আবর্জনা এক স্থান থেকে অন্য স্থানে নিয়ে যাওয়ার জন্য ব্যবহৃত।"
     },
     {
-      "id": "spade",
-      "toolNameBn": "কোদাল/বেলচা",
-      "toolNameEn": "Spade",
-      "usageBn": "মাটি খোঁড়া ও স্থানান্তরের জন্য ব্যবহৃত।"
+      "id": "HOUE",
+      "toolNameBn": "কোদাল / নিদানি",
+      "toolNameEn": "Hoe (Houe)",
+      "usageBn": "মাটি আলগা করা, আগাছা পরিষ্কার ও সার মাটিতে মেশানোর জন্য ব্যবহৃত।"
     },
     {
-      "id": "sprayer",
+      "id": "MACHETTE",
+      "toolNameBn": "দা / কাটারি",
+      "toolNameEn": "Machete (Machette)",
+      "usageBn": "ঝোপঝাড় পরিষ্কার, ডালপালা কাটা ও হালকা ফসল কাটার কাজে ব্যবহৃত।"
+    },
+    {
+      "id": "PELLE",
+      "toolNameBn": "বেলচা",
+      "toolNameEn": "Shovel / Spade (Pelle)",
+      "usageBn": "মাটি খোঁড়া, স্থানান্তর ও গর্ত তৈরির জন্য ব্যবহৃত।"
+    },
+    {
+      "id": "PULVERISATEUR",
       "toolNameBn": "স্প্রেয়ার",
-      "toolNameEn": "Sprayer",
-      "usageBn": "কীটনাশক বা সার দ্রবণ স্প্রে করার জন্য ব্যবহৃত।"
+      "toolNameEn": "Sprayer (Pulvérisateur)",
+      "usageBn": "কীটনাশক, ছত্রাকনাশক বা পাতা সার দ্রবণ স্প্রে করার জন্য ব্যবহৃত।"
+    },
+    {
+      "id": "RATEAU",
+      "toolNameBn": "রেক / আঁচড়ানোর হাতিয়ার",
+      "toolNameEn": "Rake (Rateau)",
+      "usageBn": "মাটি সমান করা, আবর্জনা জড়ো করা ও বীজতলা তৈরির কাজে ব্যবহৃত।"
+    },
+    {
+      "id": "SEAU",
+      "toolNameBn": "বালতি",
+      "toolNameEn": "Bucket (Seau)",
+      "usageBn": "পানি, সার দ্রবণ বা ফসল বহন ও মেশানোর জন্য ব্যবহৃত।"
     }
   ],
   "faq": [

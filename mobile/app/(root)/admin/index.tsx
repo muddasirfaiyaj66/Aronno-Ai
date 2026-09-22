@@ -5,12 +5,17 @@ import { Redirect, useRouter, type Href } from "expo-router";
 import { AppText, FieldInput, PrimaryButton, ScreenHeader } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import {
-  getApiError,
   useCreateAdminMutation,
   useGetAdminUsersQuery,
   useGetMeQuery,
   usePatchAdminRoleMutation,
 } from "@/services/api";
+import { userFacingError } from "@/lib/userFacingError";
+import {
+  validateDisplayNameBn,
+  validateEmailBn,
+  validatePasswordBn,
+} from "@/lib/authValidation";
 
 function isStaff(slug?: string) {
   return slug === "ADMIN" || slug === "SUPERADMIN";
@@ -21,7 +26,7 @@ export default function AdminStaffScreen() {
   const { data: me, isLoading: meLoading } = useGetMeQuery();
   const skip = !isStaff(me?.role.slug);
   const { data: users = [] } = useGetAdminUsersQuery(undefined, { skip });
-  const [createAdmin, { isLoading: creating, error: createError }] =
+  const [createAdmin, { isLoading: creating, error: createError, reset: resetCreate }] =
     useCreateAdminMutation();
   const [patchRole, { isLoading: promoting }] = usePatchAdminRoleMutation();
 
@@ -29,18 +34,33 @@ export default function AdminStaffScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [doneMessage, setDoneMessage] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   if (!meLoading && !isStaff(me?.role.slug)) {
     return <Redirect href={"/(root)/(tabs)/profile" as unknown as Href} />;
   }
 
-  const errorMessage = getApiError(createError).message;
+  const errorMessage =
+    localError ??
+    (createError
+      ? userFacingError(createError, "generic", "অ্যাডমিন তৈরি করা যায়নি।")
+      : undefined);
 
   const canSubmit =
-    displayName.trim().length >= 2 && email.includes("@") && password.length >= 10;
+    displayName.trim().length > 0 && email.trim().length > 0 && password.length > 0;
 
   const handleCreate = async () => {
-    if (!canSubmit) return;
+    const clientMsg =
+      validateDisplayNameBn(displayName) ??
+      validateEmailBn(email) ??
+      validatePasswordBn(password);
+    if (clientMsg) {
+      setLocalError(clientMsg);
+      setDoneMessage(null);
+      resetCreate();
+      return;
+    }
+    setLocalError(null);
     setDoneMessage(null);
     try {
       await createAdmin({

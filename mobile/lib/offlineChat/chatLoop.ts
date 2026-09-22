@@ -1,11 +1,17 @@
 /**
  * Offline realtime chat: STT → grounded Gemma LLM → sentence-chunked TTS.
+ * Persists turns to SQLite and grounds prompts with recent local history.
  */
 import { startListening } from "@/lib/offlineVoice/sttEngine";
 import { streamOffline } from "@/lib/offlineVoice/ttsEngine";
 import { retrieveContext } from "@/lib/offlineNlu/retrieve";
 import { isLlmReady, streamLlmReply } from "@/lib/modelManager/llmEngine";
 import { logMetric, markStart } from "@/lib/offline/metrics";
+import {
+  insertChatTurn,
+  recentChatAndScansForPrompt,
+} from "@/lib/offlineDb/queries";
+import { requestSyncSoon } from "@/lib/offlineDb/syncEngine";
 
 export const SYSTEM_PROMPT_BN =
   "তুমি আরণ্য, বাংলাদেশের কৃষকদের জন্য একজন সহায়ক কৃষি সহকারী। " +
@@ -16,7 +22,7 @@ export function buildGroundedPrompt(
   userTextBn: string,
   extraContext: string[] = [],
 ): string {
-  const context = [...retrieveContext(userTextBn), ...extraContext].slice(0, 3);
+  const context = [...retrieveContext(userTextBn), ...extraContext].slice(0, 6);
   return [
     SYSTEM_PROMPT_BN,
     context.length ? `প্রাসঙ্গিক তথ্য:\n${context.join("\n")}` : "",
@@ -37,12 +43,15 @@ export type ChatTurnHandlers = {
 async function runLlmTurn(
   userTextBn: string,
   onTextChunk: (token: string) => void,
-): Promise<void> {
+): Promise<string> {
   const end = markStart("chat.llm");
-  const prompt = buildGroundedPrompt(userTextBn);
+  const historyCtx = await recentChatAndScansForPrompt(6).catch(() => [] as string[]);
+  const prompt = buildGroundedPrompt(userTextBn, historyCtx);
   let sentenceBuffer = "";
+  let full = "";
   await streamLlmReply(prompt, (token) => {
     sentenceBuffer += token;
+    full += token;
     onTextChunk(token);
     if (/[।.!?]/.test(token)) {
       void streamOffline(sentenceBuffer);
@@ -53,6 +62,16 @@ async function runLlmTurn(
     void streamOffline(sentenceBuffer);
   }
   end("ok");
+  return full.trim();
+}
+
+async function persistTurn(role: "user" | "assistant", text: string) {
+  try {
+    await insertChatTurn(role, text);
+    requestSyncSoon();
+  } catch {
+    // DB may be unavailable on first boot
+  }
 }
 
 /** Typed (or already-final) user message → grounded LLM stream. */
@@ -65,8 +84,11 @@ export async function replyToText(
     handlers.onDone();
     return;
   }
+  const cleaned = userTextBn.trim();
+  await persistTurn("user", cleaned);
   try {
-    await runLlmTurn(userTextBn.trim(), handlers.onTextChunk);
+    const reply = await runLlmTurn(cleaned, handlers.onTextChunk);
+    if (reply) await persistTurn("assistant", reply);
   } catch (err) {
     handlers.onError?.(err);
   } finally {
@@ -90,7 +112,9 @@ export function startChatTurn(handlers: ChatTurnHandlers): () => void {
       }
       try {
         logMetric("chat.voice.final");
-        await runLlmTurn(finalTextBn, handlers.onTextChunk);
+        await persistTurn("user", finalTextBn.trim());
+        const reply = await runLlmTurn(finalTextBn, handlers.onTextChunk);
+        if (reply) await persistTurn("assistant", reply);
       } catch (err) {
         handlers.onError?.(err);
       } finally {

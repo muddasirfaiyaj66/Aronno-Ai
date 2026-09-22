@@ -7,21 +7,24 @@ import { colors } from "@/constants/theme";
 export type FieldInputProps = TextInputProps & {
   label: string;
   hint?: string;
+  error?: string;
 };
 
 export function FieldInput({
   label,
   hint,
+  error,
   className = "",
   secureTextEntry,
   ...props
 }: FieldInputProps) {
   const [hidden, setHidden] = useState(true);
   const isPassword = !!secureTextEntry;
+  const borderClass = error ? "border-severity-high" : "border-border";
 
   return (
-    <View className="gap-2">
-      <AppText variant="body" className="font-bengali-bold text-ink">
+    <View className="gap-1.5">
+      <AppText variant="caption" className="font-bengali-semibold text-muted">
         {label}
       </AppText>
       <View>
@@ -29,7 +32,7 @@ export function FieldInput({
           placeholderTextColor={colors.muted}
           accessibilityLabel={label}
           secureTextEntry={isPassword ? hidden : false}
-          className={`min-h-touch-lg rounded-2xl border border-neutral-200 bg-neutral px-4 font-bengali-medium text-body-lg text-ink ${
+          className={`min-h-[52px] rounded-xl border bg-neutral px-4 font-bengali-medium text-body text-ink ${borderClass} ${
             isPassword ? "pr-14" : ""
           } ${className}`}
           {...props}
@@ -50,8 +53,12 @@ export function FieldInput({
           </Pressable>
         ) : null}
       </View>
-      {hint ? (
-        <AppText variant="caption" className="text-muted">
+      {error ? (
+        <AppText variant="caption" className="text-severity-high">
+          {error}
+        </AppText>
+      ) : hint ? (
+        <AppText variant="caption" className="leading-5">
           {hint}
         </AppText>
       ) : null}

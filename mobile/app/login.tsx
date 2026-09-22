@@ -6,6 +6,7 @@ import { AuthScaffold } from "@/components/auth/AuthScaffold";
 import { AppText, FieldInput, PrimaryButton } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import { getApiError, useLoginMutation } from "@/services/api";
+import { userFacingError } from "@/lib/userFacingError";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -13,8 +14,9 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [login, { isLoading, error }] = useLoginMutation();
 
-  const apiError = getApiError(error);
-  const message = apiError.message;
+  const message = error
+    ? userFacingError(error, "auth", "ইমেইল বা পাসওয়ার্ড ঠিক নেই।")
+    : undefined;
 
   const handleSubmit = async () => {
     const normalizedEmail = email.trim().toLowerCase();

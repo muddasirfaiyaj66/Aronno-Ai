@@ -20,7 +20,7 @@ export function SecondaryButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       disabled={disabled}
-      className={`min-h-touch-lg flex-row items-center justify-center gap-2 rounded-2xl bg-white px-5 active:bg-neutral-100 ${
+      className={`min-h-touch-lg flex-row items-center justify-center gap-2 rounded-2xl border border-border bg-white px-5 active:bg-neutral ${
         disabled ? "opacity-50" : ""
       } ${className}`}
       {...props}

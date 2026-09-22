@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Image,
@@ -17,21 +17,24 @@ import {
   AppText,
   DistrictPicker,
   FieldInput,
+  FormSection,
   IconPickerRow,
   PrimaryButton,
-  ScreenHeader,
-  SecondaryButton,
+  SettingsGroup,
+  SettingsRow,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import {
-  getApiError,
   useGetDistrictsQuery,
   useGetMeQuery,
   useGetProfessionsQuery,
   useLogoutMutation,
   usePatchMeMutation,
 } from "@/services/api";
+import { userFacingError } from "@/lib/userFacingError";
+import { validateBdPhoneBn } from "@/lib/authValidation";
 import { matchDistrictSlug, useFarmLocation } from "@/hooks/useFarmLocation";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { uploadImageToCloudinary } from "@/services/cloudinary";
 import * as ImagePicker from "expo-image-picker";
 
@@ -48,9 +51,11 @@ const PROFESSION_ICONS: Record<string, IconName> = {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { data: me } = useGetMeQuery();
-  const { data: professions = [] } = useGetProfessionsQuery();
-  const { data: districts = [] } = useGetDistrictsQuery();
+  const { data: me, refetch: refetchMe } = useGetMeQuery();
+  const { data: professions = [], refetch: refetchProfessions } =
+    useGetProfessionsQuery();
+  const { data: districts = [], refetch: refetchDistricts } =
+    useGetDistrictsQuery();
   const [logout] = useLogoutMutation();
   const [patchMe, { isLoading, error }] = usePatchMeMutation();
   const location = useFarmLocation();
@@ -64,6 +69,7 @@ export default function ProfileScreen() {
   const [locationHint, setLocationHint] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!me) return;
@@ -73,20 +79,44 @@ export default function ProfileScreen() {
     setDistrictSlug(me.district?.slug ?? null);
   }, [me]);
 
-  const message = getApiError(error).message;
+  const refreshAll = useCallback(async () => {
+    await Promise.all([
+      refetchMe(),
+      refetchProfessions(),
+      refetchDistricts(),
+    ]);
+  }, [refetchMe, refetchProfessions, refetchDistricts]);
+
+  const { refreshControl } = usePullToRefresh(refreshAll);
+
+  const message =
+    localError ??
+    (error
+      ? userFacingError(error, "generic", "প্রোফাইল সংরক্ষণ করা যায়নি।")
+      : undefined);
   const canSave = displayName.trim().length >= 2;
+  const districtName =
+    districts.find((d) => d.slug === districtSlug)?.nameBn ?? undefined;
+  const professionName =
+    professions.find((p) => p.slug === professionSlug)?.nameBn ?? undefined;
 
   const handleSave = async () => {
     if (!canSave) return;
     setSaved(false);
+    const phoneCheck = validateBdPhoneBn(phone);
+    if (!phoneCheck.ok) {
+      setLocalError(phoneCheck.message ?? null);
+      return;
+    }
+    setLocalError(null);
     try {
-      const trimmedPhone = phone.trim();
       await patchMe({
         displayName: displayName.trim(),
-        phone: trimmedPhone.length >= 6 ? trimmedPhone : undefined,
+        phone: phoneCheck.value,
         professionSlug: professionSlug ?? undefined,
         districtSlug: districtSlug ?? undefined,
       }).unwrap();
+      if (phoneCheck.value) setPhone(phoneCheck.value);
       setSaved(true);
     } catch {
       // banner
@@ -99,7 +129,9 @@ export default function ProfileScreen() {
     try {
       const found = await location.refresh(true);
       if (!found) {
-        setLocationHint("অবস্থান পাওয়া যায়নি। ফোনের লোকেশন চালু করে আবার চেষ্টা করুন।");
+        setLocationHint(
+          "অবস্থান পাওয়া যায়নি। ফোনের লোকেশন চালু করে আবার চেষ্টা করুন।",
+        );
         return;
       }
       const slug = matchDistrictSlug(found.labelBn, districts);
@@ -129,7 +161,7 @@ export default function ProfileScreen() {
       await patchMe({ avatarUrl }).unwrap();
       setSaved(true);
     } catch (err) {
-      setPhotoError(getApiError(err).message ?? "ছবি আপলোড করা যায়নি।");
+      setPhotoError(userFacingError(err, "upload"));
     } finally {
       setUploadingPhoto(false);
     }
@@ -188,11 +220,34 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const confirmLogout = () => {
+    Alert.alert("লগ আউট", "অ্যাকাউন্ট থেকে বের হতে চান?", [
+      { text: "না", style: "cancel" },
+      {
+        text: "লগ আউট",
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            await logout();
+            router.replace("/login");
+          })();
+        },
+      },
+    ]);
+  };
+
   const initial = (me?.displayName ?? me?.email ?? "ক").trim().charAt(0);
+  const isStaff =
+    me?.role.slug === "ADMIN" || me?.role.slug === "SUPERADMIN";
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <ScreenHeader title="আমি" subtitle="নাম, ফোন, পেশা ও জেলা আপডেট করুন" />
+      <View className="border-b border-border bg-white px-5 pb-3 pt-2">
+        <AppText variant="title">প্রোফাইল</AppText>
+        <AppText variant="caption" className="mt-0.5">
+          নিজের তথ্য ও অ্যাপ সেটিংস
+        </AppText>
+      </View>
 
       <KeyboardAvoidingView
         className="flex-1"
@@ -200,11 +255,13 @@ export default function ProfileScreen() {
       >
         <ScrollView
           className="flex-1"
-          contentContainerClassName="gap-5 px-5 py-5 pb-10"
+          contentContainerClassName="gap-5 px-4 py-5 pb-28"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
         >
-          <View className="items-center rounded-[28px] border border-neutral-200 bg-white px-5 py-6">
+          {/* Identity */}
+          <View className="items-center rounded-2xl border border-border bg-white px-5 py-6">
             <Pressable
               onPress={pickAvatar}
               accessibilityRole="button"
@@ -215,14 +272,14 @@ export default function ProfileScreen() {
                 {me?.avatarUrl ? (
                   <Image
                     source={{ uri: me.avatarUrl }}
-                    style={{ height: 88, width: 88, borderRadius: 44 }}
+                    style={{ height: 96, width: 96, borderRadius: 48 }}
                   />
                 ) : (
                   <View
-                    className="h-[88px] w-[88px] items-center justify-center rounded-full"
+                    className="h-24 w-24 items-center justify-center rounded-full"
                     style={{ backgroundColor: colors.primary }}
                   >
-                    <AppText variant="title" className="text-white">
+                    <AppText variant="display" className="text-white">
                       {initial}
                     </AppText>
                   </View>
@@ -231,156 +288,217 @@ export default function ProfileScreen() {
                   className="absolute bottom-0 right-0 h-8 w-8 items-center justify-center rounded-full border-2 border-white"
                   style={{ backgroundColor: colors.tertiary }}
                 >
-                  <Ionicons name="camera" size={14} color={colors.white} />
+                  {uploadingPhoto ? (
+                    <Ionicons name="hourglass" size={14} color={colors.white} />
+                  ) : (
+                    <Ionicons name="camera" size={14} color={colors.white} />
+                  )}
                 </View>
               </View>
-              <AppText variant="caption" className="mt-3 font-bengali-semibold text-primary">
-                {uploadingPhoto ? "ছবি তোলা হচ্ছে…" : "ছবি যোগ করুন"}
+            </Pressable>
+            <AppText
+              variant="title"
+              className="mt-4 text-center"
+              numberOfLines={1}
+            >
+              {me?.displayName || "নাম নেই"}
+            </AppText>
+            <AppText variant="caption" className="mt-1 text-center">
+              {me?.email}
+            </AppText>
+            {(professionName || districtName) && (
+              <View className="mt-3 flex-row flex-wrap items-center justify-center gap-2">
+                {professionName ? (
+                  <View className="rounded-full bg-secondary px-3 py-1">
+                    <AppText
+                      variant="caption"
+                      className="font-bengali-semibold text-primary"
+                    >
+                      {professionName}
+                    </AppText>
+                  </View>
+                ) : null}
+                {districtName ? (
+                  <View className="rounded-full bg-neutral px-3 py-1">
+                    <AppText variant="caption" className="font-bengali-semibold">
+                      {districtName}
+                    </AppText>
+                  </View>
+                ) : null}
+              </View>
+            )}
+            <Pressable
+              onPress={pickAvatar}
+              className="mt-3 min-h-touch items-center justify-center px-3"
+              accessibilityRole="button"
+            >
+              <AppText
+                variant="caption"
+                className="font-bengali-semibold text-primary"
+              >
+                {uploadingPhoto ? "ছবি আপলোড হচ্ছে…" : "ছবি বদলান"}
               </AppText>
             </Pressable>
             {photoError ? (
-              <AppText variant="caption" className="mt-2 text-center text-severity-high">
+              <AppText
+                variant="caption"
+                className="mt-1 text-center text-severity-high"
+              >
                 {photoError}
               </AppText>
             ) : null}
-            <AppText variant="body" className="mt-2 text-muted">
-              {me?.email}
-            </AppText>
           </View>
 
-          <View className="gap-5 rounded-[28px] border border-neutral-200 bg-white px-5 py-5">
+          {/* Editable details */}
+          <FormSection title="ব্যক্তিগত তথ্য">
             <FieldInput
-              label="আপনার নাম"
+              label="নাম"
               value={displayName}
-              onChangeText={setDisplayName}
+              onChangeText={(t) => {
+                setDisplayName(t);
+                setLocalError(null);
+                setSaved(false);
+              }}
               autoComplete="name"
               textContentType="name"
               placeholder="যেমন: করিম মিয়া"
             />
             <FieldInput
-              label="ফোন"
+              label="মোবাইল"
               value={phone}
-              onChangeText={setPhone}
+              onChangeText={(t) => {
+                setPhone(t);
+                setLocalError(null);
+                setSaved(false);
+              }}
               keyboardType="phone-pad"
               autoComplete="tel"
               textContentType="telephoneNumber"
-              placeholder="০১৭xxxxxxxx"
+              maxLength={14}
+              hint="১১ সংখ্যা, যেমন 01712345678"
+              placeholder="01712345678"
+              error={
+                localError && localError.includes("মোবাইল")
+                  ? localError
+                  : undefined
+              }
             />
+          </FormSection>
 
-            <View className="gap-3">
-              <AppText variant="body" className="font-bengali-bold text-ink">
-                পেশা
-              </AppText>
-              <IconPickerRow
-                options={professions.map((p) => ({
-                  id: p.slug,
-                  label: p.nameBn,
-                  icon: (
-                    <Ionicons
-                      name={PROFESSION_ICONS[p.slug] ?? "person-outline"}
-                      size={22}
-                      color={colors.primary}
-                    />
-                  ),
-                }))}
-                value={professionSlug}
-                onChange={setProfessionSlug}
-              />
-            </View>
+          <FormSection title="পেশা">
+            <IconPickerRow
+              options={professions.map((p) => ({
+                id: p.slug,
+                label: p.nameBn,
+                icon: (
+                  <Ionicons
+                    name={PROFESSION_ICONS[p.slug] ?? "person-outline"}
+                    size={20}
+                    color={colors.primary}
+                  />
+                ),
+              }))}
+              value={professionSlug}
+              onChange={(id) => {
+                setProfessionSlug(id);
+                setSaved(false);
+              }}
+            />
+          </FormSection>
 
-            <View className="gap-3">
-              <AppText variant="body" className="font-bengali-bold text-ink">
-                জেলা
-              </AppText>
-              <DistrictPicker
-                districts={districts}
-                value={districtSlug}
-                onChange={setDistrictSlug}
+          <FormSection title="জেলা">
+            <DistrictPicker
+              districts={districts}
+              value={districtSlug}
+              onChange={(slug) => {
+                setDistrictSlug(slug);
+                setSaved(false);
+              }}
+            />
+            <Pressable
+              onPress={() => {
+                void useCurrentPlace();
+              }}
+              disabled={locating}
+              accessibilityRole="button"
+              className="min-h-[48px] flex-row items-center justify-center gap-2 rounded-xl border border-border bg-neutral px-3 active:bg-secondary"
+            >
+              <Ionicons
+                name="navigate-outline"
+                size={18}
+                color={colors.primary}
               />
-              {districts.length > 0 ? (
-                <AppText variant="caption">
-                  বাংলাদেশের {districts.length} জেলা — খুঁজে বেছে নিন
-                </AppText>
-              ) : (
-                <AppText variant="caption">জেলার তালিকা আনা হচ্ছে…</AppText>
-              )}
-              <SecondaryButton
-                label={locating ? "অবস্থান খোঁজা হচ্ছে…" : "বর্তমান অবস্থান ব্যবহার করুন"}
-                onPress={useCurrentPlace}
-                disabled={locating}
-                icon={
-                  <Ionicons name="navigate-outline" size={20} color={colors.ink} />
-                }
-              />
-              {locationHint ? (
-                <AppText variant="caption" className="text-primary">
-                  {locationHint}
-                </AppText>
-              ) : null}
-            </View>
-
-            {message ? (
-              <AppText variant="caption" className="text-severity-high">
-                {message}
+              <AppText
+                variant="body"
+                className="font-bengali-semibold text-primary"
+              >
+                {locating
+                  ? "অবস্থান খোঁজা হচ্ছে…"
+                  : "বর্তমান অবস্থান ব্যবহার"}
               </AppText>
-            ) : saved ? (
+            </Pressable>
+            {locationHint ? (
               <AppText variant="caption" className="text-primary">
-                প্রোফাইল সংরক্ষণ হয়েছে।
+                {locationHint}
               </AppText>
             ) : null}
+          </FormSection>
 
-            <PrimaryButton
-              label="সংরক্ষণ করুন"
-              loading={isLoading}
-              disabled={!canSave}
-              onPress={handleSave}
-            />
-          </View>
-
-          <View className="gap-3">
-            <AppText variant="body" className="font-bengali-bold text-ink">
-              অফলাইন এআই
+          {message && !message.includes("মোবাইল") ? (
+            <AppText variant="caption" className="px-1 text-severity-high">
+              {message}
             </AppText>
-            <AppText variant="caption">
-              জেমা / বাংলা কণ্ঠ মডেল ডাউনলোড বা মুছুন — ইন্টারনেট ছাড়া চ্যাট।
+          ) : saved ? (
+            <AppText variant="caption" className="px-1 text-primary">
+              প্রোফাইল সংরক্ষণ হয়েছে।
             </AppText>
-            <SecondaryButton
-              label="মডেল ম্যানেজার"
-              onPress={() => router.push("/(root)/(tabs)/models")}
-              icon={
-                <Ionicons name="cloud-download-outline" size={20} color={colors.ink} />
-              }
-            />
-            <SecondaryButton
-              label="অফলাইন ডিবাগ"
-              onPress={() => router.push("/(root)/offline-debug")}
-              icon={
-                <Ionicons name="pulse-outline" size={20} color={colors.ink} />
-              }
-            />
-          </View>
-
-          {me?.role.slug === "ADMIN" || me?.role.slug === "SUPERADMIN" ? (
-            <SecondaryButton
-              label="অ্যাডমিন তৈরি"
-              onPress={() => router.push("/(root)/admin" as unknown as Href)}
-              icon={<Ionicons name="people-outline" size={20} color={colors.ink} />}
-            />
           ) : null}
 
-          <Pressable
-            onPress={async () => {
-              await logout();
-              router.replace("/login");
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="লগ আউট"
-            className="min-h-touch items-center justify-center py-3"
-          >
-            <AppText variant="body" className="font-bengali-bold text-severity-high">
-              লগ আউট
-            </AppText>
-          </Pressable>
+          <PrimaryButton
+            label="পরিবর্তন সংরক্ষণ"
+            loading={isLoading}
+            disabled={!canSave}
+            onPress={handleSave}
+          />
+
+          {/* App tools */}
+          <SettingsGroup title="অফলাইন এআই" footer="ইন্টারনেট ছাড়া চ্যাট ও স্ক্যান।">
+            <SettingsRow
+              label="মডেল ম্যানেজার"
+              subtitle="জেমা ও কণ্ঠ মডেল ডাউনলোড"
+              icon="cloud-download-outline"
+              onPress={() => router.push("/(root)/(tabs)/models")}
+            />
+            <SettingsRow
+              label="অফলাইন ডিবাগ"
+              subtitle="মডেল ও সিঙ্ক অবস্থা দেখুন"
+              icon="pulse-outline"
+              onPress={() => router.push("/(root)/offline-debug")}
+              last={!isStaff}
+            />
+            {isStaff ? (
+              <SettingsRow
+                label="অ্যাডমিন প্যানেল"
+                subtitle="নতুন অ্যাডমিন তৈরি"
+                icon="people-outline"
+                onPress={() =>
+                  router.push("/(root)/admin" as unknown as Href)
+                }
+                last
+              />
+            ) : null}
+          </SettingsGroup>
+
+          <SettingsGroup>
+            <SettingsRow
+              label="লগ আউট"
+              icon="log-out-outline"
+              destructive
+              showChevron={false}
+              last
+              onPress={confirmLogout}
+            />
+          </SettingsGroup>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

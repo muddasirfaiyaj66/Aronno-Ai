@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Image, Pressable, ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,6 +15,7 @@ import {
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import {
   useCreateMarketListingMutation,
   useGetDistrictsQuery,
@@ -178,17 +179,30 @@ export default function MarketScreen() {
   const [uploadingListing, setUploadingListing] = useState(false);
   const [shareListing] = useShareListingMutation();
 
-  const { data: pricePayload } = useGetMarketPricesQuery({
+  const { data: pricePayload, refetch: refetchPrices } = useGetMarketPricesQuery({
     cropSlug: priceCrop === "all" ? undefined : priceCrop,
     districtSlug: priceDistrict === "all" ? undefined : priceDistrict,
   });
-  const { data: listings = [] } = useGetMarketListingsQuery({
-    cropSlug: marketCrop === "all" ? undefined : marketCrop,
-    districtSlug: marketDistrict === "all" ? undefined : marketDistrict,
-    sort: sortDesc ? "price_desc" : "price_asc",
-  });
-  const { data: heatmap } = useGetHeatmapQuery();
-  const { data: districts = [] } = useGetDistrictsQuery();
+  const { data: listings = [], refetch: refetchListings } =
+    useGetMarketListingsQuery({
+      cropSlug: marketCrop === "all" ? undefined : marketCrop,
+      districtSlug: marketDistrict === "all" ? undefined : marketDistrict,
+      sort: sortDesc ? "price_desc" : "price_asc",
+    });
+  const { data: heatmap, refetch: refetchHeatmap } = useGetHeatmapQuery();
+  const { data: districts = [], refetch: refetchDistricts } =
+    useGetDistrictsQuery();
+
+  const refreshMarket = useCallback(async () => {
+    await Promise.all([
+      refetchPrices(),
+      refetchListings(),
+      refetchHeatmap(),
+      refetchDistricts(),
+    ]);
+  }, [refetchPrices, refetchListings, refetchHeatmap, refetchDistricts]);
+
+  const { refreshControl } = usePullToRefresh(refreshMarket);
   const districtLabel = (slug: string) =>
     districts.find((d) => d.slug === slug)?.nameBn ?? slug;
   const districtFilterOptions: { id: District | "all"; label: string }[] = [
@@ -247,13 +261,13 @@ export default function MarketScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-neutral-200 bg-white px-5 py-4">
+      <View className="border-b border-border bg-white px-5 py-3.5">
         <AppText variant="title">বাজার</AppText>
-        <AppText variant="caption" className="mt-1">
+        <AppText variant="caption" className="mt-0.5">
           দাম, বাজার ও সরাসরি বিক্রির তথ্য
         </AppText>
         <SegmentedTabs
-          className="mt-4"
+          className="mt-3"
           options={TABS}
           value={tab}
           onChange={setTab}
@@ -262,8 +276,10 @@ export default function MarketScreen() {
 
       <ScrollView
         className="flex-1"
-        contentContainerClassName="gap-4 px-5 py-5"
+        contentContainerClassName="gap-4 px-5 py-5 pb-24"
         keyboardShouldPersistTaps="handled"
+        refreshControl={refreshControl}
+        showsVerticalScrollIndicator={false}
       >
         {tab === "price" ? (
           <>

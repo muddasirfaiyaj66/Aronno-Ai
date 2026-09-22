@@ -12,10 +12,13 @@ export class ApiError extends HttpException {
 }
 
 export const Errors = {
-  validation: (details?: unknown) =>
+  validation: (
+    details?: unknown,
+    message = 'অবৈধ তথ্য দেওয়া হয়েছে।',
+  ) =>
     new ApiError(
       'VALIDATION_ERROR',
-      'অবৈধ তথ্য দেওয়া হয়েছে।',
+      message,
       HttpStatus.BAD_REQUEST,
       details,
     ),

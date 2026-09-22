@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +16,7 @@ import { useLocale } from "@/context/locale";
 import { useAppSelector } from "@/store";
 import { colors } from "@/constants/theme";
 import { useFarmLocation } from "@/hooks/useFarmLocation";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import {
   useGetHistoryQuery,
   useGetWeatherQuery,
@@ -25,11 +26,24 @@ export default function HomeScreen() {
   const router = useRouter();
   const { t } = useLocale();
   const name = useAppSelector((s) => s.auth.user?.displayName);
-  const { data: history } = useGetHistoryQuery();
+  const { data: history, refetch: refetchHistory } = useGetHistoryQuery();
   const location = useFarmLocation();
-  const { data: weather } = useGetWeatherQuery(location.coords ?? {}, {
-    skip: location.status === "loading",
-  });
+  const { data: weather, refetch: refetchWeather } = useGetWeatherQuery(
+    location.coords ?? {},
+    {
+      skip: location.status === "loading",
+    },
+  );
+
+  const refreshHome = useCallback(async () => {
+    await Promise.all([
+      refetchHistory(),
+      location.coords ? refetchWeather() : Promise.resolve(),
+      location.refresh(false),
+    ]);
+  }, [refetchHistory, refetchWeather, location.coords, location.refresh]);
+
+  const { refreshControl } = usePullToRefresh(refreshHome);
 
   const insights = useMemo(() => {
     const items: InsightItem[] = [];
@@ -71,6 +85,7 @@ export default function HomeScreen() {
         className="flex-1"
         contentContainerClassName="pb-20"
         showsVerticalScrollIndicator={false}
+        refreshControl={refreshControl}
       >
         <View className="flex-row items-center justify-between px-5 pt-2 pb-4">
           <View className="flex-1 pr-3">

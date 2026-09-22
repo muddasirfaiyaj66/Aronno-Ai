@@ -18,6 +18,8 @@ export type DiseaseHistoryEntry = HistoryEntryBase & {
   severity: SeverityLevel;
   confidence: number;
   imageUrl: string;
+  /** Server diagnosis id when known (history event sourceId). */
+  sourceId?: string;
 };
 
 export type YieldTrend = "up" | "down" | "flat";

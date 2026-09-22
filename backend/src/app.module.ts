@@ -31,6 +31,7 @@ import { CsrfGuard } from './common/guards/csrf.guard';
 import { ApiExceptionFilter } from './common/filters/api-exception.filter';
 import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor';
 import { WeatherModule } from './weather/weather.module';
+import { SyncModule } from './sync/sync.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { WeatherModule } from './weather/weather.module';
     LoansModule,
     HealthModule,
     WeatherModule,
+    SyncModule,
   ],
   controllers: [AppController],
   providers: [

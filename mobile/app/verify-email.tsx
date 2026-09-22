@@ -6,10 +6,10 @@ import { AuthScaffold } from "@/components/auth/AuthScaffold";
 import { AppText, FieldInput, PrimaryButton, SecondaryButton } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import {
-  getApiError,
   useResendVerificationMutation,
   useVerifyEmailMutation,
 } from "@/services/api";
+import { userFacingError } from "@/lib/userFacingError";
 import { sanitizeOtpInput } from "@/utils/otp";
 
 function normalizeEmail(email: string) {
@@ -30,7 +30,11 @@ export default function VerifyEmailScreen() {
   const [resend, { isLoading: resending, error: resendError }] =
     useResendVerificationMutation();
 
-  const message = getApiError(error).message ?? getApiError(resendError).message;
+  const message = error
+    ? userFacingError(error, "auth", "কোড যাচাই করা যায়নি।")
+    : resendError
+      ? userFacingError(resendError, "auth", "কোড পাঠানো যায়নি।")
+      : undefined;
   const emailLocked = lockedEmail.length > 0;
 
   useEffect(() => {

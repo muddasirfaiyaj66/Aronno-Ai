@@ -11,7 +11,23 @@ ml/data/raw/**
 ml/data/processed/**
 !ml/data/processed/.gitkeep
 
+# Training outputs & base YOLO weights — too large for GitHub (100MB limit)
+ml/artifacts/**
+!ml/artifacts/README.md
+!ml/artifacts/.gitkeep
+ml/**/runs/
+ml/**/weights/
+ml/calibration_*.npy
+*.npy
+ml/yolov8n.pt
+ml/yolo11n.pt
+ml/tool_detector/yolov8n.pt
+ml/tool_detector/_data_resolved.yaml
+**/labels.cache
 # Do not commit large ONNX / TFLite / GGUF binaries at repo root
 *.onnx
 *.gguf
 *.tar.bz2
+
+# One-off local scripts
+mobile/scripts/_patch_app_json_icons.py

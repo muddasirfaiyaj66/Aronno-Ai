@@ -33,10 +33,10 @@ export function IconPickerRow({
             accessibilityRole="button"
             accessibilityState={{ selected }}
             accessibilityLabel={option.label}
-            className={`min-h-touch w-[47%] items-center gap-2 rounded-3xl border px-3 py-4 ${
+            className={`min-h-touch w-[47%] items-center gap-2 rounded-2xl border px-3 py-3.5 ${
               selected
                 ? "border-primary bg-secondary"
-                : "border-neutral-200 bg-neutral"
+                : "border-border bg-neutral"
             }`}
           >
             <View className="h-11 w-11 items-center justify-center rounded-2xl bg-white">

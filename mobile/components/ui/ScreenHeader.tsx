@@ -11,22 +11,25 @@ export type ScreenHeaderProps = {
 
 export function ScreenHeader({ title, subtitle, onBack }: ScreenHeaderProps) {
   return (
-    <View className="border-b border-neutral-200 bg-white px-5 pb-4 pt-3">
-      <View className="flex-row items-start gap-3">
+    <View className="border-b border-border bg-white px-5 pb-3.5 pt-2">
+      <View className="flex-row items-center gap-3">
         {onBack ? (
           <Pressable
             onPress={onBack}
             accessibilityRole="button"
             accessibilityLabel="ফিরে যান"
-            className="mt-0.5 h-12 w-12 items-center justify-center rounded-full bg-neutral"
+            className="h-11 w-11 items-center justify-center rounded-full bg-neutral"
+            hitSlop={6}
           >
-            <Ionicons name="chevron-back" size={24} color={colors.ink} />
+            <Ionicons name="chevron-back" size={22} color={colors.ink} />
           </Pressable>
         ) : null}
-        <View className="flex-1">
-          <AppText variant="title">{title}</AppText>
+        <View className="min-w-0 flex-1">
+          <AppText variant="title" numberOfLines={1}>
+            {title}
+          </AppText>
           {subtitle ? (
-            <AppText variant="caption" className="mt-1 leading-6">
+            <AppText variant="caption" className="mt-0.5 leading-5" numberOfLines={2}>
               {subtitle}
             </AppText>
           ) : null}

@@ -96,6 +96,7 @@ model User {
   listings          Listing[]
   loanApplications  LoanApplication[]
   emailTokens       EmailToken[]
+  chatTurns         ChatTurn[]
 
   @@index([googleSub])
 }
@@ -159,6 +160,8 @@ model AuditLog {
 enum DiagnosisSource {
   photo
   voice
+  offline_photo
+  offline_voice
 }
 
 enum Severity {
@@ -178,6 +181,9 @@ model Diagnosis {
   diseaseNameEn   String
   confidence      Int
   severity        Severity
+  clientLocalId   String?         @unique
+  offlineLabelId  String?
+  verifiedBn      String?
   createdAt       DateTime        @default(now())
 
   user           User            @relation(fields: [userId], references: [id])
@@ -201,6 +207,23 @@ model HistoryEvent {
   user       User        @relation(fields: [userId], references: [id])
 
   @@index([userId, occurredAt])
+}
+
+enum ChatRole {
+  user
+  assistant
+}
+
+model ChatTurn {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String   @db.ObjectId
+  clientLocalId  String?  @unique
+  role           ChatRole
+  textBn         String
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
 }
 
 // --- Sprint 2: treatment + cost ---

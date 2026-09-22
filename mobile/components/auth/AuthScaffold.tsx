@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "@/components/ui/AppText";
 import { colors } from "@/constants/theme";
 
@@ -17,7 +17,12 @@ export type AuthScaffoldProps = {
   footer?: ReactNode;
 };
 
-export function AuthScaffold({ title, subtitle, children, footer }: AuthScaffoldProps) {
+export function AuthScaffold({
+  title,
+  subtitle,
+  children,
+  footer,
+}: AuthScaffoldProps) {
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top", "bottom"]}>
       <KeyboardAvoidingView
@@ -32,17 +37,20 @@ export function AuthScaffold({ title, subtitle, children, footer }: AuthScaffold
         >
           <View className="mb-8 items-center">
             <View
-              className="h-[68px] w-[68px] items-center justify-center rounded-[22px]"
               style={{
-                backgroundColor: colors.primary,
                 shadowColor: colors.primary,
                 shadowOpacity: 0.28,
                 shadowRadius: 16,
                 shadowOffset: { width: 0, height: 8 },
                 elevation: 6,
+                borderRadius: 22,
               }}
             >
-              <Ionicons name="leaf" size={32} color={colors.white} />
+              <Image
+                source={require("@/assets/images/icon.png")}
+                accessibilityLabel="আরণ্য"
+                style={{ height: 72, width: 72, borderRadius: 22 }}
+              />
             </View>
             <AppText
               variant="caption"
@@ -53,13 +61,16 @@ export function AuthScaffold({ title, subtitle, children, footer }: AuthScaffold
             <AppText variant="title" className="mt-2 text-center">
               {title}
             </AppText>
-            <AppText variant="body" className="mt-2 max-w-[320px] text-center leading-7 text-muted">
+            <AppText
+              variant="body"
+              className="mt-2 max-w-[320px] text-center leading-7 text-muted"
+            >
               {subtitle}
             </AppText>
           </View>
 
           <View
-            className="rounded-[28px] border border-neutral-200 bg-white px-5 py-6"
+            className="rounded-[28px] border border-border bg-white px-5 py-6"
             style={{
               shadowColor: colors.ink,
               shadowOpacity: 0.06,

@@ -17,6 +17,8 @@ import {
   isLlmReady,
 } from "@/lib/modelManager/llmEngine";
 import { isSTTReady } from "@/lib/offlineVoice/sttEngine";
+import { listChatTurns } from "@/lib/offlineDb/queries";
+import { userFacingError } from "@/lib/userFacingError";
 
 type Bubble = {
   id: string;
@@ -54,6 +56,20 @@ export default function AssistantScreen() {
 
   useEffect(() => {
     void refreshLlm();
+    void listChatTurns(60)
+      .then((turns) => {
+        if (!turns.length) return;
+        setBubbles((prev) => {
+          const welcome = prev.filter((b) => b.role === "system");
+          const restored: Bubble[] = turns.map((t) => ({
+            id: t.localId,
+            role: t.role,
+            text: t.textBn,
+          }));
+          return [...welcome, ...restored];
+        });
+      })
+      .catch(() => undefined);
     return () => {
       stopRef.current?.();
     };
@@ -103,11 +119,8 @@ export default function AssistantScreen() {
         );
       },
       onDone: () => setGenerating(false),
-      onError: () => {
-        appendBubble(
-          "system",
-          "উত্তর তৈরি করা যায়নি। মডেল চালু আছে কিনা দেখুন।",
-        );
+      onError: (err) => {
+        appendBubble("system", userFacingError(err, "chat"));
         setGenerating(false);
       },
     });
@@ -120,7 +133,7 @@ export default function AssistantScreen() {
     if (!sttReady) {
       appendBubble(
         "system",
-        "অফলাইন কণ্ঠ মডেল নেই — নিচে লিখে পাঠান, অথবা মডেল ম্যানেজার থেকে STT ডাউনলোড করুন।",
+        "অফলাইন কণ্ঠ মডেল নেই — নিচে লিখে পাঠান, অথবা মডেল ম্যানেজার থেকে কণ্ঠ মডেল ডাউনলোড করুন।",
       );
       return;
     }
@@ -155,11 +168,8 @@ export default function AssistantScreen() {
         setGenerating(false);
         stopRef.current = null;
       },
-      onError: () => {
-        appendBubble(
-          "system",
-          "উত্তর তৈরি করা যায়নি। মডেল চালু আছে কিনা দেখুন।",
-        );
+      onError: (err) => {
+        appendBubble("system", userFacingError(err, "chat"));
         setListening(false);
         setGenerating(false);
       },

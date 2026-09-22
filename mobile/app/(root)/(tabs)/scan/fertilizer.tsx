@@ -15,9 +15,9 @@ import { colors } from "@/constants/theme";
 import type { CropType } from "@/types/treatment";
 import type { FertilizerAdvice, GrowthStage, SoilColor, SoilMoisture } from "@/types/fertilizer";
 import {
-  getApiError,
   useRecommendFertilizerMutation,
 } from "@/services/api";
+import { userFacingError } from "@/lib/userFacingError";
 
 const CROP_OPTIONS: {
   id: CropType;
@@ -240,7 +240,7 @@ export default function FertilizerRecommendationScreen() {
             } catch (err) {
               setShowResult(false);
               setAiError(
-                getApiError(err).message ?? "AI সেবা এখন কাজ করছে না। আবার চেষ্টা করুন।",
+                userFacingError(err, "generic", "সার সুপারিশ করা যায়নি। আবার চেষ্টা করুন।"),
               );
             }
           }}

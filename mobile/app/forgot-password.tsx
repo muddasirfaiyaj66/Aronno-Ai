@@ -3,13 +3,16 @@ import { Pressable, View } from "react-native";
 import { Link, useRouter, type Href } from "expo-router";
 import { AuthScaffold } from "@/components/auth/AuthScaffold";
 import { AppText, FieldInput, PrimaryButton } from "@/components/ui";
-import { getApiError, useForgotPasswordMutation } from "@/services/api";
+import { useForgotPasswordMutation } from "@/services/api";
+import { userFacingError } from "@/lib/userFacingError";
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [forgot, { isLoading, error }] = useForgotPasswordMutation();
-  const message = getApiError(error).message;
+  const message = error
+    ? userFacingError(error, "auth", "কোড পাঠানো যায়নি। আবার চেষ্টা করুন।")
+    : undefined;
 
   const handleSubmit = async () => {
     try {

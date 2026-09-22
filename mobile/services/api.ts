@@ -41,14 +41,38 @@ function unwrap<T>(raw: unknown): T {
 
 export function getApiError(error: unknown): { code?: string; message?: string } {
   if (!error || typeof error !== "object") return {};
+
+  // RTK Query FetchBaseQueryError with envelope body
   if ("data" in error) {
-    const data = (error as { data?: { error?: { code?: string; message?: string } } })
-      .data;
-    if (data?.error) return data.error;
+    const data = (error as { data?: unknown }).data;
+    if (data && typeof data === "object") {
+      const env = data as {
+        error?: { code?: string; message?: string };
+        message?: string;
+      };
+      if (env.error?.message || env.error?.code) {
+        return {
+          code: env.error.code,
+          message: env.error.message,
+        };
+      }
+      if (typeof env.message === "string") return { message: env.message };
+    }
   }
+
+  // RTK CUSTOM_ERROR / SerializedError / FETCH_ERROR string
+  if ("error" in error && typeof (error as { error: unknown }).error === "string") {
+    const status = (error as { status?: unknown }).status;
+    if (status === "FETCH_ERROR" || status === "TIMEOUT_ERROR") {
+      return { code: "NETWORK", message: (error as { error: string }).error };
+    }
+    return { message: (error as { error: string }).error };
+  }
+
   if ("message" in error && typeof (error as { message: unknown }).message === "string") {
     return { message: (error as { message: string }).message };
   }
+
   return {};
 }
 
@@ -284,11 +308,18 @@ export const api = createApi({
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["CostEstimate"],
     }),
-    getHistory: builder.query<HistoryEntry[], { kind?: HistoryEntryKind | "all" } | void>({
+    getHistory: builder.query<
+      HistoryEntry[],
+      { kind?: HistoryEntryKind | "all"; cursor?: string } | void
+    >({
       query: (arg) => {
+        const p = new URLSearchParams();
         const kind = arg && "kind" in arg ? arg.kind : undefined;
-        const q = kind && kind !== "all" ? `?kind=${kind}` : "";
-        return `/history${q}`;
+        const cursor = arg && "cursor" in arg ? arg.cursor : undefined;
+        if (kind && kind !== "all") p.set("kind", kind);
+        if (cursor) p.set("cursor", cursor);
+        const q = p.toString();
+        return `/history${q ? `?${q}` : ""}`;
       },
       transformResponse: (r) => unwrap(r),
       providesTags: ["History"],
@@ -297,6 +328,67 @@ export const api = createApi({
       query: (id) => `/history/${id}`,
       transformResponse: (r) => unwrap(r),
       providesTags: (_r, _e, id) => [{ type: "History", id }],
+    }),
+    syncOffline: builder.mutation<
+      {
+        diagnoses: { clientLocalId: string; serverId: string }[];
+        tools: { clientLocalId: string; serverId: string }[];
+        chatTurns: { clientLocalId: string; serverId: string }[];
+      },
+      {
+        diagnoses: {
+          clientLocalId: string;
+          labelId?: string;
+          diseaseNameBn: string;
+          diseaseNameEn: string;
+          confidence: number;
+          severity: string;
+          verifiedBn?: string | null;
+          source?: string;
+          imageObjectKey?: string;
+        }[];
+        tools: {
+          clientLocalId: string;
+          labelId?: string;
+          toolNameBn: string;
+          toolNameEn: string;
+          reasonBn?: string;
+          verifiedBn?: string | null;
+          imageObjectKey?: string;
+        }[];
+        chatTurns: {
+          clientLocalId: string;
+          role: "user" | "assistant";
+          textBn: string;
+          createdAt?: string;
+        }[];
+      }
+    >({
+      query: (body) => ({ url: "/sync/offline", method: "POST", body }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["History"],
+    }),
+    syncPullChat: builder.query<
+      {
+        items: {
+          id: string;
+          role: "user" | "assistant";
+          textBn: string;
+          createdAt: string;
+          clientLocalId?: string | null;
+        }[];
+        nextCursor?: string;
+      },
+      { cursor?: string; limit?: number } | void
+    >({
+      query: (arg) => {
+        const p = new URLSearchParams();
+        if (arg?.cursor) p.set("cursor", arg.cursor);
+        if (arg?.limit) p.set("limit", String(arg.limit));
+        const q = p.toString();
+        return `/sync/chat${q ? `?${q}` : ""}`;
+      },
+      transformResponse: (r) => unwrap(r),
     }),
     createReport: builder.mutation<
       { id: string; diagnosis: DiagnosisResult; treatment: TreatmentPlan },
@@ -506,6 +598,8 @@ export const {
   useCreateCostEstimateMutation,
   useGetHistoryQuery,
   useGetHistoryEntryQuery,
+  useSyncOfflineMutation,
+  useLazySyncPullChatQuery,
   useCreateReportMutation,
   useDownloadReportPdfMutation,
   useSpeakMutation,

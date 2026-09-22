@@ -30,7 +30,10 @@ export class UsersService {
         })
       : undefined;
     if (input.professionSlug && !profession)
-      throw Errors.validation({ professionSlug: 'unknown' });
+      throw Errors.validation(
+        { professionSlug: 'unknown' },
+        'পেশা সঠিক নয়। তালিকা থেকে বেছে নিন।',
+      );
 
     const district = input.districtSlug
       ? await this.prisma.district.findUnique({
@@ -38,7 +41,10 @@ export class UsersService {
         })
       : undefined;
     if (input.districtSlug && !district)
-      throw Errors.validation({ districtSlug: 'unknown' });
+      throw Errors.validation(
+        { districtSlug: 'unknown' },
+        'জেলা সঠিক নয়। তালিকা থেকে বেছে নিন।',
+      );
 
     await this.prisma.user.update({
       where: { id },

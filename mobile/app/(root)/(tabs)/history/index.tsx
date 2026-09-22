@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Image, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,9 +11,17 @@ import {
   SeverityBadge,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
+import { useGetHistoryQuery } from "@/services/api";
 import {
-  useGetHistoryQuery,
-} from "@/services/api";
+  countPendingUploads,
+  listLocalHistory,
+} from "@/lib/offlineDb/queries";
+import {
+  requestSyncSoon,
+  subscribeSyncStatus,
+} from "@/lib/offlineDb/syncEngine";
+import { useIsOnline } from "@/hooks/useIsOnline";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import type {
   DiseaseHistoryEntry,
   HistoryEntry,
@@ -40,7 +48,7 @@ function RowShell({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      className="flex-row items-center gap-3 rounded-2xl bg-white p-3"
+      className="flex-row items-center gap-3 rounded-2xl border border-border bg-white p-3 active:bg-neutral"
     >
       {children}
     </Pressable>
@@ -166,34 +174,83 @@ function TimelineItem({
 
 export default function CropHealthHistoryScreen() {
   const router = useRouter();
+  const online = useIsOnline();
   const [filter, setFilter] = useState<FilterValue>("all");
-  const { data = [] } = useGetHistoryQuery(
+  const [localEntries, setLocalEntries] = useState<HistoryEntry[]>([]);
+  const [pending, setPending] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+
+  const { data: remote = [], refetch: refetchRemote } = useGetHistoryQuery(
     filter === "all" ? undefined : { kind: filter },
+    { skip: !online },
   );
 
-  const sortedEntries = useMemo(
-    () => [...data].sort((a, b) => b.date.localeCompare(a.date)),
-    [data],
-  );
+  const reloadLocal = useCallback(async () => {
+    try {
+      setLocalEntries(await listLocalHistory());
+      setPending(await countPendingUploads());
+    } catch {
+      setLocalEntries([]);
+      setPending(0);
+    }
+  }, []);
+
+  const refreshHistory = useCallback(async () => {
+    await reloadLocal();
+    if (online) {
+      requestSyncSoon(0);
+      await refetchRemote();
+      await reloadLocal();
+    }
+  }, [online, refetchRemote, reloadLocal]);
+
+  const { refreshControl } = usePullToRefresh(refreshHistory);
+
+  useEffect(() => {
+    void reloadLocal();
+    return subscribeSyncStatus((s) => {
+      setPending(s.pending);
+      setSyncing(s.syncing);
+      void listLocalHistory().then(setLocalEntries).catch(() => undefined);
+    });
+  }, [reloadLocal]);
+
+  useEffect(() => {
+    if (online) requestSyncSoon(500);
+  }, [online]);
+
+  const merged = useMemo(() => {
+    const byKey = new Map<string, HistoryEntry>();
+    for (const e of localEntries) byKey.set(e.id, e);
+    for (const e of remote) {
+      if (!byKey.has(e.id)) byKey.set(e.id, e);
+    }
+    return [...byKey.values()].sort((a, b) => b.date.localeCompare(a.date));
+  }, [localEntries, remote]);
 
   const filteredEntries = useMemo(
     () =>
       (filter === "all"
-        ? sortedEntries
-        : sortedEntries.filter((entry) => entry.kind === filter)
+        ? merged
+        : merged.filter((entry) => entry.kind === filter)
       ).filter((entry) => entry.kind === "disease"),
-    [sortedEntries, filter],
+    [merged, filter],
   );
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-neutral-200 bg-white px-5 py-4">
+      <View className="border-b border-border bg-white px-5 py-3.5">
         <AppText variant="title">ইতিহাস</AppText>
-        <AppText variant="caption" className="mt-1">
+        <AppText variant="caption" className="mt-0.5">
           স্ক্যান ও রোগ শনাক্তের রেকর্ড
+          {pending > 0
+            ? ` · অপেক্ষমাণ ${pending}${syncing ? " (সিঙ্ক হচ্ছে…)" : ""}`
+            : syncing
+              ? " · সিঙ্ক হচ্ছে…"
+              : ""}
         </AppText>
         <SegmentedTabs
-          className="mt-4"
+          className="mt-3"
           options={FILTERS}
           value={filter}
           onChange={setFilter}
@@ -201,17 +258,25 @@ export default function CropHealthHistoryScreen() {
       </View>
 
       {filteredEntries.length === 0 ? (
-        <EmptyState
-          icon={<Ionicons name="time" size={32} color={colors.primary} />}
-          message="এই বিভাগে এখনো কোনো ইতিহাস নেই।"
-          ctaLabel="সব দেখুন"
-          onCta={() => setFilter("all")}
-        />
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="flex-grow"
+          refreshControl={refreshControl}
+          showsVerticalScrollIndicator={false}
+        >
+          <EmptyState
+            icon={<Ionicons name="time" size={32} color={colors.primary} />}
+            message="এই বিভাগে এখনো কোনো ইতিহাস নেই।"
+            ctaLabel="সব দেখুন"
+            onCta={() => setFilter("all")}
+          />
+        </ScrollView>
       ) : (
         <ScrollView
           className="flex-1"
-          contentContainerClassName="px-5 py-5"
+          contentContainerClassName="px-5 py-5 pb-24"
           showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
         >
           {filteredEntries.map((entry, index) => (
             <TimelineItem

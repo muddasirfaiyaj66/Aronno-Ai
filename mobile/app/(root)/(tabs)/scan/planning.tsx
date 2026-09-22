@@ -15,10 +15,10 @@ import {
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import {
-  getApiError,
   useGenerateCropPlanMutation,
   useGetLatestCropPlanQuery,
 } from "@/services/api";
+import { userFacingError } from "@/lib/userFacingError";
 import { useFarmLocation } from "@/hooks/useFarmLocation";
 
 export default function CropPlanningScreen() {
@@ -33,9 +33,7 @@ export default function CropPlanningScreen() {
     try {
       await generate(location.coords ?? {}).unwrap();
     } catch (err) {
-      setPlanError(
-        getApiError(err).message ?? "পরিকল্পনা তৈরি করা যায়নি। আবার চেষ্টা করুন।",
-      );
+      setPlanError(userFacingError(err, "generic", "পরিকল্পনা তৈরি করা যায়নি। আবার চেষ্টা করুন।"));
     }
   };
 

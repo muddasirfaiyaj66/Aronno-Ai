@@ -14,14 +14,15 @@ IMG_SIZE = tuple(CFG["img_size"])
 
 
 def main() -> None:
-    model = tf.keras.models.load_model(ART / "disease_classifier_saved")
+    model = tf.keras.models.load_model(ART / "disease_classifier.keras")
 
     def rep_data():
+        # Model already includes mobilenet_v3.preprocess_input — feed raw 0–255 images.
         val_ds = tf.keras.utils.image_dataset_from_directory(
             str(DATA_DIR / "val"), image_size=IMG_SIZE, batch_size=1
         )
         for images, _ in val_ds.take(200):
-            yield [tf.keras.applications.mobilenet_v3.preprocess_input(images)]
+            yield [images]
 
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]

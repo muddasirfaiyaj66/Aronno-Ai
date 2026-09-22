@@ -13,7 +13,8 @@ import { useLocale } from "@/context/locale";
 import { useIsOnline } from "@/hooks/useIsOnline";
 import { mimeFromAudioUri, readFileBase64 } from "@/lib/readFileBase64";
 import { enablePlaybackAudio, SPEECH_RECORDING } from "@/lib/speechRecording";
-import { getApiError, useTranscribeMutation } from "@/services/api";
+import { userFacingError } from "@/lib/userFacingError";
+import { useTranscribeMutation } from "@/services/api";
 import { isSTTReady, startListening } from "@/lib/offlineVoice/sttEngine";
 import { logMetric } from "@/lib/offline/metrics";
 
@@ -56,7 +57,7 @@ export default function VoiceCaptureScreen() {
     if (!online && !offlineStt && mode === "voice") {
       setMode("text");
       setError(
-        "অফলাইনে কণ্ঠ মডেল নেই — লিখে জানান, অথবা মডেল ম্যানেজার থেকে বাংলা STT ডাউনলোড করুন।",
+        "অফলাইনে কণ্ঠ মডেল নেই — লিখে জানান, অথবা মডেল ম্যানেজার থেকে বাংলা কণ্ঠ মডেল ডাউনলোড করুন।",
       );
     }
   }, [online, offlineStt, mode]);
@@ -127,7 +128,7 @@ export default function VoiceCaptureScreen() {
         }
       } catch (err) {
         setMode("text");
-        setError(getApiError(err).message ?? "কথা লেখা যায়নি। এখানে লিখে দিন।");
+        setError(userFacingError(err, "generic", "কথা লেখা যায়নি। এখানে লিখে দিন।"));
       } finally {
         setTranscribing(false);
       }

@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { Image, Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -62,9 +62,16 @@ export default function OnboardingScreen() {
         style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 36 }}
       >
         <View className="flex-row items-center justify-between">
-          <AppText variant="caption" className="font-bengali-bold text-leaf-300">
-            আরণ্য
-          </AppText>
+          <View className="flex-row items-center gap-2.5">
+            <Image
+              source={require("@/assets/images/icon.png")}
+              accessibilityLabel="আরণ্য"
+              style={{ height: 36, width: 36, borderRadius: 10 }}
+            />
+            <AppText variant="caption" className="font-bengali-bold text-leaf-300">
+              আরণ্য
+            </AppText>
+          </View>
           <Pressable
             onPress={finishOnboarding}
             accessibilityRole="button"

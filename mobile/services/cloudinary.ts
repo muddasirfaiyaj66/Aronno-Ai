@@ -7,7 +7,7 @@ export async function uploadImageToCloudinary(localUri: string): Promise<string>
   }
   if (!CLOUD_NAME || !UPLOAD_PRESET) {
     throw new Error(
-      "Cloudinary সেট করা নেই। EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME ও UPLOAD_PRESET দিন।",
+      "ছবি আপলোড সেটআপ সম্পূর্ণ নয়। অ্যাপে ইন্টারনেট কনফিগ ঠিক করুন।",
     );
   }
 
@@ -26,7 +26,7 @@ export async function uploadImageToCloudinary(localUri: string): Promise<string>
   );
   const json = (await res.json()) as { secure_url?: string; error?: { message?: string } };
   if (!res.ok || typeof json.secure_url !== "string") {
-    throw new Error(json.error?.message ?? "ছবি আপলোড করা যায়নি।");
+    throw new Error("ছবি আপলোড করা যায়নি। ইন্টারনেট দেখে আবার চেষ্টা করুন।");
   }
   return json.secure_url;
 }

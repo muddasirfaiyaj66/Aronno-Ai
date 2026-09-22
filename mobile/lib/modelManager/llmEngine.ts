@@ -88,9 +88,7 @@ export async function streamLlmReply(
   onToken: (t: string) => void,
 ): Promise<void> {
   if (!ctx) {
-    throw new Error(
-      "no LLM loaded — open Model Manager and download Gemma first",
-    );
+    throw new Error("llm-not-ready");
   }
   const end = markStart("llm.completion");
   await ctx.completion(

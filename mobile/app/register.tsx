@@ -7,6 +7,8 @@ import { AuthScaffold } from "@/components/auth/AuthScaffold";
 import { AppText, FieldInput, IconPickerRow, PrimaryButton } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import { useGetProfessionsQuery, useRegisterMutation } from "@/services/api";
+import { userFacingError } from "@/lib/userFacingError";
+import { validateRegisterBn } from "@/lib/authValidation";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -26,17 +28,25 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [professionSlug, setProfessionSlug] = useState<string | null>(null);
-  const [register, { isLoading, error }] = useRegisterMutation();
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [register, { isLoading, error, reset: resetMutation }] = useRegisterMutation();
 
   const message =
-    error && "data" in error
-      ? ((error.data as { error?: { message?: string } })?.error?.message ??
-        "নিবন্ধন করা যায়নি।")
-      : error
-        ? "নিবন্ধন করা যায়নি।"
-        : null;
+    localError ??
+    (error ? userFacingError(error, "auth", "নিবন্ধন করা যায়নি।") : null);
 
   const handleSubmit = async () => {
+    const clientMsg = validateRegisterBn({
+      displayName,
+      email,
+      password,
+    });
+    if (clientMsg) {
+      setLocalError(clientMsg);
+      resetMutation();
+      return;
+    }
+    setLocalError(null);
     try {
       await register({
         email: email.trim(),
@@ -49,7 +59,7 @@ export default function RegisterScreen() {
         params: { email: email.trim() },
       } as unknown as Href);
     } catch {
-      // error banner
+      // error banner from RTK
     }
   };
 
@@ -77,7 +87,10 @@ export default function RegisterScreen() {
         <FieldInput
           label="আপনার নাম"
           value={displayName}
-          onChangeText={setDisplayName}
+          onChangeText={(t) => {
+            setDisplayName(t);
+            setLocalError(null);
+          }}
           autoComplete="name"
           textContentType="name"
           placeholder="যেমন: করিম মিয়া"
@@ -85,7 +98,10 @@ export default function RegisterScreen() {
         <FieldInput
           label="ইমেইল"
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(t) => {
+            setEmail(t);
+            setLocalError(null);
+          }}
           autoCapitalize="none"
           autoComplete="email"
           keyboardType="email-address"
@@ -95,7 +111,10 @@ export default function RegisterScreen() {
         <FieldInput
           label="পাসওয়ার্ড"
           value={password}
-          onChangeText={setPassword}
+          onChangeText={(t) => {
+            setPassword(t);
+            setLocalError(null);
+          }}
           secureTextEntry
           autoComplete="new-password"
           textContentType="newPassword"

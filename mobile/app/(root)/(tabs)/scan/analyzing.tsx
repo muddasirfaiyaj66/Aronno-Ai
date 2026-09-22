@@ -4,13 +4,13 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { AIGeneratingShimmer, AppText, RetryCard } from "@/components/ui";
 import { uploadImageToCloudinary } from "@/services/cloudinary";
 import {
-  getApiError,
   useCreatePhotoDiagnosisMutation,
   useCreateVoiceDiagnosisMutation,
   useIdentifyToolPhotoMutation,
   useIdentifyToolVoiceMutation,
   useScanReceiptMutation,
 } from "@/services/api";
+import { userFacingError } from "@/lib/userFacingError";
 import { fetchIsOnline } from "@/hooks/useIsOnline";
 import { classifyLeaf, isDiseaseModelAvailable } from "@/lib/offlineVision/diseaseModel";
 import { detectTool, isToolModelAvailable } from "@/lib/offlineVision/toolModel";
@@ -18,6 +18,14 @@ import {
   matchDiseaseFromTranscript,
   matchToolFromTranscript,
 } from "@/lib/offlineNlu/offlineMatch";
+import { verifyScanResult } from "@/lib/offlineChat/verifyScan";
+import {
+  insertDiagnosis,
+  insertTool,
+  updateDiagnosisVerified,
+} from "@/lib/offlineDb/queries";
+import { requestSyncSoon } from "@/lib/offlineDb/syncEngine";
+import { speakOffline } from "@/lib/offlineVoice/ttsEngine";
 import { logMetric } from "@/lib/offline/metrics";
 import type { DiagnosisResult } from "@/types/diagnosis";
 import type { ToolResult } from "@/types/tools";
@@ -108,12 +116,80 @@ export default function AnalyzingScreen() {
     if (error) return;
     let cancelled = false;
 
+    const finalizeDisease = async (result: DiagnosisResult) => {
+      const labelId =
+        result.id?.replace(/^offline-/, "") ?? result.diseaseNameEn;
+      const row = await insertDiagnosis({
+        labelId,
+        diseaseNameBn: result.diseaseNameBn,
+        diseaseNameEn: result.diseaseNameEn,
+        confidence: result.confidence,
+        severity: result.severity,
+        imageUri: result.imageUrl || params.imageUri || "",
+        verifiedBn: null,
+        source: params.transcript ? "offline_voice" : "offline_photo",
+      });
+      const withLocalId: DiagnosisResult = {
+        ...result,
+        id: row.localId,
+        imageUrl: result.imageUrl || params.imageUri || "",
+      };
+      if (!cancelled) goDiagnosis(router, withLocalId, params.imageUri);
+
+      // Gemma cross-check (non-blocking for navigation)
+      void (async () => {
+        const verified = await verifyScanResult({
+          kind: "disease",
+          labelId,
+          nameBn: result.diseaseNameBn,
+          nameEn: result.diseaseNameEn,
+          confidence: result.confidence,
+        });
+        const note =
+          verified.deepExplanationBn || verified.noteBn || "";
+        if (note) {
+          await updateDiagnosisVerified(row.localId, note).catch(() => undefined);
+          void speakOffline(note.slice(0, 400));
+        }
+        requestSyncSoon();
+      })();
+      requestSyncSoon();
+    };
+
+    const finalizeTool = async (result: ToolResult) => {
+      const labelId = result.id.replace(/^offline-/, "");
+      const row = await insertTool({
+        labelId,
+        toolNameBn: result.toolNameBn,
+        toolNameEn: result.toolNameEn,
+        reasonBn: result.reasonBn,
+        imageUri: params.imageUri ?? "",
+        verifiedBn: null,
+      });
+      if (!cancelled) {
+        goTool(router, { ...result, id: row.localId });
+      }
+      void (async () => {
+        const verified = await verifyScanResult({
+          kind: "tool",
+          labelId,
+          nameBn: result.toolNameBn,
+          nameEn: result.toolNameEn,
+          confidence: 80,
+        });
+        const note = verified.deepExplanationBn || verified.noteBn || "";
+        if (note) void speakOffline(note.slice(0, 400));
+        requestSyncSoon();
+      })();
+      requestSyncSoon();
+    };
+
     const runOfflineDisease = async (): Promise<boolean> => {
       if (params.imageUri && (await isDiseaseModelAvailable())) {
         const result = await classifyLeaf(params.imageUri);
         if (result && !cancelled) {
           logMetric("analyzing.offline.disease.vision");
-          goDiagnosis(router, result, params.imageUri);
+          await finalizeDisease(result);
           return true;
         }
       }
@@ -124,7 +200,7 @@ export default function AnalyzingScreen() {
         );
         if (matched && !cancelled) {
           logMetric("analyzing.offline.disease.kb");
-          goDiagnosis(router, matched, params.imageUri);
+          await finalizeDisease(matched);
           return true;
         }
       }
@@ -136,7 +212,7 @@ export default function AnalyzingScreen() {
         const result = await detectTool(params.imageUri);
         if (result && !cancelled) {
           logMetric("analyzing.offline.tool.vision");
-          goTool(router, result);
+          await finalizeTool(result);
           return true;
         }
       }
@@ -144,7 +220,7 @@ export default function AnalyzingScreen() {
         const matched = matchToolFromTranscript(params.transcript);
         if (matched && !cancelled) {
           logMetric("analyzing.offline.tool.kb");
-          goTool(router, matched);
+          await finalizeTool(matched);
           return true;
         }
       }
@@ -167,16 +243,12 @@ export default function AnalyzingScreen() {
 
         if (!onlineRef.current) {
           if (flow === "receipt") {
-            throw new Error("অফলাইনে রসিদ স্ক্যান এখনো চালু নেই। ইন্টারনেট লাগবে।");
+            throw new Error("OFFLINE_RECEIPT");
           }
           if (flow === "tool") {
-            throw new Error(
-              "অফলাইনে হাতিয়ার শনাক্ত হয়নি। মডেল কপি করুন অথবা নাম বলে/লিখে আবার চেষ্টা করুন।",
-            );
+            throw new Error("OFFLINE_TOOL");
           }
-          throw new Error(
-            "অফলাইনে রোগ শনাক্ত হয়নি। crop_disease_int8.tflite কপি করুন, অথবা রোগের নাম বলে/লিখে চেষ্টা করুন।",
-          );
+          throw new Error("OFFLINE_DISEASE");
         }
 
         if (flow === "tool") {
@@ -213,6 +285,22 @@ export default function AnalyzingScreen() {
               imageUrl: await uploadImageToCloudinary(params.imageUri!),
             }).unwrap();
         if (cancelled) return;
+        try {
+          await insertDiagnosis({
+            labelId: result.diseaseNameEn || result.diseaseNameBn,
+            diseaseNameBn: result.diseaseNameBn,
+            diseaseNameEn: result.diseaseNameEn,
+            confidence: result.confidence,
+            severity: result.severity,
+            imageUri: result.imageUrl || params.imageUri || "",
+            verifiedBn: null,
+            source: params.transcript ? "voice" : "photo",
+            syncStatus: "synced",
+            localId: result.id,
+          });
+        } catch {
+          // ignore local mirror failure
+        }
         goDiagnosis(router, result, params.imageUri);
       } catch (err) {
         if (cancelled) return;
@@ -226,11 +314,13 @@ export default function AnalyzingScreen() {
             // fall through
           }
         }
-        setErrorMessage(
-          err instanceof Error
-            ? err.message
-            : getApiError(err).message ?? "বিশ্লেষণ করা যায়নি। আবার চেষ্টা করুন।",
-        );
+        const ctx =
+          flow === "tool"
+            ? "analyze-tool"
+            : flow === "receipt"
+              ? "analyze-receipt"
+              : "analyze-disease";
+        setErrorMessage(userFacingError(err, ctx));
         setError(true);
       }
     };

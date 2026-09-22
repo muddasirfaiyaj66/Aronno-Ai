@@ -17,7 +17,7 @@ IMG_SIZE = tuple(CFG["img_size"])
 
 
 def main() -> None:
-    model = tf.keras.models.load_model(ART / "disease_classifier_saved")
+    model = tf.keras.models.load_model(ART / "disease_classifier.keras")
     test_ds = tf.keras.utils.image_dataset_from_directory(
         str(DATA_DIR / "test"), image_size=IMG_SIZE, batch_size=32, shuffle=False
     )

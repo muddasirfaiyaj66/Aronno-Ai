@@ -60,8 +60,15 @@ def main() -> None:
         loss="sparse_categorical_crossentropy",
         metrics=["accuracy"],
     )
+    # Keras 3 requires a .keras (or .h5) extension — plain directories are rejected.
+    saved = ART / "disease_classifier.keras"
     callbacks = [
-        tf.keras.callbacks.EarlyStopping(patience=4, restore_best_weights=True)
+        tf.keras.callbacks.EarlyStopping(patience=4, restore_best_weights=True),
+        tf.keras.callbacks.ModelCheckpoint(
+            filepath=str(saved),
+            monitor="val_accuracy",
+            save_best_only=True,
+        ),
     ]
     model.fit(
         train_ds,
@@ -85,7 +92,6 @@ def main() -> None:
         callbacks=callbacks,
     )
 
-    saved = ART / "disease_classifier_saved"
     model.save(saved)
     (ART / "class_names.txt").write_text("\n".join(class_names), encoding="utf-8")
     print("Saved:", saved)

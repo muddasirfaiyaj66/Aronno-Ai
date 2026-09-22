@@ -8,12 +8,25 @@ export function getKnowledgeBase() {
   return kb;
 }
 
+/** Normalize PlantVillage / YOLO labels for lookup (underscores, case). */
+function normId(id: string) {
+  return id.trim().toLowerCase().replace(/_+/g, "_");
+}
+
 export function findDiseaseById(id: string): KbDisease | undefined {
-  return kb.diseases.find((d) => d.id === id);
+  const key = normId(id);
+  return (
+    kb.diseases.find((d) => d.id === id) ??
+    kb.diseases.find((d) => normId(d.id) === key)
+  );
 }
 
 export function findToolById(id: string): KbTool | undefined {
-  return kb.tools.find((t) => t.id === id);
+  const key = id.trim().toLowerCase();
+  return (
+    kb.tools.find((t) => t.id === id) ??
+    kb.tools.find((t) => t.id.toLowerCase() === key)
+  );
 }
 
 /**

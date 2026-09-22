@@ -18,9 +18,9 @@ import type {
   LandUnit,
 } from "@/types/treatment";
 import {
-  getApiError,
   useCreateCostEstimateMutation,
 } from "@/services/api";
+import { userFacingError } from "@/lib/userFacingError";
 
 const CROP_OPTIONS: { id: CropType; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { id: "rice", label: "ধান", icon: "leaf-outline" },
@@ -63,7 +63,7 @@ export default function CostEstimatorScreen() {
     } catch (err) {
       setResult(null);
       setErrorMessage(
-        getApiError(err).message ?? "খরচ হিসাব করা যায়নি। আবার চেষ্টা করুন।",
+        userFacingError(err, "generic", "খরচ হিসাব করা যায়নি। আবার চেষ্টা করুন।"),
       );
     }
   };

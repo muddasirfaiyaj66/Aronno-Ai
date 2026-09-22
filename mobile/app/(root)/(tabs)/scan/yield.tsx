@@ -12,10 +12,10 @@ import {
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import {
-  getApiError,
   useGetLatestYieldQuery,
   usePredictYieldMutation,
 } from "@/services/api";
+import { userFacingError } from "@/lib/userFacingError";
 import { useFarmLocation } from "@/hooks/useFarmLocation";
 
 function ReadOnlyRow({ label, value }: { label: string; value: string }) {
@@ -42,7 +42,7 @@ export default function YieldPredictionScreen() {
       await predict(location.coords ?? {}).unwrap();
     } catch (err) {
       setPredictError(
-        getApiError(err).message ?? "AI সেবা এখন কাজ করছে না। আবার চেষ্টা করুন।",
+        userFacingError(err, "generic", "ফলন হিসাব করা যায়নি। আবার চেষ্টা করুন।"),
       );
     }
   };

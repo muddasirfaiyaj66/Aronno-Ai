@@ -1,5 +1,8 @@
 # Offline vision + KB build (pin loosely for Colab compatibility)
 tensorflow>=2.15,<2.18
+# TF 2.17 pins ml_dtypes~=0.4.x. Do NOT install jax/jaxlib into this env —
+# a newer jax raises ValueError on import and breaks `import tensorflow`.
+ml_dtypes>=0.4.0,<0.5
 tensorflow-datasets>=4.9
 pillow>=10.0
 scikit-learn>=1.3
@@ -8,3 +11,11 @@ numpy>=1.24
 pyyaml>=6.0
 ultralytics>=8.0
 pandas>=2.0
+# YOLO → TFLite export (install onnx2tf with --no-deps to avoid TF upgrades)
+onnx==1.16.2
+onnxslim==0.1.65
+onnxruntime==1.19.2
+sng4onnx>=1.0.1
+tf_keras==2.17.0
+onnx-graphsurgeon>=0.3.26
+# then: pip install onnx2tf==1.26.3 --no-deps

@@ -1,0 +1,183 @@
+@import "tailwindcss";
+
+:root {
+  --forest: #1b5e4a;
+  --forest-deep: #0f2f26;
+  --leaf: #4fa883;
+  --sand: #eef2ee;
+  --ink: #1c2b24;
+  --muted: #5b6b64;
+  --harvest: #b7791f;
+  --border: #d5ddd8;
+  --white: #ffffff;
+  --danger: #b42318;
+}
+
+@theme inline {
+  --color-forest: var(--forest);
+  --color-forest-deep: var(--forest-deep);
+  --color-leaf: var(--leaf);
+  --color-sand: var(--sand);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-harvest: var(--harvest);
+  --color-border: var(--border);
+  --color-danger: var(--danger);
+  --font-display: var(--font-tiro), "Noto Serif Bengali", serif;
+  --font-sans: var(--font-hind), "Noto Sans Bengali", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--sand);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--leaf) 35%, white);
+}
+
+.field {
+  width: 100%;
+  min-height: 3rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--border);
+  background: var(--white);
+  padding: 0.65rem 0.95rem;
+  font: inherit;
+  color: var(--ink);
+}
+
+.field:focus {
+  outline: 2px solid color-mix(in srgb, var(--forest) 45%, transparent);
+  outline-offset: 1px;
+  border-color: var(--forest);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 0.65rem 1.35rem;
+  border-radius: 999px;
+  border: none;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease, opacity 160ms ease;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--forest);
+  color: var(--white);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--forest-deep);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--forest);
+  border: 1px solid color-mix(in srgb, var(--forest) 28%, transparent);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--leaf) 16%, white);
+}
+
+.leaf-wash {
+  background:
+    radial-gradient(1200px 500px at 10% -10%, color-mix(in srgb, var(--leaf) 28%, transparent), transparent 60%),
+    radial-gradient(900px 420px at 90% 0%, color-mix(in srgb, var(--forest) 22%, transparent), transparent 55%),
+    linear-gradient(180deg, #dce8e1 0%, var(--sand) 48%, #e7eee8 100%);
+}
+
+.paddy-grid {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--forest) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--forest) 7%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(180deg, black, transparent 85%);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise-in {
+  animation: rise-in 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.rise-in-delay {
+  animation: rise-in 800ms 120ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.field-band {
+  background:
+    linear-gradient(180deg, transparent, color-mix(in srgb, var(--forest-deep) 88%, black)),
+    repeating-linear-gradient(
+      -12deg,
+      color-mix(in srgb, var(--leaf) 35%, transparent) 0 2px,
+      transparent 2px 18px
+    ),
+    linear-gradient(135deg, #1b5e4a, #0f2f26 55%, #163d32);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .btn {
+    transition: none;
+  }
+  .rise-in,
+  .rise-in-delay {
+    animation: none;
+  }
+}

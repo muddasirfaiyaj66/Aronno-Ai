@@ -60,7 +60,7 @@ export async function createNestApp(): Promise<NestExpressApplication> {
   const origins = config
     .get<string>(
       'CORS_ORIGIN',
-      'http://localhost:8081,http://localhost:19006,http://localhost:8082',
+      'http://localhost:8081,http://localhost:19006,http://localhost:8082,http://localhost:3001,https://aronnoaibd.vercel.app',
     )
     .split(',')
     .map((s) => s.trim())

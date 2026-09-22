@@ -23,7 +23,7 @@ export function logMetric(name: string, ms?: number, detail?: string) {
   notify();
 }
 
-export function markStart(name: string): () => void {
+export function markStart(name: string): (detail?: string) => void {
   const t0 = Date.now();
   return (detail?: string) => logMetric(name, Date.now() - t0, detail);
 }

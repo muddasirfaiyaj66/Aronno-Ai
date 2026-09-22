@@ -1,28 +1,21 @@
 /**
- * Offline Bangla STT via sherpa-onnx native module (optional).
- * Until the native bridge + Zipformer model are installed, isSTTReady() is false
- * and callers should fall back to typing or cloud STT when online.
+ * Offline Bangla STT via @siteed/sherpa-onnx.rn (streaming Zipformer transducer).
+ * Mic: expo-av record → recognizeFromFile (reliable without a live PCM module).
  */
-import { NativeEventEmitter, NativeModules, Platform } from "react-native";
+import { Audio } from "expo-av";
+import { ASR } from "@siteed/sherpa-onnx.rn";
+import type { AsrModelConfig } from "@siteed/sherpa-onnx.rn";
 import { catalogByKind } from "@/lib/modelManager/catalog";
 import { isInstalled, localDir } from "@/lib/modelManager/modelManager";
+import { enablePlaybackAudio, SPEECH_RECORDING } from "@/lib/speechRecording";
 import { logMetric, markStart } from "@/lib/offline/metrics";
 
-type SherpaSTTModule = {
-  init: (paths: {
-    encoder: string;
-    decoder: string;
-    joiner: string;
-    tokens: string;
-  }) => Promise<void>;
-  startStreaming: () => void;
-  stopStreaming: () => void;
-  addListener?: never;
-};
-
-const SherpaSTT = NativeModules.SherpaSTT as SherpaSTTModule | undefined;
 let ready = false;
-let emitter: NativeEventEmitter | null = null;
+let recording: Audio.Recording | null = null;
+
+function nativePath(uri: string) {
+  return uri.replace(/^file:\/\//, "");
+}
 
 export async function initSTT(): Promise<boolean> {
   const end = markStart("stt.init");
@@ -32,21 +25,24 @@ export async function initSTT(): Promise<boolean> {
     end("model-not-downloaded");
     return false;
   }
-  if (!SherpaSTT) {
-    ready = false;
-    end("native-module-missing");
-    return false;
-  }
   try {
-    const base = localDir(entry);
-    await SherpaSTT.init({
-      encoder: `${base}encoder.onnx`,
-      decoder: `${base}decoder.onnx`,
-      joiner: `${base}joiner.onnx`,
-      tokens: `${base}tokens.txt`,
-    });
-    if (Platform.OS !== "web") {
-      emitter = new NativeEventEmitter(NativeModules.SherpaSTT);
+    const config: AsrModelConfig = {
+      modelDir: nativePath(localDir(entry)),
+      modelType: "transducer",
+      streaming: true,
+      numThreads: 2,
+      modelFiles: {
+        encoder: "encoder.onnx",
+        decoder: "decoder.onnx",
+        joiner: "joiner.onnx",
+        tokens: "tokens.txt",
+      },
+    };
+    const result = await ASR.initialize(config);
+    if (!result.success) {
+      ready = false;
+      end(result.error ?? "init-failed");
+      return false;
     }
     ready = true;
     end("ok");
@@ -63,30 +59,89 @@ export async function isSTTReady(): Promise<boolean> {
   return initSTT();
 }
 
+async function transcribeUri(uri: string): Promise<string> {
+  const result = await ASR.recognizeFromFile(nativePath(uri));
+  return (result.text ?? "").trim();
+}
+
+/**
+ * Record → offline STT. Emits "…" while recording; final text on stop().
+ */
 export function startListening(
   onPartial: (text: string) => void,
   onFinal: (text: string) => void,
 ): () => void {
-  if (!ready || !SherpaSTT) {
-    logMetric("stt.start", undefined, "not-ready");
-    return () => undefined;
-  }
-  logMetric("stt.start");
-  SherpaSTT.startStreaming();
-  const subPartial = emitter?.addListener(
-    "partialResult",
-    (e: { text: string }) => onPartial(e.text),
-  );
-  const subFinal = emitter?.addListener(
-    "finalResult",
-    (e: { text: string }) => {
-      logMetric("stt.final", undefined, e.text.slice(0, 40));
-      onFinal(e.text);
-    },
-  );
+  let stopped = false;
+
+  void (async () => {
+    if (!ready) {
+      const ok = await initSTT();
+      if (!ok) {
+        logMetric("stt.start", undefined, "not-ready");
+        onFinal("");
+        return;
+      }
+    }
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        onFinal("");
+        return;
+      }
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+      });
+      const created = await Audio.Recording.createAsync(SPEECH_RECORDING);
+      recording = created.recording;
+      onPartial("…");
+      logMetric("stt.start");
+    } catch (err) {
+      logMetric(
+        "stt.start",
+        undefined,
+        err instanceof Error ? err.message : "fail",
+      );
+      onFinal("");
+    }
+  })();
+
   return () => {
-    subPartial?.remove();
-    subFinal?.remove();
-    SherpaSTT?.stopStreaming();
+    if (stopped) return;
+    stopped = true;
+    void (async () => {
+      const rec = recording;
+      recording = null;
+      if (!rec) {
+        onFinal("");
+        return;
+      }
+      const end = markStart("stt.recognize");
+      try {
+        await rec.stopAndUnloadAsync();
+        await enablePlaybackAudio();
+        const uri = rec.getURI();
+        if (!uri) {
+          end("no-uri");
+          onFinal("");
+          return;
+        }
+        const text = await transcribeUri(uri);
+        end(text.slice(0, 40));
+        onFinal(text);
+      } catch (err) {
+        end(err instanceof Error ? err.message : "fail");
+        onFinal("");
+      }
+    })();
   };
+}
+
+export async function transcribeOfflineFile(uri: string): Promise<string> {
+  if (!ready) {
+    const ok = await initSTT();
+    if (!ok) throw new Error("stt-not-ready");
+  }
+  return transcribeUri(uri);
 }

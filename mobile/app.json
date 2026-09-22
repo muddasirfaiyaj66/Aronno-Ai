@@ -87,7 +87,9 @@
           "enableCoreMLDelegate": true,
           "enableAndroidGpuLibraries": true
         }
-      ]
+      ],
+      "@siteed/sherpa-onnx.rn",
+      "expo-document-picker"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -1,30 +1,34 @@
 /** Catalog of downloadable offline models (LLM / STT / TTS). */
 
-export type ModelKind = "llm" | "stt" | "tts";
+export type ModelKind = "llm" | "stt" | "tts" | "vision";
 
 export type ModelCatalogEntry = {
-  /** Stable id — used as storage folder name */
   id: string;
   kind: ModelKind;
   nameBn: string;
   nameEn: string;
-  /** Approximate download size shown before download */
   sizeMb: number;
-  /** Rough RAM guidance shown to the user */
   minRamMb: number;
-  /** Hugging Face "owner/repo" (or GitHub release owner for archives) */
+  /** Hugging Face "owner/repo" (llm single-file) */
   repo: string;
-  /** Exact filename under the repo / archive */
+  /** Primary filename (llm) or marker file used by isInstalled */
   file: string;
   recommended?: boolean;
-  /** Optional override when the download URL is not the HF resolve pattern */
+  /** Single-archive / single-file override URL */
   downloadUrl?: string;
+  /**
+   * Multi-file download (preferred for STT/TTS — no tar.bz2 extract on device).
+   * Each file is saved under models/<id>/<relativePath>.
+   */
+  files?: { relativePath: string; url: string }[];
 };
 
-/**
- * Local fallback catalog. Prefer fetching a remote JSON later (§9.2)
- * so new Gemma sizes can ship without an app-store update.
- */
+const HF = (repo: string, file: string) =>
+  `https://huggingface.co/${repo}/resolve/main/${file}`;
+
+const BN_STT = "csukuangfj2/sherpa-onnx-streaming-zipformer-bn-vosk-2026-02-09";
+const BN_TTS = "csukuangfj/vits-coqui-bn-custom_female";
+
 export const MODEL_CATALOG: ModelCatalogEntry[] = [
   {
     id: "gemma3-270m-q8",
@@ -54,11 +58,15 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     nameEn: "Bangla Speech Recognition",
     sizeMb: 90,
     minRamMb: 1000,
-    repo: "k2-fsa/sherpa-onnx",
-    file: "sherpa-onnx-streaming-zipformer-bn-vosk-2026-02-09.tar.bz2",
-    downloadUrl:
-      "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bn-vosk-2026-02-09.tar.bz2",
+    repo: BN_STT,
+    file: "tokens.txt",
     recommended: true,
+    files: [
+      { relativePath: "encoder.onnx", url: HF(BN_STT, "encoder.onnx") },
+      { relativePath: "decoder.onnx", url: HF(BN_STT, "decoder.onnx") },
+      { relativePath: "joiner.onnx", url: HF(BN_STT, "joiner.onnx") },
+      { relativePath: "tokens.txt", url: HF(BN_STT, "tokens.txt") },
+    ],
   },
   {
     id: "tts-bn-vits",
@@ -67,10 +75,13 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     nameEn: "Bangla Voice (Speech)",
     sizeMb: 110,
     minRamMb: 1000,
-    repo: "csukuangfj/sherpa-onnx-tts",
-    file: "vits-bn-multi.tar.bz2",
-    // Pin a concrete HF/GitHub URL when the VITS archive is chosen
+    repo: BN_TTS,
+    file: "model.onnx",
     recommended: true,
+    files: [
+      { relativePath: "model.onnx", url: HF(BN_TTS, "model.onnx") },
+      { relativePath: "tokens.txt", url: HF(BN_TTS, "tokens.txt") },
+    ],
   },
 ];
 

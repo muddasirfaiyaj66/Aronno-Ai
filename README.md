@@ -35,7 +35,7 @@ Aronno helps farmers and agri stakeholders in Bangladesh:
 - Browse **market prices**, post **listings**, and submit **loan applications**
 - Use a Bangla-first UI with on-device **listen** (text-to-speech)
 
-AI analysis uses Google’s free **gemini-3.5-flash-lite** family. Weather uses **Open-Meteo** (no API key). Photos upload to **Cloudinary** from the phone; the API stores HTTPS URLs only. If Gemini is unavailable, the API returns a clear error — it does **not** invent mock diagnoses.
+AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. When offline, the app can use **on-device Gemma**, Bangla STT/TTS, and optional TFLite vision — see **[docs/offline_ai/README.md](docs/offline_ai/README.md)**. Weather uses **Open-Meteo** (no API key). Photos upload to **Cloudinary** from the phone; the API stores HTTPS URLs only. If Gemini is unavailable, the API returns a clear error — it does **not** invent mock diagnoses. Offline scan can still answer from on-device models or the local knowledge base when those are installed.
 
 ---
 
@@ -47,9 +47,11 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family. Weather uses 
 │  Screens · Redux / RTK Query        │
 │  SecureStore cookie jar             │
 │  Camera / mic · Cloudinary upload   │
-│  expo-speech (Bangla listen)        │
+│  Online: Gemini via API             │
+│  Offline: Gemma · sherpa · TFLite   │
+│  (see docs/offline_ai/README.md)    │
 └─────────────────┬───────────────────┘
-                  │ HTTPS + cookies + CSRF
+                  │ HTTPS + cookies + CSRF (when online)
 ┌─────────────────▼───────────────────┐
 │  Nest.js API (backend/)             │
 │  Auth · RBAC · Feature modules      │
@@ -258,6 +260,9 @@ After superadmin login, create more admins from **আমি → অ্যাড�
 | Document | Contents |
 |----------|----------|
 | [SETUP.md](SETUP.md) | Environment variables, SMTP, Cloudinary, Gemini, APK / EAS build, ERD, API tester notes |
+| [docs/offline_ai/README.md](docs/offline_ai/README.md) | **Offline AI:** setup, usage, code map, system prompts, token optimization, model catalog |
+| [docs/model_cards/](docs/model_cards/) | Per-model accuracy, limits, licenses |
+| [ml/README.md](ml/README.md) | Train disease / tool TFLite models |
 | [backend/README.md](backend/README.md) | API auth model, route overview, scripts |
 | [mobile/](mobile/) | Expo app source (`app/` file-based routes) |
 | [LICENSE](LICENSE) | MIT |

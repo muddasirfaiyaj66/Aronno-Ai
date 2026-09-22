@@ -1,11 +1,18 @@
-# Offline AI native module (sherpa-onnx)
+# Offline AI native audio
 
-Sprint 1 wiring in JS is ready (`lib/offlineVoice/sttEngine.ts`, `ttsEngine.ts`).
+STT/TTS now use **`@siteed/sherpa-onnx.rn`** (Expo config plugin in `app.json`).
 
-Native bridge still needed for real streaming STT/TTS:
+This folder is kept for optional custom bridges; you do **not** need to fill it for Bangla Zipformer / VITS.
 
-1. Add sherpa-onnx Android `.aar` / iOS xcframework under `android/` and `ios/`
-2. Expose `NativeModules.SherpaSTT` and `SherpaTTS` with `init`, `startStreaming`, `stopStreaming`, `speak`, and events `partialResult` / `finalResult`
-3. Rebuild expo-dev-client
+After `pnpm install` (approve `@siteed/sherpa-onnx.rn` build scripts), rebuild the
+dev client:
 
-Until then: offline voice capture falls back to **typing**; TTS uses **expo-speech**.
+```bash
+cd mobile
+npx expo prebuild
+npx expo run:android
+# or: eas build --profile development --platform android
+```
+
+Models download from Hugging Face as **individual files** (no tar.bz2 on device)
+via the Model Manager screen.

@@ -66,7 +66,7 @@ export async function autoLoadLlm(
     end(err instanceof Error ? err.message : "load-failed");
     return null;
   }
-
+}
 
 export function isLlmReady(): boolean {
   return ctx !== null;

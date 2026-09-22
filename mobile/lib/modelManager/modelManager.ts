@@ -1,6 +1,6 @@
 /**
  * Download / list / delete offline models under documentDirectory/models/.
- * Uses expo-file-system legacy resumable downloads (Expo SDK 54).
+ * Supports single-file (GGUF) and multi-file (STT/TTS ONNX) catalog entries.
  */
 import * as FileSystem from "expo-file-system/legacy";
 import {
@@ -11,10 +11,10 @@ import {
 
 const MODELS_DIR = `${FileSystem.documentDirectory ?? ""}models/`;
 
-async function ensureDir() {
-  const info = await FileSystem.getInfoAsync(MODELS_DIR);
+async function ensureDir(path = MODELS_DIR) {
+  const info = await FileSystem.getInfoAsync(path);
   if (!info.exists) {
-    await FileSystem.makeDirectoryAsync(MODELS_DIR, { intermediates: true });
+    await FileSystem.makeDirectoryAsync(path, { intermediates: true });
   }
 }
 
@@ -32,6 +32,17 @@ export function localDir(entry: ModelCatalogEntry): string {
 
 export async function isInstalled(entry: ModelCatalogEntry): Promise<boolean> {
   if (!FileSystem.documentDirectory) return false;
+  if (entry.files?.length) {
+    const flags = await Promise.all(
+      entry.files.map(async (f) => {
+        const info = await FileSystem.getInfoAsync(
+          `${localDir(entry)}${f.relativePath}`,
+        );
+        return info.exists;
+      }),
+    );
+    return flags.every(Boolean);
+  }
   const info = await FileSystem.getInfoAsync(localPath(entry));
   return info.exists;
 }
@@ -41,22 +52,16 @@ export async function listInstalled(): Promise<ModelCatalogEntry[]> {
   return MODEL_CATALOG.filter((_, i) => flags[i]);
 }
 
-export async function downloadModel(
-  entry: ModelCatalogEntry,
+async function downloadOne(
+  url: string,
+  dest: string,
   onProgress: (fraction: number) => void,
 ): Promise<void> {
-  if (!FileSystem.documentDirectory) {
-    throw new Error("documentDirectory unavailable");
-  }
-  await ensureDir();
-  const dir = localDir(entry);
-  await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(
-    () => undefined,
-  );
-
+  const parent = dest.replace(/[^/]+$/, "");
+  await ensureDir(parent);
   const resumable = FileSystem.createDownloadResumable(
-    defaultDownloadUrl(entry),
-    localPath(entry),
+    url,
+    dest,
     {},
     (p) => {
       const total = p.totalBytesExpectedToWrite;
@@ -68,9 +73,34 @@ export async function downloadModel(
     },
   );
   const result = await resumable.downloadAsync();
-  if (!result?.uri) {
-    throw new Error(`download-failed:${entry.id}`);
+  if (!result?.uri) throw new Error(`download-failed:${dest}`);
+}
+
+export async function downloadModel(
+  entry: ModelCatalogEntry,
+  onProgress: (fraction: number) => void,
+): Promise<void> {
+  if (!FileSystem.documentDirectory) {
+    throw new Error("documentDirectory unavailable");
   }
+  await ensureDir();
+  await ensureDir(localDir(entry));
+
+  if (entry.files?.length) {
+    const n = entry.files.length;
+    let completed = 0;
+    for (const f of entry.files) {
+      const dest = `${localDir(entry)}${f.relativePath}`;
+      await downloadOne(f.url, dest, (frac) => {
+        onProgress((completed + frac) / n);
+      });
+      completed += 1;
+      onProgress(completed / n);
+    }
+    return;
+  }
+
+  await downloadOne(defaultDownloadUrl(entry), localPath(entry), onProgress);
   onProgress(1);
 }
 

@@ -42,3 +42,15 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Offline AI: large STT/TTS/vision binaries (download on device / local only)
+assets/models/stt/**/*
+!assets/models/stt/**/.gitkeep
+assets/models/tts/**/*
+!assets/models/tts/**/.gitkeep
+assets/models/vision/*
+!assets/models/vision/.gitkeep
+!assets/models/vision/README.md
+*.tflite
+*.onnx
+*.gguf

@@ -1,0 +1,20 @@
+# YOLOv8 tool detector — point paths at your Roboflow export
+path: ../data/annotations/tools_yolo
+train: train/images
+val: valid/images
+# test: test/images
+
+nc: 12
+names:
+  - sickle
+  - hoe
+  - spade
+  - sprayer
+  - plough
+  - watering_can
+  - sickle_kaste
+  - nidani
+  - shovel
+  - rake
+  - basket
+  - wheelbarrow

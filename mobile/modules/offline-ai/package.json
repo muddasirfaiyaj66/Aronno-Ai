@@ -1,0 +1,6 @@
+{
+  "name": "aronno-offline-ai",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Expo config plugin + native bridge for sherpa-onnx STT/TTS (Sprint 1)"
+}

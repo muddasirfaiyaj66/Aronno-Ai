@@ -1,2 +1,17 @@
 # Local planning docs — keep on disk, do not publish
 sprints.md
+
+# ML: virtualenvs, raw data, heavy artifacts (see ml/*/ .gitignore too)
+ml/venv/
+ml/.venv/
+**/__pycache__/
+*.pyc
+ml/data/raw/**
+!ml/data/raw/.gitkeep
+ml/data/processed/**
+!ml/data/processed/.gitkeep
+
+# Do not commit large ONNX / TFLite / GGUF binaries at repo root
+*.onnx
+*.gguf
+*.tar.bz2

@@ -1,0 +1,10 @@
+# Crop disease classifier (MobileNetV3-Small → INT8 TFLite)
+img_size: [224, 224]
+batch_size: 32
+epochs_phase1: 15
+epochs_phase2: 10
+learning_rate_phase1: 0.001
+learning_rate_phase2: 0.00001
+dropout: 0.3
+data_dir: ../data/processed
+artifacts_dir: ../artifacts/v1_2026-09-22

@@ -1,0 +1,104 @@
+{
+  "diseases": [
+    {
+      "id": "tomato_early_blight",
+      "diseaseNameBn": "টমেটোর আগাম ধ্বসা রোগ",
+      "diseaseNameEn": "Tomato Early Blight",
+      "symptomsBn": "পাতায় বাদামী গোল দাগ, দাগের চারপাশে হলুদ বলয়",
+      "treatmentBn": "আক্রান্ত পাতা সরিয়ে ফেলুন, প্রতি লিটার পানিতে ২ গ্রাম ম্যানকোজেব মিশিয়ে স্প্রে করুন, ৭-১০ দিন পর পর পুনরাবৃত্তি করুন।",
+      "preventionBn": "ফসল আবর্তন করুন, সেচের সময় পাতা ভেজানো এড়িয়ে চলুন।",
+      "severity": "moderate"
+    },
+    {
+      "id": "tomato_late_blight",
+      "diseaseNameBn": "টমেটোর নাবী ধ্বসা রোগ",
+      "diseaseNameEn": "Tomato Late Blight",
+      "symptomsBn": "পাতায় জলভেজা দাগ, দ্রুত পাতা শুকিয়ে যায়",
+      "treatmentBn": "আক্রান্ত গাছ সরিয়ে ফেলুন; কপার-ভিত্তিক ছত্রাকনাশক নির্দেশিত মাত্রায় ব্যবহার করুন।",
+      "preventionBn": "আর্দ্র আবহাওয়ায় নিবিড় পর্যবেক্ষণ; ঘন রোপণ এড়িয়ে চলুন।",
+      "severity": "high"
+    },
+    {
+      "id": "potato_early_blight",
+      "diseaseNameBn": "আলুর আগাম ধ্বসা",
+      "diseaseNameEn": "Potato Early Blight",
+      "symptomsBn": "পাতায় গাঢ় বাদামী দাগ, বৃত্তাকার বলয়",
+      "treatmentBn": "ম্যানকোজেব বা ক্লোরোথ্যালোনিল নির্দেশিত মাত্রায় স্প্রে করুন।",
+      "preventionBn": "পরিষ্কার বীজ আলু ব্যবহার করুন; আক্রান্ত পাতা অপসারণ করুন।",
+      "severity": "moderate"
+    },
+    {
+      "id": "rice_blast",
+      "diseaseNameBn": "ধানের ব্লাস্ট রোগ",
+      "diseaseNameEn": "Rice Blast",
+      "symptomsBn": "পাতায় হীরকাকৃতির ধূসর দাগ",
+      "treatmentBn": "প্রতিরোধী জাত ব্যবহার; অনুমোদিত ছত্রাকনাশক কৃষি সম্প্রসারণ অফিসের পরামর্শ অনুযায়ী।",
+      "preventionBn": "সঠিক নাইট্রোজেন মাত্রা; ঘন রোপণ এড়িয়ে চলুন।",
+      "severity": "high"
+    },
+    {
+      "id": "healthy_leaf",
+      "diseaseNameBn": "সুস্থ পাতা",
+      "diseaseNameEn": "Healthy Leaf",
+      "symptomsBn": "স্পষ্ট রোগের লক্ষণ নেই",
+      "treatmentBn": "কোনো চিকিৎসা প্রয়োজন নেই।",
+      "preventionBn": "নিয়মিত পর্যবেক্ষণ ও সুষম সার ব্যবহার চালিয়ে যান।",
+      "severity": "low"
+    }
+  ],
+  "tools": [
+    {
+      "id": "sickle",
+      "toolNameBn": "কাস্তে",
+      "toolNameEn": "Sickle",
+      "usageBn": "ধান বা গম কাটার জন্য ব্যবহৃত হাতিয়ার।"
+    },
+    {
+      "id": "hoe",
+      "toolNameBn": "কোদাল",
+      "toolNameEn": "Hoe",
+      "usageBn": "মাটি আলগা করা ও আগাছা পরিষ্কারের জন্য ব্যবহৃত।"
+    },
+    {
+      "id": "spade",
+      "toolNameBn": "কোদাল/বেলচা",
+      "toolNameEn": "Spade",
+      "usageBn": "মাটি খোঁড়া ও স্থানান্তরের জন্য ব্যবহৃত।"
+    },
+    {
+      "id": "sprayer",
+      "toolNameBn": "স্প্রেয়ার",
+      "toolNameEn": "Sprayer",
+      "usageBn": "কীটনাশক বা সার দ্রবণ স্প্রে করার জন্য ব্যবহৃত।"
+    }
+  ],
+  "faq": [
+    {
+      "intent": "greeting",
+      "patternsBn": [
+        "আসসালামু আলাইকুম",
+        "হ্যালো",
+        "কেমন আছেন",
+        "নমস্কার"
+      ],
+      "responseBn": "আসসালামু আলাইকুম! আমি আপনার ফসলের সমস্যা নিয়ে সাহায্য করতে পারি। ছবি তুলুন বা বলুন কী সমস্যা।"
+    },
+    {
+      "intent": "how_to_scan",
+      "patternsBn": [
+        "কিভাবে ছবি তুলব",
+        "রোগ কিভাবে দেখব",
+        "স্ক্যান কিভাবে"
+      ],
+      "responseBn": "ক্যামেরা আইকনে চাপ দিন, আক্রান্ত পাতার একটি স্পষ্ট ছবি তুলুন।"
+    },
+    {
+      "intent": "offline_help",
+      "patternsBn": [
+        "অফলাইনে কাজ করে",
+        "ইন্টারনেট ছাড়া"
+      ],
+      "responseBn": "হ্যাঁ, অফলাইনেও রোগ ও হাতিয়ার চিনতে এবং বাংলায় উত্তর দিতে পারি।"
+    }
+  ]
+}

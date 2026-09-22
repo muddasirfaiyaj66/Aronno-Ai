@@ -342,6 +342,22 @@ export default function ProfileScreen() {
 
           <View className="gap-3">
             <AppText variant="body" className="font-bengali-bold text-ink">
+              অফলাইন এআই
+            </AppText>
+            <AppText variant="caption">
+              জেমা / বাংলা কণ্ঠ মডেল ডাউনলোড বা মুছুন — ইন্টারনেট ছাড়া চ্যাট।
+            </AppText>
+            <SecondaryButton
+              label="মডেল ম্যানেজার"
+              onPress={() => router.push("/(root)/(tabs)/models")}
+              icon={
+                <Ionicons name="cloud-download-outline" size={20} color={colors.ink} />
+              }
+            />
+          </View>
+
+          <View className="gap-3">
+            <AppText variant="body" className="font-bengali-bold text-ink">
               কৃষি ঋণ
             </AppText>
             {loan ? (

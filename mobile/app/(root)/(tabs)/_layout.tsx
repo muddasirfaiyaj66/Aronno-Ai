@@ -164,6 +164,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="assistant"
+        options={{
+          title: "সহকারী",
+          tabBarIcon: tabIcon("chatbubbles-outline", "chatbubbles"),
+          tabBarLabel: tabLabel("সহকারী"),
+        }}
+      />
+      <Tabs.Screen
         name="market"
         options={{
           title: "বাজার",
@@ -177,6 +185,13 @@ export default function TabLayout() {
           title: "প্রোফাইল",
           tabBarIcon: tabIcon("person-outline", "person"),
           tabBarLabel: tabLabel("আমি"),
+        }}
+      />
+      <Tabs.Screen
+        name="models"
+        options={{
+          href: null,
+          title: "অফলাইন এআই মডেল",
         }}
       />
     </Tabs>

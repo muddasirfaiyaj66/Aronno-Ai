@@ -741,6 +741,7 @@ export default function MarketScreen() {
               onEditShop={() => setShopModalVisible(true)}
               onAddProduct={() => setAddProductModalVisible(true)}
               onViewMyProducts={() => router.push("/(root)/shop/my-products")}
+              onViewOrders={() => router.push("/(root)/seller-orders")}
               onViewPublicShop={() =>
                 router.push({
                   pathname: "/(root)/shop/[id]",

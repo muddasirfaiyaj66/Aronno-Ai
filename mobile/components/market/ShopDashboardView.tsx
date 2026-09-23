@@ -14,6 +14,7 @@ type ShopDashboardViewProps = {
   onAddProduct: () => void;
   onViewMyProducts: () => void;
   onViewPublicShop?: () => void;
+  onViewOrders?: () => void;
 };
 
 export function ShopDashboardView({
@@ -22,6 +23,7 @@ export function ShopDashboardView({
   onAddProduct,
   onViewMyProducts,
   onViewPublicShop,
+  onViewOrders,
 }: ShopDashboardViewProps) {
   const districtName = shop.district?.nameBn ?? "";
   const locationText = [districtName, shop.upazila, shop.address]
@@ -130,18 +132,24 @@ export function ShopDashboardView({
         </View>
       </View>
 
-      {/* 3. অর্ডারসমূহ (Orders Section Placeholder) */}
+      {/* 3. অর্ডারসমূহ (Orders Section) */}
       <StructuredCard
-        title="অর্ডারসমূহ"
+        title="দোকানের অর্ডার ব্যবস্থাপনা"
         icon={<Ionicons name="bag-handle" size={20} color={colors.primary} />}
+        footer={
+          <SecondaryButton
+            label="সকল অর্ডার দেখুন ও আপডেট করুন"
+            onPress={onViewOrders}
+            icon={<Ionicons name="clipboard-outline" size={18} color={colors.ink} />}
+          />
+        }
       >
-        <View className="items-center justify-center py-4 gap-2">
-          <Ionicons name="time-outline" size={32} color={colors.muted} />
-          <AppText variant="body" className="font-bengali-bold text-ink text-center">
-            অর্ডার ব্যবস্থাপনা শীঘ্রই আসছে
+        <View className="gap-2 py-1">
+          <AppText variant="body" className="font-bengali-bold text-ink">
+            ক্রেতাদের অর্ডার নিয়ন্ত্রণ করুন
           </AppText>
-          <AppText variant="caption" className="text-muted text-center px-4">
-            আপনার দোকান থেকে ক্রেতাদের অর্ডারের তথ্য ও ডেলিভারি আপডেট এখানে দেখতে পাবেন।
+          <AppText variant="caption" className="text-muted font-bengali-medium">
+            নতুন অর্ডার গ্রহণ, প্যাকিং, ডেলিভারির জন্য পাঠানো এবং স্ট্যাটাস আপডেট করার জন্য অর্ডার স্ক্রিনে যান।
           </AppText>
         </View>
       </StructuredCard>

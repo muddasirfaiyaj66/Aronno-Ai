@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -551,10 +551,22 @@ export default function CheckoutScreen() {
     fullAddress: "",
   });
 
+  // Pre-fill user profile info when user query resolves
+  useEffect(() => {
+    if (me) {
+      setForm((prev) => ({
+        ...prev,
+        buyerName: prev.buyerName || me.displayName || "",
+        phone: prev.phone || me.phone || "",
+      }));
+    }
+  }, [me]);
+
   const updateForm = (partial: Partial<AddressForm>) =>
     setForm((prev) => ({ ...prev, ...partial }));
 
   const handleConfirm = async () => {
+    if (isLoading) return; // Prevent double submission
     if (!cart?.shopId) {
       setCheckoutError("কার্টে দোকানের তথ্য পাওয়া যায়নি। অনুগ্রহ করে কার্টে ফিরে যান।");
       return;

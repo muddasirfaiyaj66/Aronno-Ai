@@ -44,6 +44,16 @@ export class OrderController {
     return { success: true, data };
   }
 
+  @Get(':id')
+  async getOrderById(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+  ) {
+    const data = await this.orderService.getOrderById(user.id, id);
+    return { success: true, data };
+  }
+
+
   @Patch(':id/status')
   async updateStatus(
     @CurrentUser() user: AuthUser,

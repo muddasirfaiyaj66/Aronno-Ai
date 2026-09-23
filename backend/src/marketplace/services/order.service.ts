@@ -180,6 +180,25 @@ export class OrderService {
     });
   }
 
+  async getOrderById(userId: string, orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        shop: { select: { id: true, name: true, phone: true, logoUrl: true } },
+        buyer: { select: { id: true, displayName: true, phone: true, avatarUrl: true } },
+        district: true,
+      },
+    });
+
+    if (!order) throw new NotFoundException('Order not found.');
+    if (order.buyerUserId !== userId && order.sellerUserId !== userId) {
+      throw new ForbiddenException('You do not have access to view this order.');
+    }
+
+    return order;
+  }
+
+
   async getShopOrders(sellerUserId: string) {
     const shop = await this.prisma.shop.findUnique({
       where: { ownerUserId: sellerUserId },

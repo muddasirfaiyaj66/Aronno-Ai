@@ -791,6 +791,11 @@ export const api = createApi({
       transformResponse: (r) => unwrap<any[]>(r),
       providesTags: ["Order"],
     }),
+    getOrder: builder.query<any, string>({
+      query: (id) => `/marketplace/orders/${id}`,
+      transformResponse: (r) => unwrap(r),
+      providesTags: (_r, _e, id) => [{ type: "Order", id }],
+    }),
     updateOrderStatus: builder.mutation<any, { id: string; status: string }>({
       query: ({ id, status }) => ({
         url: `/marketplace/orders/${id}/status`,
@@ -881,6 +886,7 @@ export const {
   useCheckoutMutation,
   useGetBuyerOrdersQuery,
   useGetShopOrdersQuery,
+  useGetOrderQuery,
   useUpdateOrderStatusMutation,
   useCreateReviewMutation,
 } = api;

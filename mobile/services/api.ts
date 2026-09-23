@@ -771,6 +771,9 @@ export const api = createApi({
         shippingAddress: string;
         contactPhone: string;
         districtId: string;
+        buyerName?: string;
+        upazila?: string;
+        paymentMethod?: string;
         notes?: string;
       }
     >({

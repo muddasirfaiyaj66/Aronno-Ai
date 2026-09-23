@@ -206,7 +206,7 @@ export default function CartScreen() {
           <PrimaryButton
             label="অর্ডার করতে এগিয়ে যান"
             onPress={() => {
-              // Checkout flow will be handled in order sprint
+              router.push("/(root)/checkout");
             }}
             icon={<Ionicons name="arrow-forward" size={18} color={colors.white} />}
           />

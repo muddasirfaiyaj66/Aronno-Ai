@@ -107,6 +107,21 @@ export class OrderService {
     const totalBdt = subtotalBdt + deliveryFeeBdt;
     const orderNumber = `ARN-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    // Build payment status from submitted payment method
+    const paymentStatusValue =
+      dto.paymentMethod === 'cash_on_delivery' || !dto.paymentMethod
+        ? 'cash_on_delivery'
+        : 'pending';
+
+    // Build a full shipping address string including upazila & buyer name
+    const fullAddress = [
+      dto.buyerName ? `প্রাপক: ${dto.buyerName}` : null,
+      dto.shippingAddress,
+      dto.upazila ? `উপজেলা: ${dto.upazila}` : null,
+    ]
+      .filter(Boolean)
+      .join(' | ');
+
     const order = await this.prisma.order.create({
       data: {
         orderNumber,
@@ -117,9 +132,10 @@ export class OrderService {
         subtotalBdt,
         deliveryFeeBdt,
         totalBdt,
-        shippingAddress: dto.shippingAddress,
+        shippingAddress: fullAddress,
         contactPhone: dto.contactPhone,
         districtId: district.id,
+        paymentStatus: paymentStatusValue as any,
         notes: dto.notes,
       },
       include: {

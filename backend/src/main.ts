@@ -83,7 +83,7 @@ async function bootstrap() {
   const app = await createNestApp();
   const config = app.get(ConfigService);
   const port = Number(config.get('PORT') ?? process.env.PORT ?? 3000);
-  await app.listen(port, '0.0.0.0');
+  await app.listen(port);
 
   const lan = lanIPv4();
   logger.log(`Aronno API is running`);

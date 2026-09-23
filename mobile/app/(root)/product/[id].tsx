@@ -12,7 +12,8 @@ import {
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { useAddItemMutation, useGetProductQuery } from "@/services/api";
+import { SingleShopCartModal } from "@/components/market/SingleShopCartModal";
+import { getApiError, useAddItemMutation, useGetProductQuery } from "@/services/api";
 import {
   formatCategoryBn,
   formatDateBn,
@@ -28,6 +29,7 @@ export default function ProductDetailScreen() {
   const [quantity, setQuantity] = useState(1);
   const [addedSuccess, setAddedSuccess] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [shopMismatchModalVisible, setShopMismatchModalVisible] = useState(false);
 
   const {
     data: product,
@@ -38,17 +40,22 @@ export default function ProductDetailScreen() {
 
   const [addToCart, { isLoading: addingToCart }] = useAddItemMutation();
 
-  const handleAddToCart = async () => {
+  const handleAddToCart = async (clearPreviousCart = false) => {
     if (!product) return;
     try {
       await addToCart({
         productId: product.id,
         quantity: Math.max(quantity, product.minOrderQuantity ?? 1),
+        clearPreviousCart,
       }).unwrap();
+      setShopMismatchModalVisible(false);
       setAddedSuccess(true);
       setTimeout(() => setAddedSuccess(false), 3000);
-    } catch {
-      // Error handling handled via state
+    } catch (err: unknown) {
+      const apiErr = getApiError(err);
+      if (apiErr.code === "SHOP_MISMATCH" || apiErr.message?.includes("another shop")) {
+        setShopMismatchModalVisible(true);
+      }
     }
   };
 
@@ -391,7 +398,7 @@ export default function ProductDetailScreen() {
           <View className="flex-1">
             <PrimaryButton
               label={addedSuccess ? "কার্টে যোগ হয়েছে!" : "কার্টে যোগ করুন"}
-              onPress={handleAddToCart}
+              onPress={() => handleAddToCart()}
               loading={addingToCart}
               disabled={product.availableQuantity <= 0}
               icon={<Ionicons name="cart" size={20} color={colors.white} />}
@@ -399,6 +406,13 @@ export default function ProductDetailScreen() {
           </View>
         </View>
       ) : null}
+
+      <SingleShopCartModal
+        visible={shopMismatchModalVisible}
+        onClose={() => setShopMismatchModalVisible(false)}
+        onConfirmClearAndAdd={() => handleAddToCart(true)}
+        loading={addingToCart}
+      />
     </SafeAreaView>
   );
 }

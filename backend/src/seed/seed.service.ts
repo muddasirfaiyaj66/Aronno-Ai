@@ -94,38 +94,53 @@ export class SeedService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    for (const row of ROLES) {
-      await this.prisma.role.upsert({
-        where: { slug: row.slug },
-        update: { nameBn: row.nameBn, nameEn: row.nameEn },
-        create: row,
-      });
+    // Run seed asynchronously or skip if already seeded to prevent blocking server startup
+    void this.seedAll();
+  }
+
+  private async seedAll() {
+    try {
+      const roleCount = await this.prisma.role.count();
+      if (roleCount >= ROLES.length) {
+        // Already seeded — fast startup
+        return;
+      }
+
+      for (const row of ROLES) {
+        await this.prisma.role.upsert({
+          where: { slug: row.slug },
+          update: { nameBn: row.nameBn, nameEn: row.nameEn },
+          create: row,
+        });
+      }
+      for (const row of PROFESSIONS) {
+        await this.prisma.profession.upsert({
+          where: { slug: row.slug },
+          update: { nameBn: row.nameBn, nameEn: row.nameEn },
+          create: row,
+        });
+      }
+      for (const row of BANGLADESH_DISTRICTS) {
+        await this.prisma.district.upsert({
+          where: { slug: row.slug },
+          update: { nameBn: row.nameBn },
+          create: { slug: row.slug, nameBn: row.nameBn },
+        });
+      }
+      for (const row of CROPS) {
+        await this.prisma.crop.upsert({
+          where: { slug: row.slug },
+          update: { nameBn: row.nameBn, nameEn: row.nameEn },
+          create: row,
+        });
+      }
+      await this.seedSuperadmin();
+      await this.seedDemoUser();
+      await this.seedHeatmapDemo();
+      this.logger.log('Lookup seed complete');
+    } catch (err) {
+      this.logger.error('Error during database seed:', err);
     }
-    for (const row of PROFESSIONS) {
-      await this.prisma.profession.upsert({
-        where: { slug: row.slug },
-        update: { nameBn: row.nameBn, nameEn: row.nameEn },
-        create: row,
-      });
-    }
-    for (const row of BANGLADESH_DISTRICTS) {
-      await this.prisma.district.upsert({
-        where: { slug: row.slug },
-        update: { nameBn: row.nameBn },
-        create: { slug: row.slug, nameBn: row.nameBn },
-      });
-    }
-    for (const row of CROPS) {
-      await this.prisma.crop.upsert({
-        where: { slug: row.slug },
-        update: { nameBn: row.nameBn, nameEn: row.nameEn },
-        create: row,
-      });
-    }
-    await this.seedSuperadmin();
-    await this.seedDemoUser();
-    await this.seedHeatmapDemo();
-    this.logger.log('Lookup seed complete');
   }
 
   private async seedSuperadmin() {

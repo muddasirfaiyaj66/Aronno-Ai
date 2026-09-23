@@ -737,7 +737,7 @@ export const api = createApi({
       transformResponse: (r) => unwrap(r),
       providesTags: ["Cart"],
     }),
-    addItem: builder.mutation<any, { productId: string; quantity: number }>({
+    addItem: builder.mutation<any, { productId: string; quantity: number; clearPreviousCart?: boolean }>({
       query: (body) => ({ url: "/marketplace/cart/items", method: "POST", body }),
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Cart"],

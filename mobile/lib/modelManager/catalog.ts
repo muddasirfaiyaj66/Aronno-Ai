@@ -54,6 +54,16 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     recommended: true,
   },
   {
+    id: "gemma3-4b-it-q4",
+    kind: "llm",
+    nameBn: "জেমা ৩ · ৪বি (সবচেয়ে ভালো বাংলা)",
+    nameEn: "Gemma 3 4B Instruct",
+    sizeMb: 2490,
+    minRamMb: 6000,
+    repo: "unsloth/gemma-3-4b-it-GGUF",
+    file: "gemma-3-4b-it-Q4_K_M.gguf",
+  },
+  {
     id: "stt-bn-zipformer",
     kind: "stt",
     nameBn: "বাংলা কণ্ঠ শনাক্তকরণ",

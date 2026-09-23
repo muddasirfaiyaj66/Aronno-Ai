@@ -11,13 +11,14 @@ import {
   localPath,
 } from "@/lib/modelManager/modelManager";
 import { catalogById, type ModelCatalogEntry } from "@/lib/modelManager/catalog";
+import { getPreferredLlmId, setPreferredLlmId } from "@/lib/modelManager/preferredLlm";
 import { logMetric, markStart } from "@/lib/offline/metrics";
 
 let ctx: LlamaContext | null = null;
 let activeModelId: string | null = null;
 
 const SPECIAL_RE =
-  /<\|im_start\|>\s*(assistant|user|system|model)?\s*|<\|im_end\|>|<start_of_turn>\s*(assistant|user|system|model)?\s*|<end_of_turn>|<\/?s>|<eos>|<bos>|<pad>/gi;
+  /<\|im_start\|>\s*(assistant|user|system|model)?\s*|<start_of_turn>\s*(assistant|user|system|model)?\s*|<end_of_turn>|<\|im_end\|>|<\/?s>|<eos>|<bos>|<pad>/gi;
 
 function stripSpecial(s: string) {
   return s.replace(SPECIAL_RE, "");
@@ -25,7 +26,7 @@ function stripSpecial(s: string) {
 
 /**
  * Call at app start and after an LLM download finishes.
- * Prefers `preferredId`, else recommended installed, else first installed LLM.
+ * Order: explicit preferredId → saved preference → recommended → first installed.
  */
 export async function autoLoadLlm(
   preferredId?: string,
@@ -37,8 +38,9 @@ export async function autoLoadLlm(
     return null;
   }
 
+  const savedId = preferredId ?? (await getPreferredLlmId()) ?? undefined;
   const choice: ModelCatalogEntry =
-    installed.find((e) => e.id === preferredId) ??
+    installed.find((e) => e.id === savedId) ??
     installed.find((e) => e.recommended) ??
     installed[0];
 
@@ -67,6 +69,7 @@ export async function autoLoadLlm(
       },
     );
     activeModelId = choice.id;
+    await setPreferredLlmId(choice.id);
     end(choice.id);
     logMetric("llm.loaded", undefined, choice.id);
     return activeModelId;
@@ -76,6 +79,12 @@ export async function autoLoadLlm(
     end(err instanceof Error ? err.message : "load-failed");
     return null;
   }
+}
+
+/** Switch to a specific installed Gemma and remember the choice. */
+export async function selectLlm(id: string): Promise<string | null> {
+  await setPreferredLlmId(id);
+  return autoLoadLlm(id);
 }
 
 export function isLlmReady(): boolean {
@@ -222,7 +231,9 @@ export async function hasInstalledLlm(): Promise<boolean> {
 export async function preferredInstalledLlm(): Promise<ModelCatalogEntry | null> {
   const installed = (await listInstalled()).filter((e) => e.kind === "llm");
   if (!installed.length) return null;
+  const savedId = await getPreferredLlmId();
   return (
+    installed.find((e) => e.id === savedId) ??
     installed.find((e) => e.recommended) ??
     (catalogById(installed[0].id) ?? installed[0])
   );

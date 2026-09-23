@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -18,7 +18,15 @@ import {
   isInstalled,
   storageUsedMb,
 } from "@/lib/modelManager/modelManager";
-import { autoLoadLlm, unloadLlm, currentModelId } from "@/lib/modelManager/llmEngine";
+import {
+  currentModelId,
+  selectLlm,
+  unloadLlm,
+} from "@/lib/modelManager/llmEngine";
+import {
+  clearPreferredLlmId,
+  getPreferredLlmId,
+} from "@/lib/modelManager/preferredLlm";
 import { initSTT } from "@/lib/offlineVoice/sttEngine";
 import {
   pickAndInstallVision,
@@ -31,6 +39,7 @@ export default function ModelsScreen() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [usedMb, setUsedMb] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [preferredId, setPreferredId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [vision, setVision] = useState({
@@ -47,12 +56,18 @@ export default function ModelsScreen() {
     setInstalledMap(flags);
     setUsedMb(await storageUsedMb());
     setActiveId(currentModelId());
+    setPreferredId(await getPreferredLlmId());
     setVision(await visionInstallStatus());
   }, []);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  const installedLlms = useMemo(
+    () => MODEL_CATALOG.filter((e) => e.kind === "llm" && installedMap[e.id]),
+    [installedMap],
+  );
 
   async function handleDownload(entry: ModelCatalogEntry) {
     setError(null);
@@ -65,24 +80,45 @@ export default function ModelsScreen() {
       );
       await refresh();
       if (entry.kind === "llm") {
-        const loaded = await autoLoadLlm(entry.id);
+        const loaded = await selectLlm(entry.id);
         setActiveId(loaded);
+        setPreferredId(entry.id);
         setHint(
           loaded
-            ? "জেমা লোড হয়েছে — সহকারী ট্যাবে কথা বলুন।"
-            : "ফাইল আছে, কিন্তু মেমোরিতে লোড হয়নি। ডিভাইসের RAM কম হতে পারে — ছোট জেমা (২৭০এম) ডাউনলোড করে চেষ্টা করুন।",
+            ? `${entry.nameBn} চালু হয়েছে — সহকারী ট্যাবে কথা বলুন।`
+            : "ফাইল আছে, কিন্তু মেমোরিতে লোড হয়নি। ডিভাইসের RAM কম হতে পারে — ছোট জেমা (২৭০এম) বেছে নিন।",
         );
       } else if (entry.kind === "stt") {
         const ok = await initSTT();
         setHint(ok ? "বাংলা STT প্রস্তুত।" : "STT ফাইল আছে, কিন্তু লোড ব্যর্থ।");
       } else if (entry.kind === "tts") {
-        // Do not call sherpa TTS.initialize — it can abort the process.
         setHint("কণ্ঠ উচ্চারণ ডিভাইস TTS (expo-speech) দিয়ে চলবে।");
       }
     } catch {
       setError("ডাউনলোড ব্যর্থ হয়েছে। ওয়াই‑ফাই চেক করে আবার চেষ্টা করুন।");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function handleSelect(entry: ModelCatalogEntry) {
+    setError(null);
+    setHint(null);
+    setBusyId(entry.id);
+    try {
+      const loaded = await selectLlm(entry.id);
+      setActiveId(loaded);
+      setPreferredId(entry.id);
+      setHint(
+        loaded
+          ? `${entry.nameBn} এখন চালু — সহকারীতে ব্যবহার করুন।`
+          : "লোড ব্যর্থ। RAM কম হলে ছোট মডেল বেছে নিন।",
+      );
+    } catch {
+      setError("মডেল লোড যায়নি। আবার চেষ্টা করুন।");
+    } finally {
+      setBusyId(null);
+      await refresh();
     }
   }
 
@@ -94,6 +130,15 @@ export default function ModelsScreen() {
         await unloadLlm();
       }
       await deleteModel(entry);
+      if (preferredId === entry.id) {
+        await clearPreferredLlmId();
+        const next = MODEL_CATALOG.find(
+          (e) => e.kind === "llm" && e.id !== entry.id && installedMap[e.id],
+        );
+        if (next) {
+          await selectLlm(next.id);
+        }
+      }
       await refresh();
     } catch {
       setError("মুছে ফেলা যায়নি। আবার চেষ্টা করুন।");
@@ -113,16 +158,20 @@ export default function ModelsScreen() {
     }
   }
 
+  const activeName =
+    MODEL_CATALOG.find((e) => e.id === (activeId ?? preferredId))?.nameBn ??
+    null;
+
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       <ScreenHeader
         title="অফলাইন এআই মডেল"
-        subtitle="ডাউনলোড করুন, ব্যবহার করুন, প্রয়োজনে মুছুন — ইন্টারনেট ছাড়াই চলবে।"
+        subtitle="ডাউনলোড করুন, যে জেমা চান সেটা বেছে নিন, প্রয়োজনে মুছুন।"
       />
       <View className="px-5 py-3">
         <AppText variant="caption">
           ব্যবহৃত স্টোরেজ (আনুমানিক): {usedMb} MB
-          {activeId ? ` · চালু: ${activeId}` : ""}
+          {activeName ? ` · চালু: ${activeName}` : ""}
         </AppText>
         {hint ? (
           <AppText variant="caption" className="mt-2 text-primary">
@@ -135,10 +184,81 @@ export default function ModelsScreen() {
           </AppText>
         ) : null}
       </View>
+
+      {installedLlms.length > 0 ? (
+        <View className="mx-5 mb-3 rounded-3xl border border-primary/20 bg-secondary px-4 py-4">
+          <AppText variant="body" className="font-bengali-bold text-primary">
+            কোন জেমা চালাবেন?
+          </AppText>
+          <AppText variant="caption" className="mt-1 leading-6">
+            ডাউনলোড করা মডেল থেকে একটি বেছে নিন — সহকারী সেটাই ব্যবহার করবে।
+          </AppText>
+          <View className="mt-3 gap-2">
+            {installedLlms.map((item) => {
+              const selected =
+                activeId === item.id ||
+                (!activeId && preferredId === item.id);
+              const busy = busyId === item.id;
+              return (
+                <Pressable
+                  key={`pick-${item.id}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  disabled={busy}
+                  onPress={() => void handleSelect(item)}
+                  className={`flex-row items-center gap-3 rounded-2xl border px-3 py-3 ${
+                    selected
+                      ? "border-primary bg-white"
+                      : "border-border bg-white/80"
+                  }`}
+                >
+                  <View
+                    className={`h-5 w-5 items-center justify-center rounded-full border-2 ${
+                      selected ? "border-primary" : "border-muted"
+                    }`}
+                  >
+                    {selected ? (
+                      <View className="h-2.5 w-2.5 rounded-full bg-primary" />
+                    ) : null}
+                  </View>
+                  <View className="flex-1">
+                    <AppText
+                      variant="body"
+                      className={`font-bengali-semibold ${
+                        selected ? "text-primary" : "text-ink"
+                      }`}
+                    >
+                      {item.nameBn}
+                    </AppText>
+                    <AppText variant="caption">
+                      {item.sizeMb} MB
+                      {item.recommended ? " · সুপারিশকৃত" : ""}
+                      {activeId === item.id ? " · এখন মেমোরিতে" : ""}
+                    </AppText>
+                  </View>
+                  {busy ? (
+                    <ActivityIndicator color={colors.primary} />
+                  ) : (
+                    <AppText variant="caption" className="text-primary">
+                      {selected ? "নির্বাচিত" : "বেছে নিন"}
+                    </AppText>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+
       <FlatList
         data={MODEL_CATALOG}
         keyExtractor={(e) => e.id}
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
+        ListHeaderComponent={
+          <AppText variant="body" className="mb-2 font-bengali-bold text-ink">
+            সব মডেল
+          </AppText>
+        }
         ListFooterComponent={
           <View className="mt-6 gap-3 border-t border-border pt-4">
             <AppText variant="bodyLg">ভিশন মডেল</AppText>
@@ -168,6 +288,8 @@ export default function ModelsScreen() {
           const installed = installedMap[item.id];
           const pct = progress[item.id];
           const busy = busyId === item.id;
+          const isActiveLlm =
+            installed && item.kind === "llm" && activeId === item.id;
           return (
             <View className="flex-row items-center gap-3 py-4">
               <View className="flex-1">
@@ -181,7 +303,7 @@ export default function ModelsScreen() {
                     ডাউনলোড হচ্ছে… {Math.round(pct * 100)}%
                   </AppText>
                 ) : null}
-                {installed && item.kind === "llm" && activeId === item.id ? (
+                {isActiveLlm ? (
                   <AppText variant="caption" className="mt-1 text-primary">
                     এখন চালু আছে
                   </AppText>
@@ -190,16 +312,30 @@ export default function ModelsScreen() {
               {busy ? (
                 <ActivityIndicator color={colors.primary} />
               ) : installed ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="মুছুন"
-                  onPress={() => void handleDelete(item)}
-                  className="rounded-xl bg-harvestSoft px-3 py-2"
-                >
-                  <AppText variant="caption" className="text-harvest">
-                    মুছুন
-                  </AppText>
-                </Pressable>
+                <View className="flex-row items-center gap-2">
+                  {item.kind === "llm" && activeId !== item.id ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="চালু করুন"
+                      onPress={() => void handleSelect(item)}
+                      className="rounded-xl bg-primary px-3 py-2"
+                    >
+                      <AppText variant="caption" className="text-white">
+                        চালু
+                      </AppText>
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="মুছুন"
+                    onPress={() => void handleDelete(item)}
+                    className="rounded-xl bg-harvestSoft px-3 py-2"
+                  >
+                    <AppText variant="caption" className="text-harvest">
+                      মুছুন
+                    </AppText>
+                  </Pressable>
+                </View>
               ) : (
                 <Pressable
                   accessibilityRole="button"

@@ -1,4 +1,0 @@
-allowBuilds:
-  '@siteed/sherpa-onnx.rn': true
-  llama.rn: true
-  unrs-resolver: false

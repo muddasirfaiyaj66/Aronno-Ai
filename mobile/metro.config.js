@@ -9,6 +9,20 @@ config.resolver.assetExts = [
   ...new Set([...(config.resolver.assetExts ?? []), "tflite"]),
 ];
 
+// Do not crawl huge on-device model downloads — saves Metro heap on Windows.
+const blockExtra = [
+  /[\\/]assets[\\/]models[\\/]stt[\\/].*/,
+  /[\\/]assets[\\/]models[\\/]tts[\\/].*/,
+  /\.gguf$/,
+  /\.onnx$/,
+];
+const prevBlock = config.resolver.blockList;
+config.resolver.blockList = Array.isArray(prevBlock)
+  ? [...prevBlock, ...blockExtra]
+  : prevBlock
+    ? [prevBlock, ...blockExtra]
+    : blockExtra;
+
 // react-native-fast-tflite commonjs build requires ../spec from lib/commonjs,
 // which wrongly resolves to lib/spec. Point it at the real package-root spec.
 const nativeRNTflite = path.resolve(

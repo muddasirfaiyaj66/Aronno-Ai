@@ -12,6 +12,8 @@ App screen: **Home → মাটি** (`scan/soil-sensor`).
 
 After changing BLE plugins, rebuild the **dev client** (`npx expo prebuild` / EAS). BLE does not work in Expo Go.
 
+**Pin:** use `@sfourdrinier/react-native-ble-plx@3.7.10` only (Expo SDK 54). Versions **3.8+** require RN 0.86 / Expo 57 and will hang or fail EAS `Run gradlew`.
+
 ---
 
 ## Shared JSON payload
@@ -64,7 +66,8 @@ Constants live in `mobile/lib/soilSensor/protocol.ts` (`BLE_PROTOCOL`).
 
 If your board uses different UUIDs, change **both** firmware and `BLE_PROTOCOL`.
 
-Library: `@sfourdrinier/react-native-ble-plx` (Expo SDK 54 fork), config plugin in `app.json`.
+Library: `@sfourdrinier/react-native-ble-plx` **3.7.x** (Expo SDK 54 / RN 0.81).  
+Do **not** use 3.8+ — those require Expo SDK 57 / RN 0.86 and break EAS `gradlew` on this app.
 
 ---
 

@@ -228,7 +228,8 @@ Have an agronomist review treatment text before production release.
 | ID | Kind | Approx size | Notes |
 |----|------|-------------|--------|
 | `gemma3-270m-q8` | LLM | ~300 MB | Instruct GGUF (fast) |
-| `gemma3-1b-it-q4` | LLM | ~690 MB | **Recommended** (better Bangla) |
+| `gemma3-1b-it-q4` | LLM | ~690 MB | **Recommended** default (better Bangla) |
+| `gemma3-4b-it-q4` | LLM | ~2.5 GB | Strongest Bangla; needs ~6 GB+ RAM (`Q4_K_M`) |
 | `stt-bn-zipformer` | STT | ~90 MB | Required for live mic |
 | `tts-bn-vits` | TTS | ~110 MB | Listed; runtime speech uses **expo-speech** for stability |
 
@@ -401,6 +402,9 @@ eas build --platform android --profile development
 | Every reply starts with “শুভ সকাল…” | Stale bundle / old prompt | Reload; greetings are deterministic-only now |
 | History has no treatment text | Old read-only result UI | Open history item again — KB advice + treatment plan |
 | EAS upload huge | `android/build` included | Use `.easignore`; build from `mobile/` |
+| EAS `npm ci` fails (Install dependencies) | Stale `package-lock.json` vs `package.json` (e.g. BLE pin) | Use **pnpm only**: delete `package-lock.json`; keep `pnpm-lock.yaml` + `"packageManager": "pnpm@…"` |
+| EAS canceled at ~45m on `Run gradlew` | Compiling llama/reanimated/sherpa for **4 ABIs** (arm64 + armeabi + x86 + x86_64) | `eas.json` sets `ORG_GRADLE_PROJECT_reactNativeArchitectures=arm64-v8a` for development/preview |
+| Local `sdk.dir … Directory does not exist` | Bad `android/local.properties` | Set `ANDROID_HOME` / fix `sdk.dir=C:\\Users\\…\\Android\\Sdk` (Windows). Or delete `android/` and `npx expo prebuild` |
 | App crash on boot (abort) | Sherpa TTS init | TTS uses expo-speech; do not eager-init sherpa TTS |
 | Vision “নেই” | Bundled assets not copied | Ensure TFLite files under `assets/models/vision/` and rebuild |
 

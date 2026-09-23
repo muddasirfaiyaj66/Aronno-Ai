@@ -42,16 +42,27 @@ async function migrateChatSessions(db: SQLite.SQLiteDatabase) {
   await db.execAsync(`
     CREATE INDEX IF NOT EXISTS idx_chat_conversation ON chat_turns(conversation_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_updated ON chat_sessions(updated_at);
+    CREATE TABLE IF NOT EXISTS hidden_history_ids (
+      id TEXT PRIMARY KEY NOT NULL,
+      hidden_at TEXT NOT NULL
+    );
   `);
 }
 
 export async function getOfflineDb(): Promise<SQLite.SQLiteDatabase> {
   if (!dbPromise) {
     dbPromise = (async () => {
-      const db = await SQLite.openDatabaseAsync("aronno_offline.db");
-      await db.execAsync(SCHEMA_SQL);
-      await migrateChatSessions(db);
-      return db;
+      try {
+        const db = await SQLite.openDatabaseAsync("aronno_offline.db");
+        // CREATE TABLE IF NOT EXISTS does not add new columns on existing DBs.
+        // Run column migrations before any index that depends on them.
+        await db.execAsync(SCHEMA_SQL);
+        await migrateChatSessions(db);
+        return db;
+      } catch (err) {
+        dbPromise = null;
+        throw err;
+      }
     })();
   }
   return dbPromise;

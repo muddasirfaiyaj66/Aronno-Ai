@@ -59,6 +59,31 @@ export class HistoryService {
     return assembled;
   }
 
+  /** Remove from history feed (HistoryEvent). Accepts event id or disease sourceId. */
+  async remove(user: AuthUser, id: string) {
+    const ownerFilter =
+      user.role === 'USER' ? { userId: user.id } : ({} as { userId?: string });
+
+    const matches = await this.prisma.historyEvent.findMany({
+      where: {
+        ...ownerFilter,
+        OR: [{ id }, { sourceId: id }],
+      },
+    });
+
+    if (matches.length === 0) throw Errors.notFound();
+    for (const event of matches) {
+      if (event.userId !== user.id && user.role === 'USER')
+        throw Errors.forbidden();
+    }
+
+    await this.prisma.historyEvent.deleteMany({
+      where: { id: { in: matches.map((m) => m.id) } },
+    });
+
+    return { ok: true, deleted: matches.map((m) => m.id) };
+  }
+
   private async assemble(event: {
     id: string;
     kind: HistoryKind;

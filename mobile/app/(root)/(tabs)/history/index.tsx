@@ -11,10 +11,15 @@ import {
   SeverityBadge,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { useGetHistoryQuery } from "@/services/api";
+import {
+  useDeleteHistoryEntryMutation,
+  useGetHistoryQuery,
+} from "@/services/api";
 import {
   countPendingUploads,
   deleteLocalDiagnosis,
+  hideHistoryIds,
+  listHiddenHistoryIds,
   listLocalHistory,
 } from "@/lib/offlineDb/queries";
 import {
@@ -194,13 +199,23 @@ function TimelineItem({
   );
 }
 
+function isHiddenEntry(entry: HistoryEntry, hidden: Set<string>): boolean {
+  if (hidden.has(entry.id)) return true;
+  if (entry.kind === "disease" && entry.sourceId && hidden.has(entry.sourceId)) {
+    return true;
+  }
+  return false;
+}
+
 export default function CropHealthHistoryScreen() {
   const router = useRouter();
   const online = useIsOnline();
   const [filter, setFilter] = useState<FilterValue>("all");
   const [localEntries, setLocalEntries] = useState<HistoryEntry[]>([]);
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [deleteHistoryEntry] = useDeleteHistoryEntryMutation();
 
   const { data: remote = [], refetch: refetchRemote } = useGetHistoryQuery(
     filter === "all" ? undefined : { kind: filter },
@@ -209,8 +224,14 @@ export default function CropHealthHistoryScreen() {
 
   const reloadLocal = useCallback(async () => {
     try {
-      setLocalEntries(await listLocalHistory());
-      setPending(await countPendingUploads());
+      const [local, pendingCount, hidden] = await Promise.all([
+        listLocalHistory(),
+        countPendingUploads(),
+        listHiddenHistoryIds(),
+      ]);
+      setLocalEntries(local);
+      setPending(pendingCount);
+      setHiddenIds(hidden);
     } catch {
       setLocalEntries([]);
       setPending(0);
@@ -233,7 +254,7 @@ export default function CropHealthHistoryScreen() {
     return subscribeSyncStatus((s) => {
       setPending(s.pending);
       setSyncing(s.syncing);
-      void listLocalHistory().then(setLocalEntries).catch(() => undefined);
+      void reloadLocal();
     });
   }, [reloadLocal]);
 
@@ -243,12 +264,24 @@ export default function CropHealthHistoryScreen() {
 
   const merged = useMemo(() => {
     const byKey = new Map<string, HistoryEntry>();
-    for (const e of localEntries) byKey.set(e.id, e);
+    for (const e of localEntries) {
+      if (!isHiddenEntry(e, hiddenIds)) byKey.set(e.id, e);
+    }
     for (const e of remote) {
+      if (isHiddenEntry(e, hiddenIds)) continue;
+      // Prefer local row when same diagnosis already listed under localId.
+      if (e.kind === "disease" && e.sourceId) {
+        const localMatch = [...byKey.values()].find(
+          (x) =>
+            x.kind === "disease" &&
+            (x.id === e.sourceId || x.sourceId === e.sourceId),
+        );
+        if (localMatch) continue;
+      }
       if (!byKey.has(e.id)) byKey.set(e.id, e);
     }
     return [...byKey.values()].sort((a, b) => b.date.localeCompare(a.date));
-  }, [localEntries, remote]);
+  }, [localEntries, remote, hiddenIds]);
 
   const filteredEntries = useMemo(
     () =>
@@ -269,6 +302,29 @@ export default function CropHealthHistoryScreen() {
         style: "destructive",
         onPress: () => {
           void (async () => {
+            const ids = [entry.id];
+            if (entry.kind === "disease" && entry.sourceId) {
+              ids.push(entry.sourceId);
+            }
+            await hideHistoryIds(ids);
+            setHiddenIds((prev) => {
+              const next = new Set(prev);
+              ids.forEach((id) => next.add(id));
+              return next;
+            });
+            setLocalEntries((prev) =>
+              prev.filter(
+                (e) =>
+                  e.id !== entry.id &&
+                  !(
+                    entry.kind === "disease" &&
+                    e.kind === "disease" &&
+                    entry.sourceId &&
+                    (e.id === entry.sourceId || e.sourceId === entry.sourceId)
+                  ),
+              ),
+            );
+
             if (entry.kind === "disease") {
               await deleteLocalDiagnosis(entry.id).catch(() => undefined);
               if (entry.sourceId && entry.sourceId !== entry.id) {
@@ -277,7 +333,20 @@ export default function CropHealthHistoryScreen() {
                 );
               }
             }
-            setLocalEntries((prev) => prev.filter((e) => e.id !== entry.id));
+
+            if (online) {
+              const remoteIds = [entry.id];
+              if (entry.kind === "disease" && entry.sourceId) {
+                remoteIds.push(entry.sourceId);
+              }
+              for (const rid of remoteIds) {
+                await deleteHistoryEntry(rid)
+                  .unwrap()
+                  .catch(() => undefined);
+              }
+              await refetchRemote().catch(() => undefined);
+            }
+
             await reloadLocal();
           })();
         },

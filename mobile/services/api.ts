@@ -331,6 +331,11 @@ export const api = createApi({
       transformResponse: (r) => unwrap(r),
       providesTags: (_r, _e, id) => [{ type: "History", id }],
     }),
+    deleteHistoryEntry: builder.mutation<{ ok: boolean; deleted: string[] }, string>({
+      query: (id) => ({ url: `/history/${id}`, method: "DELETE" }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["History", "Diagnosis"],
+    }),
     syncOffline: builder.mutation<
       {
         diagnoses: { clientLocalId: string; serverId: string }[];
@@ -600,6 +605,7 @@ export const {
   useCreateCostEstimateMutation,
   useGetHistoryQuery,
   useGetHistoryEntryQuery,
+  useDeleteHistoryEntryMutation,
   useSyncOfflineMutation,
   useLazySyncPullChatQuery,
   useCreateReportMutation,

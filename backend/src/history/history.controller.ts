@@ -1,4 +1,10 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { HistoryKind } from '@prisma/client';
 import { HistoryService } from './history.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -22,5 +28,10 @@ export class HistoryController {
   @Get(':id')
   get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.history.get(user, id);
+  }
+
+  @Delete(':id')
+  remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.history.remove(user, id);
   }
 }

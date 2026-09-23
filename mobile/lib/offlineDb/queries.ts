@@ -380,28 +380,34 @@ export async function recentChatHistoryTurns(
 
 export async function listLocalHistory(): Promise<HistoryEntry[]> {
   const db = await getOfflineDb();
+  const hidden = await listHiddenHistoryIds();
   const diags = await db.getAllAsync<Record<string, unknown>>(
     `SELECT * FROM local_diagnoses ORDER BY created_at DESC LIMIT 100`,
   );
-  const out: DiseaseHistoryEntry[] = diags.map((r: Record<string, unknown>) => {
-    const d = mapDiag(r);
-    return {
-      // Always navigate with localId so offline detail lookup works.
-      id: d.localId,
-      sourceId: d.serverId ?? undefined,
-      kind: "disease",
-      date: d.createdAt.slice(0, 10),
-      dateBn: dateBn(d.createdAt),
-      cropNameBn: "ফসল",
-      diseaseNameBn: d.diseaseNameBn,
-      diseaseNameEn: d.diseaseNameEn,
-      severity: (d.severity === "low" || d.severity === "high"
-        ? d.severity
-        : "medium") as DiseaseHistoryEntry["severity"],
-      confidence: d.confidence,
-      imageUrl: d.imageUri,
-    };
-  });
+  const out: DiseaseHistoryEntry[] = diags
+    .map((r: Record<string, unknown>) => {
+      const d = mapDiag(r);
+      return {
+        // Always navigate with localId so offline detail lookup works.
+        id: d.localId,
+        sourceId: d.serverId ?? undefined,
+        kind: "disease" as const,
+        date: d.createdAt.slice(0, 10),
+        dateBn: dateBn(d.createdAt),
+        cropNameBn: "ফসল",
+        diseaseNameBn: d.diseaseNameBn,
+        diseaseNameEn: d.diseaseNameEn,
+        severity: (d.severity === "low" || d.severity === "high"
+          ? d.severity
+          : "medium") as DiseaseHistoryEntry["severity"],
+        confidence: d.confidence,
+        imageUrl: d.imageUri,
+      };
+    })
+    .filter(
+      (e) =>
+        !hidden.has(e.id) && !(e.sourceId && hidden.has(e.sourceId)),
+    );
   return out;
 }
 
@@ -418,9 +424,52 @@ export async function getDiagnosisByAnyId(
   return row ? mapDiag(row) : null;
 }
 
+export async function hideHistoryId(id: string): Promise<void> {
+  if (!id) return;
+  const db = await getOfflineDb();
+  await db.runAsync(
+    `INSERT OR IGNORE INTO hidden_history_ids (id, hidden_at) VALUES (?, ?)`,
+    [id, nowIso()],
+  );
+}
+
+export async function hideHistoryIds(ids: string[]): Promise<void> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  for (const id of unique) await hideHistoryId(id);
+}
+
+export async function listHiddenHistoryIds(): Promise<Set<string>> {
+  const db = await getOfflineDb();
+  const rows = await db.getAllAsync<{ id: string }>(
+    `SELECT id FROM hidden_history_ids`,
+  );
+  return new Set(rows.map((r) => r.id));
+}
+
+export async function isHistoryHidden(id: string): Promise<boolean> {
+  if (!id) return false;
+  const db = await getOfflineDb();
+  const row = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM hidden_history_ids WHERE id = ? LIMIT 1`,
+    [id],
+  );
+  return Boolean(row);
+}
+
+/** Delete local disease row and tombstone ids so sync/remote cannot revive it. */
 export async function deleteLocalDiagnosis(id: string): Promise<void> {
   if (!id) return;
   const db = await getOfflineDb();
+  const row = await db.getFirstAsync<Record<string, unknown>>(
+    `SELECT local_id, server_id FROM local_diagnoses WHERE local_id = ? OR server_id = ? LIMIT 1`,
+    [id, id],
+  );
+  const toHide = [id];
+  if (row) {
+    toHide.push(String(row.local_id));
+    if (row.server_id) toHide.push(String(row.server_id));
+  }
+  await hideHistoryIds(toHide);
   await db.runAsync(
     `DELETE FROM local_diagnoses WHERE local_id = ? OR server_id = ?`,
     [id, id],
@@ -538,10 +587,14 @@ export async function upsertDiagnosesFromServer(
   entries: DiseaseHistoryEntry[],
 ): Promise<void> {
   const db = await getOfflineDb();
+  const hidden = await listHiddenHistoryIds();
   const ts = nowIso();
   for (const e of entries) {
     if (e.kind !== "disease") continue;
     const serverId = e.sourceId ?? e.id;
+    if (hidden.has(e.id) || hidden.has(serverId) || (e.sourceId && hidden.has(e.sourceId))) {
+      continue;
+    }
     const existing = await db.getFirstAsync<{ local_id: string }>(
       `SELECT local_id FROM local_diagnoses WHERE server_id = ? OR local_id = ?`,
       [serverId, serverId],

@@ -107,11 +107,15 @@ CREATE TABLE IF NOT EXISTS sync_meta (
   value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS hidden_history_ids (
+  id TEXT PRIMARY KEY NOT NULL,
+  hidden_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_diag_sync ON local_diagnoses(sync_status);
 CREATE INDEX IF NOT EXISTS idx_tool_sync ON local_tools(sync_status);
 CREATE INDEX IF NOT EXISTS idx_chat_sync ON chat_turns(sync_status);
 CREATE INDEX IF NOT EXISTS idx_chat_created ON chat_turns(created_at);
-CREATE INDEX IF NOT EXISTS idx_chat_conversation ON chat_turns(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_diag_created ON local_diagnoses(created_at);
-CREATE INDEX IF NOT EXISTS idx_sessions_updated ON chat_sessions(updated_at);
 `;
+

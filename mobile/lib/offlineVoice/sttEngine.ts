@@ -3,12 +3,23 @@
  * Supports one-shot push-to-talk and silence-ended utterances for live chat.
  */
 import { Audio } from "expo-av";
-import { ASR } from "@siteed/sherpa-onnx.rn";
 import type { AsrModelConfig } from "@siteed/sherpa-onnx.rn";
 import { catalogByKind } from "@/lib/modelManager/catalog";
 import { isInstalled, localDir } from "@/lib/modelManager/modelManager";
 import { enablePlaybackAudio, enableRecordingAudio, SPEECH_RECORDING } from "@/lib/speechRecording";
 import { logMetric, markStart } from "@/lib/offline/metrics";
+
+type SherpaAsr = typeof import("@siteed/sherpa-onnx.rn").ASR;
+
+/**
+ * Loaded on first use: sherpa-onnx throws at import time when its native
+ * module is missing (e.g. Expo Go), which would crash every screen that
+ * imports this file.
+ */
+function loadAsr(): SherpaAsr {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return (require("@siteed/sherpa-onnx.rn") as { ASR: SherpaAsr }).ASR;
+}
 
 let ready = false;
 let recording: Audio.Recording | null = null;
@@ -61,7 +72,7 @@ export async function initSTT(): Promise<boolean> {
         tokens: "tokens.txt",
       },
     };
-    const result = await ASR.initialize(config);
+    const result = await loadAsr().initialize(config);
     if (!result.success) {
       ready = false;
       end(result.error ?? "init-failed");
@@ -83,7 +94,7 @@ export async function isSTTReady(): Promise<boolean> {
 }
 
 async function transcribeUri(uri: string): Promise<string> {
-  const result = await ASR.recognizeFromFile(nativePath(uri));
+  const result = await loadAsr().recognizeFromFile(nativePath(uri));
   return (result.text ?? "").trim();
 }
 

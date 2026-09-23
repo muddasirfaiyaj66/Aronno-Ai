@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -12,12 +13,19 @@ import { Public } from '../../common/decorators/public.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import type { AuthUser } from '../../auth/auth.types';
 import { ShopService } from '../services/shop.service';
-import { CreateShopDto, UpdateShopDto } from '../dto/shop.dto';
+import { CreateShopDto, FilterShopsDto, UpdateShopDto } from '../dto/shop.dto';
 
 @Controller('marketplace/shops')
 @UseGuards(JwtAuthGuard)
 export class ShopController {
   constructor(private readonly shopService: ShopService) {}
+
+  @Public()
+  @Get()
+  async getShops(@Query() query: FilterShopsDto) {
+    const data = await this.shopService.filterShops(query);
+    return { success: true, data };
+  }
 
   @Post()
   async createShop(

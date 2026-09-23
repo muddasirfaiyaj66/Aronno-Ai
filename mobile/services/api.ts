@@ -615,6 +615,31 @@ export const api = createApi({
       transformResponse: (r) => unwrap<ShopData>(r),
       providesTags: (_r, _e, id) => [{ type: "Shop", id }],
     }),
+    getShops: builder.query<{ items: ShopData[]; total: number; page: number; totalPages: number }, any>({
+      query: (params) => {
+        const p = new URLSearchParams();
+        if (params?.search) p.set("search", params.search);
+        if (params?.districtId) p.set("districtId", params.districtId);
+        if (params?.page) p.set("page", String(params.page));
+        if (params?.limit) p.set("limit", String(params.limit));
+        const q = p.toString();
+        return `/marketplace/shops${q ? `?${q}` : ""}`;
+      },
+      transformResponse: (r) => {
+        const data = unwrap<{ items: ShopData[]; total: number; page: number; totalPages: number } | ShopData[]>(r);
+        if (data && !Array.isArray(data) && "items" in data) {
+          return {
+            items: data.items ?? [],
+            total: data.total ?? 0,
+            page: data.page ?? 1,
+            totalPages: data.totalPages ?? 1,
+          };
+        }
+        const arr = Array.isArray(data) ? data : [];
+        return { items: arr, total: arr.length, page: 1, totalPages: 1 };
+      },
+      providesTags: ["Shop"],
+    }),
     createShop: builder.mutation<
       ShopData,
       {
@@ -836,6 +861,7 @@ export const {
   useDeleteStorageImageMutation,
   useGetMyShopQuery,
   useGetPublicShopQuery,
+  useGetShopsQuery,
   useCreateShopMutation,
   useUpdateMyShopMutation,
   useGetProductsQuery,

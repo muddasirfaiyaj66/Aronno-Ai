@@ -71,3 +71,19 @@ export class UpdateShopDto {
   @IsOptional()
   isActive?: boolean;
 }
+
+export class FilterShopsDto {
+  @IsString()
+  @IsOptional()
+  search?: string;
+
+  @IsString()
+  @IsOptional()
+  districtId?: string;
+
+  @IsOptional()
+  page?: number;
+
+  @IsOptional()
+  limit?: number;
+}

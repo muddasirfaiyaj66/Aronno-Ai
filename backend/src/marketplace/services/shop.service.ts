@@ -4,8 +4,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateShopDto, UpdateShopDto } from '../dto/shop.dto';
+import { CreateShopDto, FilterShopsDto, UpdateShopDto } from '../dto/shop.dto';
 
 @Injectable()
 export class ShopService {
@@ -19,6 +20,67 @@ export class ShopService {
       if (d) return d;
     }
     return this.prisma.district.findUnique({ where: { slug: districtIdOrSlug } });
+  }
+
+  async filterShops(dto: FilterShopsDto) {
+    const page = Math.max(1, Number(dto.page ?? 1));
+    const limit = Math.min(50, Math.max(1, Number(dto.limit ?? 20)));
+    const skip = (page - 1) * limit;
+
+    let resolvedDistrictId: string | undefined;
+    if (dto.districtId) {
+      const district = await this.resolveDistrict(dto.districtId);
+      resolvedDistrictId = district?.id;
+    }
+
+    const where: Prisma.ShopWhereInput = {
+      isActive: true,
+      ...(resolvedDistrictId && { districtId: resolvedDistrictId }),
+      ...(dto.search && {
+        OR: [
+          { name: { contains: dto.search, mode: 'insensitive' } },
+          { description: { contains: dto.search, mode: 'insensitive' } },
+          { address: { contains: dto.search, mode: 'insensitive' } },
+          { upazila: { contains: dto.search, mode: 'insensitive' } },
+        ],
+      }),
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.shop.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        include: {
+          district: true,
+          owner: {
+            select: {
+              id: true,
+              displayName: true,
+              avatarUrl: true,
+            },
+          },
+          _count: {
+            select: {
+              products: {
+                where: { status: 'active' },
+              },
+              orders: true,
+            },
+          },
+        },
+      }),
+      this.prisma.shop.count({ where }),
+    ]);
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async createShop(ownerUserId: string, dto: CreateShopDto) {

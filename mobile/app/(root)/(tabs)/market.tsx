@@ -24,6 +24,7 @@ import {
   useGetHeatmapQuery,
   useGetMyShopQuery,
   useGetProductsQuery,
+  useGetShopsQuery,
 } from "@/services/api";
 import { type HeatLevel } from "@/types/market";
 import {
@@ -38,6 +39,13 @@ const TABS: { id: MarketTab; label: string }[] = [
   { id: "marketplace", label: "কৃষি মার্কেট" },
   { id: "shop", label: "আমার দোকান" },
   { id: "heatmap", label: "হিট ম্যাপ" },
+];
+
+type SearchMode = "products" | "shops";
+
+const SEARCH_MODE_OPTIONS: { id: SearchMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: "products", label: "পণ্যসামগ্রী", icon: "cube-outline" },
+  { id: "shops", label: "দোকানসমূহ", icon: "storefront-outline" },
 ];
 
 type ProductCategory =
@@ -146,7 +154,10 @@ export default function MarketScreen() {
       : "marketplace",
   );
 
-  // Marketplace product search & filters
+  // Search Mode: products vs shops
+  const [searchMode, setSearchMode] = useState<SearchMode>("products");
+
+  // Marketplace search & filters
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [productCategory, setProductCategory] = useState<ProductCategory>("all");
@@ -171,23 +182,47 @@ export default function MarketScreen() {
 
   const { data: myShop, isLoading: myShopLoading, refetch: refetchMyShop } = useGetMyShopQuery();
 
+  // Query Products
   const {
     data: productsData,
     isLoading: productsLoading,
     isError: productsError,
     refetch: refetchProducts,
-  } = useGetProductsQuery({
-    category: productCategory === "all" ? undefined : productCategory,
-    districtId: productDistrict === "all" ? undefined : productDistrict,
-    search: debouncedSearch || undefined,
-    sort: sortOption,
-    page,
-    limit: 20,
-  });
+  } = useGetProductsQuery(
+    {
+      category: productCategory === "all" ? undefined : productCategory,
+      districtId: productDistrict === "all" ? undefined : productDistrict,
+      search: debouncedSearch || undefined,
+      sort: sortOption,
+      page,
+      limit: 20,
+    },
+    { skip: tab !== "marketplace" || searchMode !== "products" },
+  );
+
+  // Query Shops
+  const {
+    data: shopsData,
+    isLoading: shopsLoading,
+    isError: shopsError,
+    refetch: refetchShops,
+  } = useGetShopsQuery(
+    {
+      search: debouncedSearch || undefined,
+      districtId: productDistrict === "all" ? undefined : productDistrict,
+      page,
+      limit: 20,
+    },
+    { skip: tab !== "marketplace" || searchMode !== "shops" },
+  );
 
   const products = productsData?.items ?? [];
   const totalProducts = productsData?.total ?? 0;
-  const totalPages = productsData?.totalPages ?? 1;
+  const productTotalPages = productsData?.totalPages ?? 1;
+
+  const shops = shopsData?.items ?? [];
+  const totalShops = shopsData?.total ?? 0;
+  const shopTotalPages = shopsData?.totalPages ?? 1;
 
   const {
     data: heatmap,
@@ -202,11 +237,12 @@ export default function MarketScreen() {
   const refreshMarket = useCallback(async () => {
     await Promise.all([
       refetchProducts(),
+      refetchShops(),
       refetchHeatmap(),
       refetchDistricts(),
       refetchMyShop(),
     ]);
-  }, [refetchProducts, refetchHeatmap, refetchDistricts, refetchMyShop]);
+  }, [refetchProducts, refetchShops, refetchHeatmap, refetchDistricts, refetchMyShop]);
 
   const { refreshControl } = usePullToRefresh(refreshMarket);
 
@@ -229,7 +265,7 @@ export default function MarketScreen() {
           <View>
             <AppText variant="title">কৃষি মার্কেট</AppText>
             <AppText variant="caption" className="mt-0.5 text-muted">
-              সহজে কৃষি পণ্য খুঁজুন ও কেনাবেচা করুন
+              সহজে কৃষি পণ্য ও দোকান খুঁজুন
             </AppText>
           </View>
           <View className="flex-row items-center gap-2">
@@ -264,13 +300,50 @@ export default function MarketScreen() {
       >
         {tab === "marketplace" ? (
           <>
+            {/* Mode Switcher: Products vs Shops */}
+            <View className="flex-row rounded-2xl bg-white p-1 border border-border">
+              {SEARCH_MODE_OPTIONS.map((mode) => {
+                const selected = mode.id === searchMode;
+                return (
+                  <Pressable
+                    key={mode.id}
+                    onPress={() => {
+                      setSearchMode(mode.id);
+                      setPage(1);
+                    }}
+                    className={`flex-1 flex-row items-center justify-center py-2.5 rounded-xl gap-2 ${
+                      selected ? "bg-primary shadow-xs" : "bg-transparent"
+                    }`}
+                  >
+                    <Ionicons
+                      name={mode.icon}
+                      size={18}
+                      color={selected ? colors.white : colors.ink}
+                    />
+                    <AppText
+                      variant="body"
+                      className={`font-bengali-bold ${
+                        selected ? "text-white" : "text-ink"
+                      }`}
+                    >
+                      {mode.label}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
+
             {/* Search Input Bar */}
             <View className="flex-row items-center rounded-2xl border border-border bg-white px-3.5 py-2.5 shadow-sm">
               <Ionicons name="search" size={20} color={colors.muted} />
               <TextInput
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="পণ্য খুঁজুন..."
+                placeholder={
+                  searchMode === "products"
+                    ? "পণ্য খুঁজুন..."
+                    : "দোকানের নাম বা ঠিকানা দিয়ে খুঁজুন..."
+                }
                 placeholderTextColor={colors.muted}
                 className="ml-2 flex-1 font-bengali-medium text-ink"
                 style={{ fontSize: 14, paddingVertical: 2 }}
@@ -281,17 +354,6 @@ export default function MarketScreen() {
                 </Pressable>
               ) : null}
             </View>
-
-            {/* Category filter */}
-            <FilterChipRow
-              label="শ্রেণি"
-              options={CATEGORY_FILTER_OPTIONS}
-              value={productCategory}
-              onChange={(cat) => {
-                setProductCategory(cat);
-                setPage(1);
-              }}
-            />
 
             {/* District filter */}
             <FilterChipRow
@@ -304,188 +366,367 @@ export default function MarketScreen() {
               }}
             />
 
-            {/* Sort Filter Row */}
-            <FilterChipRow
-              label="সাজান"
-              options={SORT_OPTIONS}
-              value={sortOption}
-              onChange={(s) => {
-                setSortOption(s);
-                setPage(1);
-              }}
-            />
-
-            {/* Product List */}
-            {productsLoading ? (
-              <AIGeneratingShimmer label="পণ্যের তালিকা আনা হচ্ছে" lines={4} className="w-full" />
-            ) : productsError ? (
-              <RetryCard
-                message="পণ্যের তালিকা আনা যায়নি। আবার চেষ্টা করুন।"
-                onRetry={refetchProducts}
-              />
-            ) : products.length === 0 ? (
-              <EmptyState
-                icon={<Ionicons name="storefront-outline" size={32} color={colors.primary} />}
-                message="এই ফিল্টারে কোনো পণ্য পাওয়া যায়নি।"
-                ctaLabel="ফিল্টার পরিষ্কার করুন"
-                onCta={() => {
-                  setSearchQuery("");
-                  setProductCategory("all");
-                  setProductDistrict("all");
-                  setSortOption("newest");
-                  setPage(1);
-                }}
-              />
-            ) : (
+            {/* Mode 1: Products */}
+            {searchMode === "products" ? (
               <>
-                <View className="flex-row items-center justify-between px-1">
-                  <AppText variant="caption" className="font-bengali-semibold text-muted">
-                    মোট {toBn(totalProducts)}টি পণ্য পাওয়া গেছে
-                  </AppText>
-                </View>
+                {/* Category filter */}
+                <FilterChipRow
+                  label="শ্রেণি"
+                  options={CATEGORY_FILTER_OPTIONS}
+                  value={productCategory}
+                  onChange={(cat) => {
+                    setProductCategory(cat);
+                    setPage(1);
+                  }}
+                />
 
-                <View className="flex-row flex-wrap gap-3">
-                  {products.map((product: any) => {
-                    const imageUrl = product.images?.[0]?.url;
-                    return (
-                      <Pressable
-                        key={product.id}
-                        onPress={() =>
-                          router.push({
-                            pathname: "/(root)/product/[id]",
-                            params: { id: product.id },
-                          })
-                        }
-                        className="w-[47%] overflow-hidden rounded-3xl bg-white shadow-sm border border-border/50"
-                      >
-                        {/* Product image */}
-                        <View className="h-36 w-full overflow-hidden bg-neutral">
-                          {imageUrl ? (
-                            <Image
-                              source={{ uri: imageUrl }}
-                              className="h-full w-full"
-                              resizeMode="cover"
-                            />
-                          ) : (
-                            <View className="h-full w-full items-center justify-center bg-primary/10">
-                              <Ionicons name="cube" size={32} color={colors.primary} />
-                            </View>
-                          )}
-                          {product.isOrganic ? (
-                            <View className="absolute left-2 top-2 flex-row items-center gap-0.5 rounded-full bg-severity-low-bg px-2 py-0.5 shadow-sm">
-                              <Ionicons name="leaf" size={10} color="#027A48" />
-                              <AppText
-                                variant="caption"
-                                style={{ color: "#027A48", fontSize: 10 }}
-                                className="font-bengali-bold"
-                              >
-                                জৈব
-                              </AppText>
-                            </View>
-                          ) : null}
-                        </View>
+                {/* Sort Filter Row */}
+                <FilterChipRow
+                  label="সাজান"
+                  options={SORT_OPTIONS}
+                  value={sortOption}
+                  onChange={(s) => {
+                    setSortOption(s);
+                    setPage(1);
+                  }}
+                />
 
-                        {/* Product info */}
-                        <View className="gap-1 p-3">
-                          <AppText
-                            variant="body"
-                            className="font-bengali-bold text-ink"
-                            numberOfLines={1}
+                {/* Product List */}
+                {productsLoading ? (
+                  <AIGeneratingShimmer label="পণ্যের তালিকা আনা হচ্ছে" lines={4} className="w-full" />
+                ) : productsError ? (
+                  <RetryCard
+                    message="পণ্যের তালিকা আনা যায়নি। আবার চেষ্টা করুন।"
+                    onRetry={refetchProducts}
+                  />
+                ) : products.length === 0 ? (
+                  <EmptyState
+                    icon={<Ionicons name="storefront-outline" size={32} color={colors.primary} />}
+                    message="এই ফিল্টারে কোনো পণ্য পাওয়া যায়নি।"
+                    ctaLabel="ফিল্টার পরিষ্কার করুন"
+                    onCta={() => {
+                      setSearchQuery("");
+                      setProductCategory("all");
+                      setProductDistrict("all");
+                      setSortOption("newest");
+                      setPage(1);
+                    }}
+                  />
+                ) : (
+                  <>
+                    <View className="flex-row items-center justify-between px-1">
+                      <AppText variant="caption" className="font-bengali-semibold text-muted">
+                        মোট {toBn(totalProducts)}টি পণ্য পাওয়া গেছে
+                      </AppText>
+                    </View>
+
+                    <View className="flex-row flex-wrap gap-3">
+                      {products.map((product: any) => {
+                        const imageUrl = product.images?.[0]?.url;
+                        return (
+                          <Pressable
+                            key={product.id}
+                            onPress={() =>
+                              router.push({
+                                pathname: "/(root)/product/[id]",
+                                params: { id: product.id },
+                              })
+                            }
+                            className="w-[47%] overflow-hidden rounded-3xl bg-white shadow-sm border border-border/50"
                           >
-                            {product.name}
-                          </AppText>
-                          <AppText variant="body" className="font-bengali-bold text-primary">
-                            {formatPriceBn(product.pricePerUnit, product.unit)}
-                          </AppText>
-                          {product.availableQuantity !== undefined && product.availableQuantity !== null ? (
-                            <AppText variant="caption" className="text-muted" numberOfLines={1}>
-                              মজুদ: {toBn(product.availableQuantity)} {formatUnitBn(product.unit)}
-                            </AppText>
-                          ) : null}
-                          {product.shop?.name ? (
-                            <View className="flex-row items-center gap-1 mt-0.5">
-                              <Ionicons name="storefront-outline" size={12} color={colors.muted} />
+                            {/* Product image */}
+                            <View className="h-36 w-full overflow-hidden bg-neutral">
+                              {imageUrl ? (
+                                <Image
+                                  source={{ uri: imageUrl }}
+                                  className="h-full w-full"
+                                  resizeMode="cover"
+                                />
+                              ) : (
+                                <View className="h-full w-full items-center justify-center bg-primary/10">
+                                  <Ionicons name="cube" size={32} color={colors.primary} />
+                                </View>
+                              )}
+                              {product.isOrganic ? (
+                                <View className="absolute left-2 top-2 flex-row items-center gap-0.5 rounded-full bg-severity-low-bg px-2 py-0.5 shadow-sm">
+                                  <Ionicons name="leaf" size={10} color="#027A48" />
+                                  <AppText
+                                    variant="caption"
+                                    style={{ color: "#027A48", fontSize: 10 }}
+                                    className="font-bengali-bold"
+                                  >
+                                    জৈব
+                                  </AppText>
+                                </View>
+                              ) : null}
+                            </View>
+
+                            {/* Product info */}
+                            <View className="gap-1 p-3">
                               <AppText
-                                variant="caption"
-                                className="flex-1 text-muted font-bengali-medium"
+                                variant="body"
+                                className="font-bengali-bold text-ink"
                                 numberOfLines={1}
                               >
-                                {product.shop.name}
+                                {product.name}
                               </AppText>
+                              <AppText variant="body" className="font-bengali-bold text-primary">
+                                {formatPriceBn(product.pricePerUnit, product.unit)}
+                              </AppText>
+                              {product.availableQuantity !== undefined && product.availableQuantity !== null ? (
+                                <AppText variant="caption" className="text-muted" numberOfLines={1}>
+                                  মজুদ: {toBn(product.availableQuantity)} {formatUnitBn(product.unit)}
+                                </AppText>
+                              ) : null}
+                              {product.shop?.name ? (
+                                <View className="flex-row items-center gap-1 mt-0.5">
+                                  <Ionicons name="storefront-outline" size={12} color={colors.muted} />
+                                  <AppText
+                                    variant="caption"
+                                    className="flex-1 text-muted font-bengali-medium"
+                                    numberOfLines={1}
+                                  >
+                                    {product.shop.name}
+                                  </AppText>
+                                </View>
+                              ) : null}
+                              {product.district?.nameBn ? (
+                                <View className="flex-row items-center gap-1">
+                                  <Ionicons name="location-outline" size={12} color={colors.muted} />
+                                  <AppText
+                                    variant="caption"
+                                    className="flex-1 text-muted font-bengali-medium"
+                                    numberOfLines={1}
+                                  >
+                                    {product.district.nameBn}
+                                  </AppText>
+                                </View>
+                              ) : null}
                             </View>
-                          ) : null}
-                          {product.district?.nameBn ? (
-                            <View className="flex-row items-center gap-1">
-                              <Ionicons name="location-outline" size={12} color={colors.muted} />
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+
+                    {/* Pagination Controls */}
+                    {productTotalPages > 1 ? (
+                      <View className="flex-row items-center justify-center gap-3 mt-4">
+                        <Pressable
+                          disabled={page <= 1}
+                          onPress={() => setPage((p) => Math.max(1, p - 1))}
+                          className={`h-10 rounded-full px-4 items-center justify-center flex-row gap-1 ${
+                            page <= 1 ? "bg-neutral border border-border" : "bg-white border border-primary"
+                          }`}
+                        >
+                          <Ionicons
+                            name="chevron-back"
+                            size={16}
+                            color={page <= 1 ? colors.muted : colors.primary}
+                          />
+                          <AppText
+                            variant="caption"
+                            className={`font-bengali-bold ${
+                              page <= 1 ? "text-muted" : "text-primary"
+                            }`}
+                          >
+                            পূর্ববর্তী
+                          </AppText>
+                        </Pressable>
+
+                        <AppText variant="body" className="font-bengali-bold text-ink px-2">
+                          {toBn(page)} / {toBn(productTotalPages)}
+                        </AppText>
+
+                        <Pressable
+                          disabled={page >= productTotalPages}
+                          onPress={() => setPage((p) => Math.min(productTotalPages, p + 1))}
+                          className={`h-10 rounded-full px-4 items-center justify-center flex-row gap-1 ${
+                            page >= productTotalPages
+                              ? "bg-neutral border border-border"
+                              : "bg-white border border-primary"
+                          }`}
+                        >
+                          <AppText
+                            variant="caption"
+                            className={`font-bengali-bold ${
+                              page >= productTotalPages ? "text-muted" : "text-primary"
+                            }`}
+                          >
+                            পরবর্তী
+                          </AppText>
+                          <Ionicons
+                            name="chevron-forward"
+                            size={16}
+                            color={page >= productTotalPages ? colors.muted : colors.primary}
+                          />
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </>
+                )}
+              </>
+            ) : (
+              /* Mode 2: Shops */
+              <>
+                {shopsLoading ? (
+                  <AIGeneratingShimmer label="দোকানের তালিকা আনা হচ্ছে" lines={4} className="w-full" />
+                ) : shopsError ? (
+                  <RetryCard
+                    message="দোকানের তালিকা আনা যায়নি। আবার চেষ্টা করুন।"
+                    onRetry={refetchShops}
+                  />
+                ) : shops.length === 0 ? (
+                  <EmptyState
+                    icon={<Ionicons name="storefront-outline" size={32} color={colors.primary} />}
+                    message="এই ফিল্টারে কোনো দোকান পাওয়া যায়নি।"
+                    ctaLabel="ফিল্টার পরিষ্কার করুন"
+                    onCta={() => {
+                      setSearchQuery("");
+                      setProductDistrict("all");
+                      setPage(1);
+                    }}
+                  />
+                ) : (
+                  <>
+                    <View className="flex-row items-center justify-between px-1">
+                      <AppText variant="caption" className="font-bengali-semibold text-muted">
+                        মোট {toBn(totalShops)}টি দোকান পাওয়া গেছে
+                      </AppText>
+                    </View>
+
+                    <View className="gap-3">
+                      {shops.map((shopItem: any) => {
+                        const locationText = [
+                          shopItem.district?.nameBn,
+                          shopItem.upazila,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ");
+
+                        return (
+                          <Pressable
+                            key={shopItem.id}
+                            onPress={() =>
+                              router.push({
+                                pathname: "/(root)/shop/[id]",
+                                params: { id: shopItem.id },
+                              })
+                            }
+                            className="rounded-3xl bg-white p-4 shadow-sm border border-border/50 flex-row items-center gap-3.5"
+                          >
+                            {/* Logo */}
+                            {shopItem.logoUrl ? (
+                              <Image
+                                source={{ uri: shopItem.logoUrl }}
+                                className="h-16 w-16 rounded-2xl bg-neutral"
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <View className="h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+                                <Ionicons name="storefront" size={28} color={colors.primary} />
+                              </View>
+                            )}
+
+                            {/* Shop Details */}
+                            <View className="flex-1 gap-1">
                               <AppText
-                                variant="caption"
-                                className="flex-1 text-muted font-bengali-medium"
+                                variant="subtitle"
+                                className="font-bengali-bold text-ink"
                                 numberOfLines={1}
                               >
-                                {product.district.nameBn}
+                                {shopItem.name}
                               </AppText>
+
+                              {shopItem.owner?.displayName ? (
+                                <AppText variant="caption" className="text-muted font-bengali-medium">
+                                  বিক্রেতা: {shopItem.owner.displayName}
+                                </AppText>
+                              ) : null}
+
+                              <View className="flex-row items-center gap-2 flex-wrap mt-0.5">
+                                {locationText ? (
+                                  <View className="flex-row items-center gap-0.5">
+                                    <Ionicons name="location-outline" size={12} color={colors.muted} />
+                                    <AppText variant="caption" className="text-muted font-bengali-medium">
+                                      {locationText}
+                                    </AppText>
+                                  </View>
+                                ) : null}
+
+                                <View className="rounded-full bg-primary/10 px-2 py-0.5">
+                                  <AppText
+                                    variant="caption"
+                                    className="font-bengali-bold text-primary"
+                                    style={{ fontSize: 11 }}
+                                  >
+                                    পণ্য: {toBn(shopItem._count?.products ?? 0)}টি
+                                  </AppText>
+                                </View>
+                              </View>
                             </View>
-                          ) : null}
-                        </View>
-                      </Pressable>
-                    );
-                  })}
-                </View>
 
-                {/* Pagination Controls */}
-                {totalPages > 1 ? (
-                  <View className="flex-row items-center justify-center gap-3 mt-4">
-                    <Pressable
-                      disabled={page <= 1}
-                      onPress={() => setPage((p) => Math.max(1, p - 1))}
-                      className={`h-10 rounded-full px-4 items-center justify-center flex-row gap-1 ${
-                        page <= 1 ? "bg-neutral border border-border" : "bg-white border border-primary"
-                      }`}
-                    >
-                      <Ionicons
-                        name="chevron-back"
-                        size={16}
-                        color={page <= 1 ? colors.muted : colors.primary}
-                      />
-                      <AppText
-                        variant="caption"
-                        className={`font-bengali-bold ${
-                          page <= 1 ? "text-muted" : "text-primary"
-                        }`}
-                      >
-                        পূর্ববর্তী
-                      </AppText>
-                    </Pressable>
+                            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+                          </Pressable>
+                        );
+                      })}
+                    </View>
 
-                    <AppText variant="body" className="font-bengali-bold text-ink px-2">
-                      {toBn(page)} / {toBn(totalPages)}
-                    </AppText>
+                    {/* Pagination Controls for Shops */}
+                    {shopTotalPages > 1 ? (
+                      <View className="flex-row items-center justify-center gap-3 mt-4">
+                        <Pressable
+                          disabled={page <= 1}
+                          onPress={() => setPage((p) => Math.max(1, p - 1))}
+                          className={`h-10 rounded-full px-4 items-center justify-center flex-row gap-1 ${
+                            page <= 1 ? "bg-neutral border border-border" : "bg-white border border-primary"
+                          }`}
+                        >
+                          <Ionicons
+                            name="chevron-back"
+                            size={16}
+                            color={page <= 1 ? colors.muted : colors.primary}
+                          />
+                          <AppText
+                            variant="caption"
+                            className={`font-bengali-bold ${
+                              page <= 1 ? "text-muted" : "text-primary"
+                            }`}
+                          >
+                            পূর্ববর্তী
+                          </AppText>
+                        </Pressable>
 
-                    <Pressable
-                      disabled={page >= totalPages}
-                      onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      className={`h-10 rounded-full px-4 items-center justify-center flex-row gap-1 ${
-                        page >= totalPages
-                          ? "bg-neutral border border-border"
-                          : "bg-white border border-primary"
-                      }`}
-                    >
-                      <AppText
-                        variant="caption"
-                        className={`font-bengali-bold ${
-                          page >= totalPages ? "text-muted" : "text-primary"
-                        }`}
-                      >
-                        পরবর্তী
-                      </AppText>
-                      <Ionicons
-                        name="chevron-forward"
-                        size={16}
-                        color={page >= totalPages ? colors.muted : colors.primary}
-                      />
-                    </Pressable>
-                  </View>
-                ) : null}
+                        <AppText variant="body" className="font-bengali-bold text-ink px-2">
+                          {toBn(page)} / {toBn(shopTotalPages)}
+                        </AppText>
+
+                        <Pressable
+                          disabled={page >= shopTotalPages}
+                          onPress={() => setPage((p) => Math.min(shopTotalPages, p + 1))}
+                          className={`h-10 rounded-full px-4 items-center justify-center flex-row gap-1 ${
+                            page >= shopTotalPages
+                              ? "bg-neutral border border-border"
+                              : "bg-white border border-primary"
+                          }`}
+                        >
+                          <AppText
+                            variant="caption"
+                            className={`font-bengali-bold ${
+                              page >= shopTotalPages ? "text-muted" : "text-primary"
+                            }`}
+                          >
+                            পরবর্তী
+                          </AppText>
+                          <Ionicons
+                            name="chevron-forward"
+                            size={16}
+                            color={page >= shopTotalPages ? colors.muted : colors.primary}
+                          />
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </>
+                )}
               </>
             )}
           </>

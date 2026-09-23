@@ -28,6 +28,7 @@ export type UserDto = {
   avatarUrl: string | null;
   isActive: boolean;
   emailVerifiedAt: string | null;
+  createdAt: string;
   role: { slug: string; nameBn: string; nameEn: string };
   profession: { slug: string; nameBn: string; nameEn: string } | null;
   district: { slug: string; nameBn: string } | null;
@@ -61,6 +62,7 @@ export class AuthService {
     phone: string | null;
     isActive: boolean;
     emailVerifiedAt: Date | null;
+    createdAt: Date;
     role: { slug: string; nameBn: string; nameEn: string };
     profession: { slug: string; nameBn: string; nameEn: string } | null;
     district: { slug: string; nameBn: string } | null;
@@ -74,6 +76,7 @@ export class AuthService {
       avatarUrl: user.avatarUrl,
       isActive: user.isActive,
       emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+      createdAt: user.createdAt.toISOString(),
       role: {
         slug: user.role.slug,
         nameBn: user.role.nameBn,

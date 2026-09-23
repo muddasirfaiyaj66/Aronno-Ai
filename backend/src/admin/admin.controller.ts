@@ -64,6 +64,11 @@ export class AdminController {
     return this.admin.patchActive(actor, id, body.isActive);
   }
 
+  @Get('loans')
+  listLoans(@Query('cursor') cursor?: string, @Query('limit') limit?: string) {
+    return this.admin.listLoans(cursor, Number(limit) || 50);
+  }
+
   @Patch('loans/:id/status')
   patchLoan(
     @CurrentUser() actor: AuthUser,

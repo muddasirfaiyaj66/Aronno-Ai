@@ -1,4 +1,4 @@
-import type { AuthUser } from "./types";
+import type { AdminLoan, AuthUser, LoanStatus } from "./types";
 
 type Envelope<T> =
   | { success: true; data: T }
@@ -100,5 +100,19 @@ export async function patchUserRole(
   return apiFetch<AuthUser>(`/api/admin/users/${id}/role`, {
     method: "PATCH",
     body: JSON.stringify({ roleSlug }),
+  });
+}
+
+export async function listLoans(cursor?: string) {
+  const q = cursor
+    ? `?cursor=${encodeURIComponent(cursor)}&limit=50`
+    : "?limit=50";
+  return apiFetch<AdminLoan[]>(`/api/admin/loans${q}`);
+}
+
+export async function patchLoanStatus(id: string, status: LoanStatus) {
+  return apiFetch<AdminLoan>(`/api/admin/loans/${id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
   });
 }

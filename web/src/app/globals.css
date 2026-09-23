@@ -1,16 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --forest: #1b5e4a;
-  --forest-deep: #0f2f26;
-  --leaf: #4fa883;
-  --sand: #eef2ee;
-  --ink: #1c2b24;
-  --muted: #5b6b64;
-  --harvest: #b7791f;
-  --border: #d5ddd8;
+  --forest: #145c45;
+  --forest-deep: #0a281f;
+  --leaf: #3f9a74;
+  --sand: #e8efe9;
+  --ink: #14241c;
+  --muted: #5a6e64;
+  --harvest: #a86b1a;
+  --border: #cfd9d3;
   --white: #ffffff;
   --danger: #b42318;
+  --panel: #f4f8f5;
 }
 
 @theme inline {
@@ -23,6 +24,7 @@
   --color-harvest: var(--harvest);
   --color-border: var(--border);
   --color-danger: var(--danger);
+  --color-panel: var(--panel);
   --font-display: var(--font-tiro), "Noto Serif Bengali", serif;
   --font-sans: var(--font-hind), "Noto Sans Bengali", system-ui, sans-serif;
 }
@@ -67,7 +69,7 @@ a {
 .field {
   width: 100%;
   min-height: 3rem;
-  border-radius: 0.85rem;
+  border-radius: 0.75rem;
   border: 1px solid var(--border);
   background: var(--white);
   padding: 0.65rem 0.95rem;
@@ -87,13 +89,14 @@ a {
   justify-content: center;
   gap: 0.5rem;
   min-height: 3rem;
-  padding: 0.65rem 1.35rem;
-  border-radius: 999px;
+  padding: 0.65rem 1.4rem;
+  border-radius: 0.75rem;
   border: none;
   font: inherit;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 160ms ease, background 160ms ease, opacity 160ms ease;
+  transition: transform 160ms ease, background 160ms ease, opacity 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .btn:active {
@@ -108,6 +111,7 @@ a {
 .btn-primary {
   background: var(--forest);
   color: var(--white);
+  box-shadow: 0 10px 28px -16px rgba(10, 40, 31, 0.7);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -121,28 +125,79 @@ a {
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--leaf) 16%, white);
+  background: color-mix(in srgb, var(--leaf) 14%, white);
 }
 
-.leaf-wash {
+.btn-soft {
+  background: color-mix(in srgb, var(--leaf) 18%, white);
+  color: var(--forest-deep);
+}
+
+.btn-soft:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--leaf) 28%, white);
+}
+
+/* Marketing atmosphere */
+.site-canvas {
   background:
-    radial-gradient(1200px 500px at 10% -10%, color-mix(in srgb, var(--leaf) 28%, transparent), transparent 60%),
-    radial-gradient(900px 420px at 90% 0%, color-mix(in srgb, var(--forest) 22%, transparent), transparent 55%),
-    linear-gradient(180deg, #dce8e1 0%, var(--sand) 48%, #e7eee8 100%);
+    radial-gradient(ellipse 90% 55% at 70% -5%, rgba(63, 154, 116, 0.28), transparent 55%),
+    radial-gradient(ellipse 70% 45% at 0% 15%, rgba(20, 92, 69, 0.18), transparent 50%),
+    linear-gradient(180deg, #d5e6dc 0%, var(--sand) 42%, #e4ece6 100%);
 }
 
-.paddy-grid {
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--forest) 7%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--forest) 7%, transparent) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: linear-gradient(180deg, black, transparent 85%);
+.hero-field {
+  background:
+    linear-gradient(
+      115deg,
+      rgba(8, 32, 24, 0.88) 0%,
+      rgba(16, 70, 52, 0.72) 38%,
+      rgba(20, 92, 69, 0.45) 68%,
+      rgba(20, 92, 69, 0.2) 100%
+    ),
+    linear-gradient(165deg, #145c45 0%, #0c3228 52%, #12352a 100%);
+}
+
+.hero-sheen {
+  background: radial-gradient(
+    ellipse 60% 80% at 85% 40%,
+    rgba(255, 255, 255, 0.12),
+    transparent 60%
+  );
+}
+
+.ridge-line {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--forest) 35%, transparent),
+    transparent
+  );
+}
+
+.admin-shell {
+  background:
+    radial-gradient(800px 400px at 0% 0%, rgba(63, 154, 116, 0.12), transparent 55%),
+    linear-gradient(180deg, #eef4f0 0%, var(--sand) 100%);
+}
+
+.panel {
+  border: 1px solid var(--border);
+  background: var(--white);
+  border-radius: 1.15rem;
+}
+
+.kpi-tile {
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, #fff 0%, #f7fbf8 100%);
+  border-radius: 1.1rem;
+  padding: 1.15rem 1.25rem;
 }
 
 @keyframes rise-in {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(18px);
   }
   to {
     opacity: 1;
@@ -150,23 +205,29 @@ a {
   }
 }
 
+@keyframes drift {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-6px);
+  }
+}
+
 .rise-in {
-  animation: rise-in 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: rise-in 800ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .rise-in-delay {
-  animation: rise-in 800ms 120ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: rise-in 900ms 140ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.field-band {
-  background:
-    linear-gradient(180deg, transparent, color-mix(in srgb, var(--forest-deep) 88%, black)),
-    repeating-linear-gradient(
-      -12deg,
-      color-mix(in srgb, var(--leaf) 35%, transparent) 0 2px,
-      transparent 2px 18px
-    ),
-    linear-gradient(135deg, #1b5e4a, #0f2f26 55%, #163d32);
+.rise-in-late {
+  animation: rise-in 950ms 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.drift {
+  animation: drift 5s ease-in-out infinite alternate;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -177,7 +238,9 @@ a {
     transition: none;
   }
   .rise-in,
-  .rise-in-delay {
+  .rise-in-delay,
+  .rise-in-late,
+  .drift {
     animation: none;
   }
 }

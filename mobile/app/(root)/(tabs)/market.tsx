@@ -20,6 +20,7 @@ import { ShopCreateModal } from "@/components/market/ShopCreateModal";
 import { ShopDashboardView } from "@/components/market/ShopDashboardView";
 import { ShopPromptCard } from "@/components/market/ShopPromptCard";
 import {
+  useGetCartQuery,
   useGetDistrictsQuery,
   useGetHeatmapQuery,
   useGetMyShopQuery,
@@ -257,6 +258,9 @@ export default function MarketScreen() {
     }
   }, [params.tab]);
 
+  const { data: cart } = useGetCartQuery();
+  const cartItemCount = cart?.items?.length ?? 0;
+
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       {/* Header Bar */}
@@ -271,9 +275,20 @@ export default function MarketScreen() {
           <View className="flex-row items-center gap-2">
             <Pressable
               onPress={() => router.push("/(root)/cart")}
-              className="h-10 w-10 items-center justify-center rounded-full bg-neutral"
+              className="relative h-10 w-10 items-center justify-center rounded-full bg-neutral"
             >
               <Ionicons name="cart-outline" size={20} color={colors.ink} />
+              {cartItemCount > 0 ? (
+                <View className="absolute -top-1 -right-1 h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 border-2 border-white shadow-xs">
+                  <AppText
+                    variant="caption"
+                    className="font-bengali-bold text-white"
+                    style={{ fontSize: 10, lineHeight: 12 }}
+                  >
+                    {toBn(cartItemCount)}
+                  </AppText>
+                </View>
+              ) : null}
             </Pressable>
             <Pressable
               onPress={() => router.push("/(root)/orders")}

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import { SingleShopCartModal } from "@/components/market/SingleShopCartModal";
-import { getApiError, useAddItemMutation, useGetProductQuery } from "@/services/api";
+import { getApiError, useAddItemMutation, useGetCartQuery, useGetProductQuery } from "@/services/api";
 import {
   formatCategoryBn,
   formatDateBn,
@@ -30,6 +30,9 @@ export default function ProductDetailScreen() {
   const [addedSuccess, setAddedSuccess] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [shopMismatchModalVisible, setShopMismatchModalVisible] = useState(false);
+
+  const { data: cart } = useGetCartQuery();
+  const cartItemCount = cart?.items?.length ?? 0;
 
   const {
     data: product,
@@ -92,9 +95,20 @@ export default function ProductDetailScreen() {
         </AppText>
         <Pressable
           onPress={() => router.push("/(root)/cart")}
-          className="h-10 w-10 items-center justify-center rounded-full bg-neutral"
+          className="relative h-10 w-10 items-center justify-center rounded-full bg-neutral"
         >
           <Ionicons name="cart-outline" size={20} color={colors.ink} />
+          {cartItemCount > 0 ? (
+            <View className="absolute -top-1 -right-1 h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 border-2 border-white shadow-xs">
+              <AppText
+                variant="caption"
+                className="font-bengali-bold text-white"
+                style={{ fontSize: 10, lineHeight: 12 }}
+              >
+                {toBn(cartItemCount)}
+              </AppText>
+            </View>
+          ) : null}
         </Pressable>
       </View>
 

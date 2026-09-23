@@ -725,12 +725,43 @@ export const api = createApi({
         body,
       }),
       transformResponse: (r) => unwrap(r),
-      invalidatesTags: ["Product", "Shop"],
+      async onQueryStarted({ id, ...patch }, { dispatch, queryFulfilled }) {
+        const patchResult = dispatch(
+          api.util.updateQueryData("getMyProducts", undefined, (draft) => {
+            if (!Array.isArray(draft)) return;
+            const product = draft.find((p: any) => p.id === id);
+            if (product) {
+              Object.assign(product, patch);
+            }
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
     }),
     deleteProduct: builder.mutation<any, string>({
       query: (id) => ({ url: `/marketplace/products/${id}`, method: "DELETE" }),
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Product", "Shop"],
+      async onQueryStarted(id, { dispatch, queryFulfilled }) {
+        const patchResult = dispatch(
+          api.util.updateQueryData("getMyProducts", undefined, (draft) => {
+            if (!Array.isArray(draft)) return;
+            const index = draft.findIndex((p: any) => p.id === id);
+            if (index !== -1) {
+              draft.splice(index, 1);
+            }
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
     }),
     getCart: builder.query<any, void>({
       query: () => "/marketplace/cart",
@@ -749,7 +780,27 @@ export const api = createApi({
         body,
       }),
       transformResponse: (r) => unwrap(r),
-      invalidatesTags: ["Cart"],
+      async onQueryStarted({ productId, quantity }, { dispatch, queryFulfilled }) {
+        const patchResult = dispatch(
+          api.util.updateQueryData("getCart", undefined, (draft) => {
+            if (!draft || !Array.isArray(draft.items)) return;
+            const item = draft.items.find((i: any) => i.productId === productId);
+            if (item) {
+              item.quantity = quantity;
+              item.totalPrice = item.pricePerUnit * quantity;
+              draft.totalBdt = draft.items.reduce(
+                (sum: number, i: any) => sum + (i.totalPrice ?? 0),
+                0
+              );
+            }
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
     }),
     removeItem: builder.mutation<any, string>({
       query: (productId) => ({
@@ -757,12 +808,43 @@ export const api = createApi({
         method: "DELETE",
       }),
       transformResponse: (r) => unwrap(r),
-      invalidatesTags: ["Cart"],
+      async onQueryStarted(productId, { dispatch, queryFulfilled }) {
+        const patchResult = dispatch(
+          api.util.updateQueryData("getCart", undefined, (draft) => {
+            if (!draft || !Array.isArray(draft.items)) return;
+            draft.items = draft.items.filter((i: any) => i.productId !== productId);
+            draft.totalBdt = draft.items.reduce(
+              (sum: number, i: any) => sum + (i.totalPrice ?? 0),
+              0
+            );
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
     }),
     clearCart: builder.mutation<any, void>({
       query: () => ({ url: "/marketplace/cart", method: "DELETE" }),
       transformResponse: (r) => unwrap(r),
-      invalidatesTags: ["Cart"],
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        const patchResult = dispatch(
+          api.util.updateQueryData("getCart", undefined, (draft) => {
+            if (!draft) return;
+            draft.items = [];
+            draft.totalBdt = 0;
+            draft.shopId = null;
+            draft.shopName = null;
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
     }),
     checkout: builder.mutation<
       any,

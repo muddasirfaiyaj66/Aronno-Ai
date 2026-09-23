@@ -49,15 +49,19 @@ export default function MyProductsScreen() {
     refetch,
   } = useGetMyProductsQuery();
 
-  const [updateProduct, { isLoading: toggling }] = useUpdateProductMutation();
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [updateProduct] = useUpdateProductMutation();
   const [deleteProduct, { isLoading: deleting }] = useDeleteProductMutation();
 
   const handleToggleStatus = async (product: any) => {
     const newStatus = product.status === "active" ? "inactive" : "active";
+    setTogglingId(product.id);
     try {
       await updateProduct({ id: product.id, status: newStatus }).unwrap();
     } catch {
       // silently ignore
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -228,7 +232,7 @@ export default function MyProductsScreen() {
                   {/* Toggle Active/Inactive */}
                   <Pressable
                     onPress={() => handleToggleStatus(product)}
-                    disabled={toggling}
+                    disabled={togglingId === product.id}
                     className="flex-1 flex-row items-center justify-center gap-1.5 py-3"
                   >
                     <Ionicons

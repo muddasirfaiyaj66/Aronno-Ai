@@ -191,7 +191,7 @@ model Diagnosis {
   diseaseNameEn   String
   confidence      Int
   severity        Severity
-  clientLocalId   String?         @unique
+  clientLocalId   String?
   offlineLabelId  String?
   verifiedBn      String?
   /// Where the scan happened: district from GPS (nearest centroid) or the
@@ -207,6 +207,7 @@ model Diagnosis {
   treatmentPlan  TreatmentPlan?
   reports        Report[]
 
+  @@index([clientLocalId])
   @@index([createdAt, districtId])
 }
 
@@ -235,12 +236,13 @@ enum ChatRole {
 model ChatTurn {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   userId         String   @db.ObjectId
-  clientLocalId  String?  @unique
+  clientLocalId  String?
   role           ChatRole
   textBn         String
   createdAt      DateTime @default(now())
   user           User     @relation(fields: [userId], references: [id])
 
+  @@index([clientLocalId])
   @@index([userId, createdAt])
 }
 

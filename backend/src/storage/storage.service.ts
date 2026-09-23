@@ -77,7 +77,7 @@ export class StorageService {
           resource_type: 'image',
           quality: 'auto:good',
         },
-        (error, result: UploadApiResponse | undefined) => {
+        (error: Error | undefined, result: UploadApiResponse | undefined) => {
           if (error || !result) {
             this.logger.error('Cloudinary upload error', error);
             return reject(

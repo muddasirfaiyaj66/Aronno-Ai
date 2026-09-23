@@ -89,7 +89,7 @@ async function getASR(): Promise<AsrApi | null> {
   if (asrApi) return asrApi;
   try {
     const mod = await import("@siteed/sherpa-onnx.rn");
-    asrApi = mod.ASR as AsrApi;
+    asrApi = mod.ASR as unknown as AsrApi;
     return asrApi;
   } catch {
     sherpaDisabled = true;

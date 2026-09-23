@@ -287,7 +287,7 @@ export default function ProductDetailScreen() {
                           router.push({
                             pathname: "/(root)/shop/[id]",
                             params: { id: product.shop.id },
-                          })
+                          } as any)
                         }
                         icon={<Ionicons name="open-outline" size={18} color={colors.ink} />}
                       />

@@ -445,7 +445,7 @@ export default function MarketScreen() {
                               router.push({
                                 pathname: "/(root)/product/[id]",
                                 params: { id: product.id },
-                              })
+                              } as any)
                             }
                             className="w-[47%] overflow-hidden rounded-3xl bg-white shadow-sm border border-border/50"
                           >
@@ -625,7 +625,7 @@ export default function MarketScreen() {
                               router.push({
                                 pathname: "/(root)/shop/[id]",
                                 params: { id: shopItem.id },
-                              })
+                              } as any)
                             }
                             className="rounded-3xl bg-white p-4 shadow-sm border border-border/50 flex-row items-center gap-3.5"
                           >
@@ -761,7 +761,7 @@ export default function MarketScreen() {
                 router.push({
                   pathname: "/(root)/shop/[id]",
                   params: { id: myShop.id },
-                })
+                } as any)
               }
             />
           ) : (

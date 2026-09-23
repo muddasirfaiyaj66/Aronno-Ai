@@ -1,21 +1,37 @@
 # Offline model assets
 
-Large STT / TTS / LLM / vision binaries are **not** committed.
-Users download them via the in-app **Model Manager** (`app/(root)/(tabs)/models.tsx`)
-into `documentDirectory/models/<id>/`.
+## Bundled with the APK (committed)
 
 | Path | Content | Approx size |
 |------|---------|-------------|
-| *(runtime)* `models/gemma3-*/` | Gemma 3 GGUF (user-selected) | 300 MB – 2.5 GB |
-| *(runtime)* `models/stt-bn-zipformer/` | sherpa-onnx Bengali streaming Zipformer | ~90 MB |
-| *(runtime)* `models/tts-bn-vits/` | sherpa-onnx Bengali VITS | ~90–120 MB |
-| `vision/*.tflite` | Disease / tool TFLite (after training) | 3–12 MB |
-| `kb/bn_knowledge_base.json` | Agronomist facts for LLM grounding | small (**committed**) |
+| `vision/crop_disease_int8.tflite` | Disease classifier (INT8) | ~1.2 MB |
+| `vision/tool_detector_int8.tflite` | Tool detector (INT8) | ~3 MB |
+| `vision/class_names.json` | Disease class labels | tiny |
+| `kb/bn_knowledge_base.json` | Agronomist facts for RAG + treatment UI | small |
 
-Regenerate KB:
+These are installed to `documentDirectory/models/vision/` on first boot.
+
+## Downloaded on device (Model Manager)
+
+| Runtime path | Content | Approx size |
+|--------------|---------|-------------|
+| `models/gemma3-*/` | Gemma 3 Instruct GGUF | 300 MB – 690 MB |
+| `models/stt-bn-zipformer/` | Bangla streaming STT (ONNX) | ~90 MB |
+| `models/tts-bn-vits/` | Optional VITS (UI catalog; speech uses expo-speech) | ~110 MB |
+
+Catalog: `mobile/lib/modelManager/catalog.ts`.
+
+## Rebuild knowledge base
 
 ```bash
-cd ml && python knowledge_base/build_kb.py
+cd ml
+python knowledge_base/build_kb.py
+# → mobile/assets/models/kb/bn_knowledge_base.json
 ```
 
-Catalog source of truth: `mobile/lib/modelManager/catalog.ts` (later: remote JSON).
+## EAS / git
+
+- **Include** vision `*.tflite` and KB in git and EAS uploads.
+- **Exclude** STT/TTS/ONNX/GGUF from the repo and from EAS (see `mobile/.easignore`).
+
+Full architecture & prompts: [`docs/offline_ai/README.md`](../../docs/offline_ai/README.md).

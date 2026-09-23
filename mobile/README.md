@@ -1,50 +1,92 @@
-# Welcome to your Expo app 👋
+# Aronno Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Expo SDK 54 app for **আরণ্য** — Bangla agriculture assistant with online Gemini APIs and a full **offline** path (on-device Gemma, Bangla STT, TFLite vision).
 
-## Get started
+## Documentation
 
-1. Install dependencies
+| Doc | Contents |
+|-----|----------|
+| **[Offline AI guide](../docs/offline_ai/README.md)** | Architecture, **prompts**, RAG, voice, models, **APK / EAS commands** |
+| [Model cards](../docs/model_cards/) | Gemma / vision / voice honesty notes |
+| [ML training](../ml/README.md) | Disease & tool TFLite training |
 
-   ```bash
-   npm install
-   ```
+## Prerequisites
 
-2. Start the app
+- Node 20+
+- Android Studio / SDK (local native builds)
+- Expo account (optional, for EAS)
+- API: set `EXPO_PUBLIC_API_URL` in `mobile/.env`
 
-   ```bash
-   npx expo start
-   ```
+Offline AI **does not run in Expo Go**. Use a development build.
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Quick start
 
 ```bash
-npm run reset-project
+cd mobile
+npm install --legacy-peer-deps
+
+# Native dev client
+npx expo run:android
+
+# Or Metro only (if app already installed)
+npx expo start -c
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Generate an APK
+
+### Local debug APK
+
+```bash
+cd mobile
+npx expo prebuild --platform android   # if android/ missing
+cd android
+.\gradlew.bat assembleDebug            # Windows
+```
+
+APK path:
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+### EAS (cloud)
+
+```bash
+cd mobile
+eas build --platform android --profile development   # APK + dev client
+eas build --platform android --profile preview        # internal APK
+eas build --platform android --profile production     # Play Store AAB
+```
+
+See [EAS notes & `.easignore`](../docs/offline_ai/README.md#12-eas-build-notes) so uploads stay small while **vision models stay included**.
+
+## Offline assistant (summary)
+
+1. Open **মডেল ম্যানেজার** → download Gemma (recommended 1B Instruct) + Bangla STT.
+2. **সহকারী** → type or tap mic for live Bangla conversation.
+3. Greetings / time / weather use deterministic replies; other turns use grounded Gemma + KB RAG.
+4. Vision TFLite ships in the APK under `assets/models/vision/`.
+
+Full prompt text and pipeline: **[docs/offline_ai/README.md §5](../docs/offline_ai/README.md#5-prompts--grounding)**.
+
+## Project layout (high level)
+
+```text
+app/                 Expo Router screens
+components/          UI
+lib/offlineChat/     Prompts, chat loop, live voice
+lib/offlineNlu/      RAG + KB + offline treatment
+lib/modelManager/    Catalog, download, Gemma engine
+lib/offlineVision/   TFLite loaders
+lib/offlineVoice/    STT + TTS glue
+assets/models/       Bundled KB + vision TFLite
+```
 
 ## Learn more
 
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- Expo SDK 54: https://docs.expo.dev/versions/v54.0.0/
+- EAS Build: https://docs.expo.dev/build/introduction/

@@ -1,392 +1,419 @@
-# Offline AI — Setup, Usage & Architecture
+# Aronno Offline AI
 
-**Aronno** runs two complementary AI paths:
+Professional reference for how the **offline Bangla agricultural assistant** works in the Expo mobile app: architecture, prompts, RAG, voice, models, and how to build / generate APKs.
 
-| Path | When | Engine | Cost |
-|------|------|--------|------|
-| **Online** | Device has internet | Nest.js → Gemini Flash-Lite | Free tier API (existing backend) |
-| **Offline** | No internet, or Gemini fails | On-device Gemma + sherpa-onnx + TFLite | Free forever after one-time download |
+> Online path (Nest.js → Gemini) is unchanged. This document covers the **on-device** path only.
 
-This document covers the **offline** path only: setup, how farmers use it, where each piece of logic lives, system prompts, and how we keep prompts short so small on-device models stay fast and accurate.
+Related:
 
-> General app install (MongoDB, API, Expo Go): see [SETUP.md](../SETUP.md) and the root [README.md](../README.md).
+- Model honesty cards: [`docs/model_cards/`](../model_cards/)
+- ML training: [`ml/README.md`](../../ml/README.md)
+- Short pointer: [`docs/offline_ai_setup.md`](../offline_ai_setup.md)
 
 ---
 
 ## Table of contents
 
-1. [Design principles](#1-design-principles)
+1. [Overview](#1-overview)
 2. [Architecture](#2-architecture)
-3. [Repository map (where logic lives)](#3-repository-map-where-logic-lives)
-4. [Native setup (required once)](#4-native-setup-required-once)
-5. [How to use in the app](#5-how-to-use-in-the-app)
-6. [Model catalog & storage](#6-model-catalog--storage)
-7. [System prompts & reply shaping](#7-system-prompts--reply-shaping)
-8. [Token & latency optimization](#8-token--latency-optimization)
-9. [Knowledge base (RAG-lite)](#9-knowledge-base-rag-lite)
-10. [Vision models (train & import)](#10-vision-models-train--import)
-11. [Online vs offline routing](#11-online-vs-offline-routing)
-12. [Debug & metrics](#12-debug--metrics)
-13. [Licenses](#13-licenses)
-14. [Troubleshooting](#14-troubleshooting)
+3. [Code map](#3-code-map)
+4. [Reply pipeline (how a turn works)](#4-reply-pipeline-how-a-turn-works)
+5. [Prompts & grounding](#5-prompts--grounding)
+6. [RAG-lite knowledge base](#6-rag-lite-knowledge-base)
+7. [Models & storage](#7-models--storage)
+8. [Voice (live conversation)](#8-voice-live-conversation)
+9. [Vision (disease / tools)](#9-vision-disease--tools)
+10. [Development setup](#10-development-setup)
+11. [Build & APK commands](#11-build--apk-commands)
+12. [EAS Build notes](#12-eas-build-notes)
+13. [Troubleshooting](#13-troubleshooting)
 
 ---
 
-## 1. Design principles
+## 1. Overview
 
-1. **Gemini stays the high-accuracy online path** — treatment depth, PDF reports, history sync unchanged.
-2. **Offline chat is a real generative model (Gemma 3 GGUF)**, not a scripted FAQ bot.
-3. **Agronomist facts ground the model** — `bn_knowledge_base.json` is injected into the prompt (RAG-lite). Wrong pesticide doses must not be invented.
-4. **Models are opt-in downloads** — never bundled in the APK (250 MB–2.5 GB). Users delete them anytime.
-5. **Vision ≠ LLM** — crop disease / tool ID use small TFLite classifiers/detectors; the LLM only *talks about* results.
-6. **Bangla-first** — STT, TTS, system prompt, and UI copy prefer simple Bangla.
+| Capability | Engine | Bundled in APK? |
+|------------|--------|-----------------|
+| Chat / voice assistant (Bangla) | Gemma 3 Instruct GGUF via `llama.rn` | No — download in **Model Manager** |
+| Speech-to-text | sherpa-onnx Zipformer (Bangla) | No — download in Model Manager |
+| Text-to-speech | Device TTS (`expo-speech`); sherpa TTS avoided (native abort risk) | OS voices |
+| Disease / tool scan | INT8 TFLite via `react-native-fast-tflite` | **Yes** — `assets/models/vision/*.tflite` |
+| Agronomist facts (RAG) | `bn_knowledge_base.json` | **Yes** — small JSON |
+
+**Product surface:** tab **সহকারী** (`assistant.tsx`) for chat + live voice; **স্ক্যান** for photo/voice diagnosis; **মডেল ম্যানেজার** for LLM/STT downloads.
+
+**Boot policy:** `OfflineAiBootstrap` initializes SQLite and copies bundled vision models. It does **not** eagerly load Gemma or Sherpa TTS (avoids SIGABRT / crash loops). LLM and STT load on first use.
 
 ---
 
 ## 2. Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  MODEL MANAGER  (download / delete / import)                     │
-│  Gemma GGUF · Bangla STT/TTS ONNX · TFLite vision (sideload)   │
-└──────────────────────────────────────────────────────────────────┘
-                                  │
-┌──────────────────────────────────────────────────────────────────┐
-│  VOICE CHAT (সহকারী)                                             │
-│  Mic ──▶ sherpa-onnx STT (Bangla) ──▶ text                       │
-│            │                                                     │
-│            ▼                                                     │
-│  retrieveContext()  ← bn_knowledge_base.json (≤3 facts)          │
-│            │                                                     │
-│            ▼                                                     │
-│  Gemma (llama.rn) ── stream tokens ──▶ sentence TTS (sherpa)     │
-│                                      └─ fallback: expo-speech    │
-└──────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  Model Manager (catalog.ts + modelManager.ts)               │
+│  Download Gemma GGUF · Bangla STT ONNX into documentDir     │
+└────────────────────────────┬────────────────────────────────┘
+                             │
+┌────────────────────────────▼────────────────────────────────┐
+│  সহকারী (assistant)                                         │
+│                                                             │
+│  Typed text ──┐                                             │
+│  Live mic ────┼──▶ tryDeterministicReply()                  │
+│               │         │ yes → welcome / time / weather    │
+│               │         ▼ no                                │
+│               │    RAG retrieveContext() + session facts    │
+│               │    + recent chat (follow-ups)               │
+│               │         ▼                                   │
+│               │    buildGroundedPrompt()                    │
+│               │         ▼                                   │
+│               │    Gemma (llama.rn) stream                  │
+│               │         ▼                                   │
+│               │    sanitizeAssistantReply()                 │
+│               │         ▼                                   │
+│               └──▶ UI bubble + speakBangla (expo-speech)    │
+└─────────────────────────────────────────────────────────────┘
 
-┌──────────────────────────────────────────────────────────────────┐
-│  SCAN (disease / tool)                                           │
-│  online? ──yes──▶ Gemini (backend)                               │
-│          └──no──▶ TFLite (if installed) else KB name match       │
-│                   └── same result UI (DiagnosisResult / ToolResult)│
-└──────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  স্ক্যান (analyzing)                                         │
+│  Online → Gemini API                                        │
+│  Offline → TFLite disease/tool → result + KB treatment UI   │
+└─────────────────────────────────────────────────────────────┘
 ```
-
-**Boot:** `OfflineAiBootstrap` tries to load any already-downloaded LLM / STT / TTS into memory when the app starts.
 
 ---
 
-## 3. Repository map (where logic lives)
+## 3. Code map
 
-### Mobile app (`mobile/`)
-
-| Concern | Path | Responsibility |
-|---------|------|----------------|
-| Model catalog (URLs, sizes, kinds) | `lib/modelManager/catalog.ts` | Single source of truth for downloadable models |
-| Download / delete / install check | `lib/modelManager/modelManager.ts` | `expo-file-system/legacy` resumable downloads into `documentDirectory/models/` |
-| Gemma load + stream | `lib/modelManager/llmEngine.ts` | `llama.rn` `initLlama` / `completion` (`n_predict: 256`, `temperature: 0.4`) |
-| Chat loop (STT → LLM → TTS) | `lib/offlineChat/chatLoop.ts` | System prompt, grounding, sentence-chunked speak |
-| RAG-lite retrieval | `lib/offlineNlu/retrieve.ts` | Keyword match → ≤3 Bangla fact strings |
-| KB loader | `lib/offlineNlu/knowledgeBase.ts` | Typed access to bundled JSON |
-| Offline transcript → diagnosis/tool | `lib/offlineNlu/offlineMatch.ts` | Fallback when TFLite missing |
-| Bangla STT | `lib/offlineVoice/sttEngine.ts` | `@siteed/sherpa-onnx.rn` ASR |
-| Bangla TTS | `lib/offlineVoice/ttsEngine.ts` | Sherpa VITS + `expo-speech` fallback |
-| Disease TFLite | `lib/offlineVision/diseaseModel.ts` | INT8 classifier → `DiagnosisResult` |
-| Tool TFLite | `lib/offlineVision/toolModel.ts` | YOLO-style detector → `ToolResult` |
-| Vision paths / sideload | `lib/offlineVision/paths.ts`, `importModel.ts` | Runtime `models/vision/` + document picker |
-| Latency log | `lib/offline/metrics.ts` | Local only — never sent to server |
-| Online/offline flag | `hooks/useIsOnline.ts` | Shared NetInfo helper |
-| Boot autoload | `components/OfflineAiBootstrap.tsx` | Called from `app/_layout.tsx` |
-| Chat UI | `app/(root)/(tabs)/assistant.tsx` | Tab **সহকারী** |
-| Model Manager UI | `app/(root)/(tabs)/models.tsx` | Hidden tab; open from Profile / assistant |
-| Scan offline branch | `app/(root)/(tabs)/scan/analyzing.tsx` | Gemini → offline fallback |
-| Voice capture offline | `app/(root)/(tabs)/scan/voice.tsx` | Offline STT or type-to-submit |
-| Debug screen | `app/(root)/offline-debug.tsx` | Profile → অফলাইন ডিবাগ |
-| Bundled KB | `assets/models/kb/bn_knowledge_base.json` | Committed (tiny) |
-| Drop / import notes | `assets/models/DROP_MODELS_HERE.md` | Farmer/dev drop paths |
-
-### Training (`ml/`)
-
-| Path | Purpose |
-|------|---------|
-| `ml/disease_classifier/` | PlantVillage train → INT8 TFLite export |
-| `ml/tool_detector/` | YOLOv8n train → INT8 TFLite |
-| `ml/knowledge_base/` | CSV → `bn_knowledge_base.json` |
-| `ml/README.md` | Colab / local training commands |
-
-### Docs
-
-| Path | Purpose |
-|------|---------|
-| `docs/offline_ai/README.md` | This guide |
-| `docs/model_cards/` | Per-model honesty: accuracy, limits, license |
-
----
-
-## 4. Native setup (required once)
-
-Offline AI uses **native modules**. Expo Go is not enough — use a **development build**.
-
-### Prerequisites
-
-- Node 20+ · pnpm · Android Studio (or EAS)
-- Expo SDK 54 project already under `mobile/`
-
-### Install & rebuild
-
-```bash
-cd mobile
-pnpm install
-
-# Allow postinstall scripts for native binaries when pnpm asks:
-#   @siteed/sherpa-onnx.rn  → true
-#   llama.rn                → true
-# (see mobile/pnpm-workspace.yaml → allowBuilds)
-
-npx expo prebuild
-npx expo run:android
-# or: eas build --profile development --platform android
-```
-
-### Packages (already in `package.json`)
-
-| Package | Role |
+| Concern | Path |
 |---------|------|
-| `llama.rn` | On-device Gemma GGUF |
-| `@siteed/sherpa-onnx.rn` | Bangla STT + TTS |
-| `react-native-fast-tflite` | Vision INT8 models |
-| `expo-image-manipulator` | Resize photos for TFLite |
-| `expo-document-picker` | Import trained `.tflite` files |
-| `expo-file-system` | Model downloads (`/legacy` resumable API) |
-
-Plugins are registered in `mobile/app.json` (`llama.rn`, `@siteed/sherpa-onnx.rn`, `react-native-fast-tflite`, `expo-document-picker`).
-
----
-
-## 5. How to use in the app
-
-### A. Download models (Wi‑Fi recommended)
-
-1. Open **আমি (Profile)** → **অফলাইন এআই** → **মডেল ম্যানেজার**  
-   — or from **সহকারী** when no LLM is loaded.
-2. Download in this order (recommended):
-   1. **জেমা ৩ (ছোট)** — chatbot brain (~300 MB)
-   2. **বাংলা কণ্ঠ শনাক্তকরণ** — STT (~90 MB)
-   3. **বাংলা কণ্ঠস্বর** — TTS (~110 MB; optional; OS TTS works without it)
-3. After Gemma finishes, it **auto-loads**. Status shows on the same screen.
-4. **মুছুন** frees storage and unloads that model.
-
-### B. Talk offline (সহকারী tab)
-
-1. Type Bangla and send, **or** tap the mic (needs STT model).
-2. Partial / final transcript appears as a user bubble.
-3. Gemma streams the reply; speech starts **per sentence** (does not wait for the full answer).
-4. If no LLM: the screen prompts you to open Model Manager.
-
-### C. Scan disease / tool offline
-
-1. Use the normal **স্ক্যান** flow (photo or voice transcript).
-2. If **offline** (or online Gemini fails):
-   - Photo + TFLite present → on-device classify/detect
-   - Else transcript/KB name match → structured result without market listings
-3. Same result screens as online (`DiagnosisResult` / offline `ToolResult`).
-
-### D. Import vision weights (after you train)
-
-On Model Manager (bottom section):
-
-- Import `crop_disease_int8.tflite`
-- Import `tool_detector_int8.tflite`
-- Import `class_names.json` (optional override of bundled starter)
+| Chat loop, prompts, deterministic replies | `mobile/lib/offlineChat/chatLoop.ts` |
+| Continuous voice (listen → think → speak) | `mobile/lib/offlineChat/liveConversation.ts` |
+| Scan cross-check with Gemma | `mobile/lib/offlineChat/verifyScan.ts` |
+| RAG + welcome + weather/time helpers | `mobile/lib/offlineNlu/retrieve.ts` |
+| KB lookup / disease by name | `mobile/lib/offlineNlu/knowledgeBase.ts` |
+| Offline treatment plan from KB | `mobile/lib/offlineNlu/offlineTreatment.ts` |
+| Gemma load / completion | `mobile/lib/modelManager/llmEngine.ts` |
+| Download catalog | `mobile/lib/modelManager/catalog.ts` |
+| Bangla STT (silence-ended turns) | `mobile/lib/offlineVoice/sttEngine.ts` |
+| TTS wrapper | `mobile/lib/offlineVoice/ttsEngine.ts` → `speakBangla.ts` |
+| Bundled vision install paths | `mobile/lib/offlineVision/paths.ts` |
+| Disease / tool inference | `*.native.ts` under `offlineVision/` |
+| SQLite chat + history | `mobile/lib/offlineDb/` |
+| Assistant UI | `mobile/app/(root)/(tabs)/assistant.tsx` |
+| EAS upload excludes | `mobile/.easignore` |
 
 ---
 
-## 6. Model catalog & storage
+## 4. Reply pipeline (how a turn works)
 
-Defined in `mobile/lib/modelManager/catalog.ts`.
+Implemented in `runLlmTurn()` (`chatLoop.ts`).
 
-| ID | Kind | Approx size | Source |
-|----|------|-------------|--------|
-| `gemma3-270m-q8` | LLM (recommended) | ~300 MB | Hugging Face GGUF |
-| `gemma3-1b-q4` | LLM | ~700 MB | Hugging Face GGUF |
-| `stt-bn-zipformer` | STT | ~90 MB | HF multi-file ONNX (no tar.bz2) |
-| `tts-bn-vits` | TTS | ~110 MB | HF VITS coqui BN (`model.onnx` + `tokens.txt`) |
-
-**On device:** `FileSystem.documentDirectory + "models/<id>/..."`.
-
-**Bundled only:** `assets/models/kb/bn_knowledge_base.json` (and a starter `class_names.json`). Large binaries are gitignored.
-
-To add Gemma 4B later: append a catalog entry (or serve a remote catalog JSON — planned upgrade).
+1. **Deterministic fast path** (`tryDeterministicReply`) — no LLM:
+   - Pure greeting → `buildWelcomeBn()` (time-of-day + user first name)
+   - Time question → device clock (`timeReplyBn`)
+   - Weather question → RTK-cached weather or honest offline message
+2. **Follow-up shortcut:** short affirmations (`হ্যাঁ` / `ঠিক`) after a disease-related turn → steer user to camera scan (no model waffle).
+3. **Otherwise LLM:**
+   - Pull RAG hits, optional recent scans, last ~4 chat lines
+   - Build grounded prompt
+   - Stream Gemma completion (Gemma 3 Instruct chat template)
+   - Sanitize output (strip greeting spam, name theft, role tags)
+4. Persist turns to SQLite; live mode speaks via `speakBangla`.
 
 ---
 
-## 7. System prompts & reply shaping
+## 5. Prompts & grounding
 
-### System prompt (Bangla)
+### 5.1 Grounded Q&A prompt
 
-Source: `mobile/lib/offlineChat/chatLoop.ts` → `SYSTEM_PROMPT_BN`
+Source: `buildGroundedPrompt()` in `mobile/lib/offlineChat/chatLoop.ts`.
 
-```
-তুমি আরণ্য, বাংলাদেশের কৃষকদের জন্য একজন সহায়ক কৃষি সহকারী।
-সবসময় সহজ, সংক্ষিপ্ত বাংলায় উত্তর দাও। নিচের তথ্য সঠিক হিসেবে ব্যবহার করো,
-এর বাইরে অনুমান করে ওষুধ বা মাত্রা বলো না, অনিশ্চিত হলে কৃষি সম্প্রসারণ অফিসে যোগাযোগের পরামর্শ দাও।
+Template (conceptual):
+
+```text
+তুমি আরণ্য, কৃষি সহকারী। সরাসরি উত্তর দাও।
+নিয়ম: ১–২ ছোট বাংলা বাক্য। প্রশ্ন আবার লিখবে না।
+অভিবাদন দিও না যদি প্রশ্ন অভিবাদন না হয়।
+নাম জানা থাকলে নাম জিজ্ঞাসা করবে না। নিজেকে ব্যবহারকারীর নাম বলো না।
+আগের কথোপকথন থাকলে সেই প্রসঙ্গে উত্তর দাও।
+টমেটো/রোগ জিজ্ঞাসা হলে স্ক্যান/ছবির পরামর্শ দিতে পারো।
+নাম: <firstName>                    # if logged in
+তথ্য:
+- <session / RAG / recent chat / scans>
+
+প্রশ্ন: <user text>
+উত্তর:
 ```
 
-Intent:
+**Design rules baked into the prompt**
 
-- Stay in simple Bangla  
-- Prefer KB facts over free invention  
-- Refuse to invent pesticide doses  
-- Defer to extension officers when unsure  
+| Rule | Why |
+|------|-----|
+| 1–2 short Bangla sentences | Small GGUF models ramble otherwise |
+| No greeting on non-greeting turns | Models copy “শুভ সকাল…” onto every answer |
+| Address by name, never by profession | Stops “কৃষক / পেশা” role confusion |
+| Prefer injected facts; don’t invent °C / doses | Safety + RAG honesty |
 
-### Full user message shape
+### 5.2 Welcome string (deterministic)
 
-Built by `buildGroundedPrompt()`:
+Source: `buildWelcomeBn()` in `retrieve.ts`.
 
+Example: `শুভ সকাল, Faiyaj! আমি আরণ্য। <district>… কী জানতে চান?`
+
+Time bands: সকাল / দুপুর / বিকেল / সন্ধ্যা (`timeOfDayGreetingBn`).
+
+### 5.3 Gemma chat template
+
+Source: `llmEngine.ts` → `completeOnce`.
+
+```text
+<start_of_turn>user
+…grounded prompt…
+<end_of_turn>
+<start_of_turn>model
 ```
-[SYSTEM_PROMPT_BN]
 
-প্রাসঙ্গিক তথ্য:
-<up to 3 retrieved Bangla fact lines>
+Optional short history turns may be prepended as prior `user` / `model` blocks.
 
-কৃষকের প্রশ্ন: <user text>
-```
+### 5.4 Generation parameters
 
-Empty context section is omitted (no wasted tokens).
+| Parameter | Typical value | Notes |
+|-----------|---------------|--------|
+| `n_ctx` | 2048 | Load-time context |
+| `n_predict` | 120 | Caps reply length |
+| `temperature` | ~0.55 (retry ~0.4) | Lower on echo retry |
+| `stop` | `<end_of_turn>`, `<start_of_turn>`, … | Gemma IT stops |
+| `n_threads` | 4 | CPU |
+| `n_gpu_layers` | 0 | CPU-safe default on many devices |
 
-### Generation parameters
+### 5.5 Output sanitizer
 
-Source: `mobile/lib/modelManager/llmEngine.ts` → `streamLlmReply`
+`sanitizeAssistantReply()` strips:
 
-| Parameter | Value | Why |
-|-----------|-------|-----|
-| `n_ctx` | 2048 | Fits phone RAM; enough for short agri Q&A |
-| `n_predict` | **256** | Caps answer length (token budget) |
-| `temperature` | **0.4** | Lower = fewer hallucinations vs grounding |
-| `stop` | `<end_of_turn>` | Clean stop for Gemma chat format |
-| `n_threads` | 4 | Mid-range Android default |
-| `n_gpu_layers` | 99 | Use GPU/NPU when the device supports it |
+- Role prefixes (`কৃষক:`, `আরণ্য:`, …)
+- Copied welcome lines on non-greeting turns
+- “আমার নাম …” / asking for name when already known
+- Prompt-leak phrases (`তোমার পেশা নয়`, etc.)
+
+### 5.6 Scan verify prompt
+
+`verifyScan.ts` uses a short separate prompt: ask for `ok` / `uncertain` plus a one-line Bangla note, with KB facts for the label.
 
 ---
 
-## 8. Token & latency optimization
-
-Small on-device models are slow if prompts are huge. Aronno keeps the **prompt short** and the **reply short**, and starts audio early.
-
-| Technique | Where | Effect |
-|-----------|--------|--------|
-| Cap retrieval at **3** KB hits | `retrieve.ts` / `buildGroundedPrompt` | Less context → faster first token |
-| Keyword RAG-lite (no embedding model) | `retrieve.ts` | Zero extra model RAM for retrieval |
-| `n_predict: 256` | `llmEngine.ts` | Hard ceiling on generated tokens |
-| Low temperature `0.4` | `llmEngine.ts` | Shorter, more factual answers |
-| Concise Bangla system prompt | `chatLoop.ts` | Instructs “সংক্ষিপ্ত” answers |
-| Sentence-chunked TTS | `chatLoop.ts` + `streamOffline` | Speak on `।.!?<unk>` — user hears audio while generation continues |
-| Stream tokens to UI | `assistant.tsx` | Feels realtime without waiting for full text |
-| Prefer Gemma **270M** by default | catalog `recommended` | Smaller model = fewer tokens/sec needed for usable UX |
-| STT/TTS multi-file HF download | `catalog.ts` | No tar.bz2 extract on device |
-| Vision separate from LLM | TFLite loaders | Classification in ~100 ms class, not generative tokens |
-| Local metrics only | `lib/offline/metrics.ts` | Profile latency without network cost |
-
-**Honest expectation:** 270M Bangla is simpler than cloud Gemini; 1B is better but heavier. Grounding is what keeps advice safer either way.
-
----
-
-## 9. Knowledge base (RAG-lite)
+## 6. RAG-lite knowledge base
 
 | Item | Location |
 |------|----------|
 | Runtime JSON | `mobile/assets/models/kb/bn_knowledge_base.json` |
-| Source CSV | `ml/knowledge_base/disease_treatment_bn.csv` |
-| Builder | `ml/knowledge_base/build_kb.py` |
+| Retrieval | `retrieveContext(userText)` — keyword / token overlap |
+| Sections | `diseases`, `tools`, `faq` |
+| Rebuild | `cd ml && python knowledge_base/build_kb.py` |
+
+**Behaviour**
+
+- Returns up to ~4 short Bangla fact strings for the LLM (not shown as canned chat bubbles).
+- Weather questions also get season tips and/or cached live weather.
+- FAQ patterns (rain, temperature, fertilizer, greeting) expand grounding coverage.
+- Offline treatment UI uses the same KB via `offlineTreatment.ts` (symptoms / treatment / prevention).
+
+Have an agronomist review treatment text before production release.
+
+---
+
+## 7. Models & storage
+
+### Catalog (`catalog.ts`)
+
+| ID | Kind | Approx size | Notes |
+|----|------|-------------|--------|
+| `gemma3-270m-q8` | LLM | ~300 MB | Instruct GGUF (fast) |
+| `gemma3-1b-it-q4` | LLM | ~690 MB | **Recommended** (better Bangla) |
+| `stt-bn-zipformer` | STT | ~90 MB | Required for live mic |
+| `tts-bn-vits` | TTS | ~110 MB | Listed; runtime speech uses **expo-speech** for stability |
+
+**On device:** `FileSystem.documentDirectory + "models/<id>/..."`.
+
+### Bundled with the app (APK)
+
+| Asset | Path |
+|-------|------|
+| Disease TFLite | `assets/models/vision/crop_disease_int8.tflite` |
+| Tool TFLite | `assets/models/vision/tool_detector_int8.tflite` |
+| Class names | `assets/models/vision/class_names.json` |
+| Knowledge base | `assets/models/kb/bn_knowledge_base.json` |
+
+Copied into `documentDirectory/models/vision/` on boot (`ensureBundledVisionInstalled`).
+
+---
+
+## 8. Voice (live conversation)
+
+Source: `liveConversation.ts` + `sttEngine.ts` + `speakBangla.ts`.
+
+1. Optional spoken welcome (`greet: true` on empty chat).
+2. `listenUntilSilence` — calibrate noise floor → detect speech → end after ~1.4 s silence.
+3. Empty transcripts retry quietly (notice after repeated misses).
+4. `runLlmTurn` → show text → `speakBangla` (sentence chunks, preferred Bangla system voice).
+5. ~700 ms gap after TTS so the assistant’s own speech is not re-captured.
+
+**Requirements:** development build (not Expo Go), STT model downloaded, mic permission. Emulators need host mic routing enabled.
+
+---
+
+## 9. Vision (disease / tools)
+
+1. Photo captured in scan flow → `analyzing.tsx`.
+2. Offline: TFLite classify/detect → structured result.
+3. Result screen shows KB **লক্ষণ / চিকিৎসা / প্রতিরোধ** and can open offline treatment plan.
+4. History detail loads local SQLite diagnosis and opens the same result UI.
+
+---
+
+## 10. Development setup
 
 ```bash
-cd ml
-python knowledge_base/build_kb.py
-# writes mobile/assets/models/kb/bn_knowledge_base.json
+cd mobile
+npm install --legacy-peer-deps   # or pnpm with allowBuilds for llama.rn / sherpa
+
+# Environment
+# EXPO_PUBLIC_API_URL=https://<your-api>/api
+
+npx expo prebuild                # generate android/ if needed
+npx expo run:android             # native dev client + install
+npx expo start -c                # Metro (press a / scan QR for dev client)
 ```
 
-Schema sections: `diseases`, `tools`, `faq`.
-
-**Important:** FAQ entries are **not** shown as canned chat bubbles. They become optional grounding lines when patterns match. The LLM still generates the spoken/written reply.
-
-Have an agronomist review treatment text before production — wrong doses cause real harm.
+Expo SDK **54** / React Native **0.81**. Offline AI **requires a custom/dev client** (native modules).
 
 ---
 
-## 10. Vision models (train & import)
+## 11. Build & APK commands
 
-Code is ready; weights are **not** shipped until you train.
+All commands from `mobile/` unless noted.
+
+### A. Local debug APK (Gradle)
+
+Fastest way to get an installable APK on a machine with Android SDK:
 
 ```bash
-cd ml
-python -m venv venv
-# activate venv
-pip install -r requirements.txt
-# See ml/README.md for PlantVillage / YOLO steps
+cd mobile
+
+# Ensure native project exists
+npx expo prebuild --platform android
+
+cd android
+.\gradlew.bat assembleDebug          # Windows
+# ./gradlew assembleDebug            # macOS / Linux
 ```
 
-After export:
+**Output:**
 
-1. Copy `crop_disease_int8.tflite`, `tool_detector_int8.tflite`, `class_names.json`
-2. Import via Model Manager, **or** place under `documentDirectory/models/vision/`
+```text
+mobile/android/app/build/outputs/apk/debug/app-debug.apk
+```
 
-Model honesty cards: `docs/model_cards/crop_disease.md`, `tool_detector.md`.
+Install:
+
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Release (local, needs signing config):
+
+```bash
+cd android
+.\gradlew.bat assembleRelease
+# → android/app/build/outputs/apk/release/app-release.apk
+```
+
+### B. Expo run (dev client on device/emulator)
+
+```bash
+cd mobile
+npx expo run:android
+```
+
+Builds, installs, and starts Metro in one flow.
+
+### C. EAS Build (cloud)
+
+Profiles in `mobile/eas.json`:
+
+| Profile | Artifact | Use |
+|---------|----------|-----|
+| `development` | APK + dev client | Internal testing with Metro |
+| `preview` | APK | Internal distribution |
+| `production` | AAB (`app-bundle`) | Play Store |
+
+```bash
+cd mobile
+npm i -g eas-cli
+eas login
+
+# Development APK (dev client)
+eas build --platform android --profile development
+
+# Preview APK
+eas build --platform android --profile preview
+
+# Production App Bundle
+eas build --platform android --profile production
+```
+
+Download the artifact from the EAS dashboard when the build finishes.
+
+### D. Metro only (already installed app)
+
+```bash
+cd mobile
+npx expo start -c
+# press r to reload · a to open Android
+```
 
 ---
 
-## 11. Online vs offline routing
+## 12. EAS Build notes
 
-| Screen / flow | Online | Offline |
-|---------------|--------|---------|
-| Disease / tool photo or voice → `analyzing.tsx` | Gemini via Nest API | TFLite and/or KB match |
-| Scan voice capture `voice.tsx` | Cloud STT (backend) | Sherpa STT if downloaded; else type |
-| সহকারী chat | N/A (offline product) | Gemma + grounding + TTS |
-| Receipts / PDF / history sync | Backend required | Not available offline |
+Local `android/` Gradle outputs can be multi‑GB. **`mobile/.easignore`** excludes:
 
-`OfflineBanner` (root layout) and `useIsOnline` / `fetchIsOnline` drive the branch.
+- `node_modules/`, `android/`, `ios/`, `.expo/`
+- Large STT/TTS/ONNX/GGUF trees
 
----
+And **keeps** bundled vision TFLite + KB.
 
-## 12. Debug & metrics
+If the upload shows ~1 GB+, confirm you are running `eas build` from `mobile/` and that `.easignore` is present. Cancel and retry after pulling the ignore file.
 
-**আমি → অফলাইন ডিবাগ**
-
-- Shows whether LLM / STT / TTS / vision files are ready  
-- Lists recent local events: `llm.autoload`, `stt.recognize`, `chat.llm`, `vision.disease.infer`, etc.  
-- Data stays on device (`lib/offline/metrics.ts`)
+```bash
+cd mobile
+eas build --platform android --profile development
+```
 
 ---
 
-## 13. Licenses
-
-| Component | License note |
-|-----------|----------------|
-| Gemma 3 | Google Gemma Terms — free to use incl. commercial; keep notice in-app |
-| sherpa-onnx models / runtime | Apache-2.0 / MIT (see model cards) |
-| Ultralytics YOLOv8 (training) | AGPL-3.0 — confirm with your team before distribution |
-| Aronno app code | MIT (repo root `LICENSE`) |
-
----
-
-## 14. Troubleshooting
+## 13. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| “মডেল দরকার” forever | No GGUF downloaded or native module missing | Download Gemma; rebuild with `expo-dev-client` |
-| Mic does nothing offline | STT not downloaded / sherpa not linked | Download STT; rebuild native app |
-| TTS is robotic / OS voice | VITS not downloaded | Download TTS, or keep expo-speech fallback |
-| Offline scan fails | No `.tflite` and no disease name in transcript | Train + import vision, or speak/type disease name matching KB |
-| Download stuck | No Wi‑Fi / HF blocked | Retry on Wi‑Fi; check progress % on Model Manager |
-| `pnpm` build script ignored | `allowBuilds` | Enable `@siteed/sherpa-onnx.rn` and `llama.rn` in `pnpm-workspace.yaml` |
+| White screen on launch | Auth gate waiting on `/auth/me` | Fixed with timeout + spinner; check API URL |
+| “মডেল নেই” | No GGUF downloaded | Model Manager → download recommended Gemma |
+| Mic / “ঠিক শুনতে পাইনি” | No STT model or dead mic | Download STT; check mic permission / emulator host audio |
+| Every reply starts with “শুভ সকাল…” | Stale bundle / old prompt | Reload; greetings are deterministic-only now |
+| History has no treatment text | Old read-only result UI | Open history item again — KB advice + treatment plan |
+| EAS upload huge | `android/build` included | Use `.easignore`; build from `mobile/` |
+| App crash on boot (abort) | Sherpa TTS init | TTS uses expo-speech; do not eager-init sherpa TTS |
+| Vision “নেই” | Bundled assets not copied | Ensure TFLite files under `assets/models/vision/` and rebuild |
 
 ---
 
 ## Quick checklist
 
-- [ ] `pnpm install` + allow native postinstalls  
-- [ ] `npx expo prebuild` && `npx expo run:android` (or EAS)  
-- [ ] Download Gemma 270M (+ STT/TTS)  
-- [ ] Confirm **সহকারী** answers offline  
-- [ ] (Later) Train & import vision TFLite  
-- [ ] Agronomist review of `bn_knowledge_base.json`  
+- [ ] `npm install` in `mobile/`
+- [ ] Dev client: `npx expo run:android` or EAS `development` profile
+- [ ] Vision TFLite + KB present under `assets/models/`
+- [ ] Download **Gemma 1B Instruct** (or 270M) + **Bangla STT**
+- [ ] Test সহকারী: greeting, time, weather, disease follow-up, live mic
+- [ ] Local APK: `cd android && gradlew assembleDebug`
+- [ ] Cloud APK: `eas build -p android --profile preview`
 
-For training details: [`ml/README.md`](../ml/README.md). For model honesty: [`docs/model_cards/`](../model_cards/).
+For training pipelines and agronomist review of KB text, see [`ml/README.md`](../../ml/README.md) and [`docs/model_cards/`](../model_cards/).

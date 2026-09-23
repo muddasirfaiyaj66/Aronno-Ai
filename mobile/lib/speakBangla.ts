@@ -1,32 +1,142 @@
 import * as Speech from "expo-speech";
+import { VoiceQuality } from "expo-speech";
 import { enablePlaybackAudio } from "@/lib/speechRecording";
 
 const LANGS = ["bn-BD", "bn-IN", "bn"] as const;
 
-async function banglaVoice(preferredLang: string): Promise<string | undefined> {
+type VoicePick = { language: string; voice?: string };
+
+let cachedPick: VoicePick | null = null;
+let pickPromise: Promise<VoicePick> | null = null;
+
+/** Prefer clearer / neural Bangla voices when the OS exposes them. */
+function scoreVoice(v: Speech.Voice): number {
+  const id = `${v.identifier} ${v.name} ${v.language}`.toLowerCase();
+  let score = 0;
+  if (id.includes("bn-bd") || id.includes("bengali bangladesh")) score += 40;
+  else if (id.includes("bn-in") || id.includes("bengali")) score += 30;
+  else if (id.startsWith("bn") || id.includes(" bn")) score += 20;
+  if (id.includes("neural") || id.includes("wavenet") || id.includes("natural"))
+    score += 25;
+  if (id.includes("enhanced") || id.includes("premium") || id.includes("hq")) score += 15;
+  if (id.includes("female") || id.includes("woman") || id.includes("samantha")) score += 8;
+  if (id.includes("local") || id.includes("offline")) score += 5;
+  if (id.includes("network") || id.includes("online")) score -= 3;
+  if (v.quality === VoiceQuality.Enhanced) score += 20;
+  return score;
+}
+
+async function resolveBanglaVoice(): Promise<VoicePick> {
+  if (cachedPick) return cachedPick;
+  if (pickPromise) return pickPromise;
+
+  pickPromise = (async () => {
+    try {
+      const voices = await Speech.getAvailableVoicesAsync();
+      const bangla = voices
+        .filter((v) => /^bn/i.test(v.language) || /bengali/i.test(v.name))
+        .sort((a, b) => scoreVoice(b) - scoreVoice(a));
+      if (bangla[0]) {
+        const pick = {
+          language: bangla[0].language || "bn-BD",
+          voice: bangla[0].identifier,
+        };
+        cachedPick = pick;
+        return pick;
+      }
+    } catch {
+      // fall through
+    }
+    const pick = { language: "bn-BD" as string, voice: undefined };
+    cachedPick = pick;
+    return pick;
+  })();
+
   try {
-    const voices = await Speech.getAvailableVoicesAsync();
-    const lang = preferredLang.toLowerCase();
-    const match =
-      voices.find((v) => v.language.toLowerCase().startsWith(lang)) ??
-      voices.find((v) => v.language.toLowerCase().startsWith("bn"));
-    return match?.identifier;
-  } catch {
-    return undefined;
+    return await pickPromise;
+  } finally {
+    pickPromise = null;
   }
+}
+
+/**
+ * Make Bangla TTS less choppy: expand symbols, soften punctuation,
+ * keep short fluent phrases.
+ */
+export function prepareSpeechText(raw: string): string {
+  return raw
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/(\d+)\s*°\s*[Cc]?/g, "$1 ডিগ্রি ")
+    .replace(/[°˚]/g, " ডিগ্রি ")
+    .replace(/%/g, " শতাংশ ")
+    .replace(/(\d+)\s*কিমি\/?ঘ(?:ণ্টা)?/g, "$1 কিলোমিটার প্রতি ঘণ্টা ")
+    .replace(/[•·▪︎]/g, " ")
+    .replace(/[–—]/g, " ")
+    .replace(/[/|\\]/g, " ")
+    .replace(/["«»]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 3900);
+}
+
+/** Split into speakable chunks so the engine doesn't rush or drop mid-clause. */
+export function splitSpeechChunks(text: string): string[] {
+  const prepared = prepareSpeechText(text);
+  if (!prepared) return [];
+
+  const parts = prepared
+    .split(/(?<=[।!?\.])\s+|\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const chunks: string[] = [];
+  let buf = "";
+  for (const part of parts) {
+    const next = buf ? `${buf} ${part}` : part;
+    if (next.length > 140 && buf) {
+      chunks.push(buf);
+      buf = part;
+    } else {
+      buf = next;
+    }
+  }
+  if (buf) chunks.push(buf);
+
+  // Very long single sentence — soft-split on commas / connectors.
+  return chunks.flatMap((c) => {
+    if (c.length <= 180) return [c];
+    const soft = c.split(/(?<=[,;]| এবং | আর | কিন্তু )\s+/);
+    const out: string[] = [];
+    let b = "";
+    for (const s of soft) {
+      const n = b ? `${b} ${s}` : s;
+      if (n.length > 160 && b) {
+        out.push(b);
+        b = s;
+      } else b = n;
+    }
+    if (b) out.push(b);
+    return out;
+  });
 }
 
 function speakOnce(
   text: string,
   language: string,
-  voice?: string,
+  voice: string | undefined,
+  signal: { stopped: boolean },
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (signal.stopped) {
+      resolve();
+      return;
+    }
     Speech.speak(text, {
       language,
       voice,
-      rate: 0.92,
-      pitch: 1,
+      // Slightly slower + steady pitch = clearer Bangla on device TTS.
+      rate: 0.86,
+      pitch: 1.02,
       onDone: () => resolve(),
       onStopped: () => resolve(),
       onError: (err) => reject(err instanceof Error ? err : new Error("tts")),
@@ -34,39 +144,71 @@ function speakOnce(
   });
 }
 
+function pause(ms: number, signal: { stopped: boolean }) {
+  return new Promise<void>((resolve) => {
+    if (signal.stopped) {
+      resolve();
+      return;
+    }
+    setTimeout(resolve, ms);
+  });
+}
+
+let activeSignal: { stopped: boolean } | null = null;
+
 export async function speakBangla(
   text: string,
   handlers?: { onDone?: () => void; onStopped?: () => void; onError?: () => void },
 ) {
-  const cleaned = text.replace(/\s+/g, " ").trim().slice(0, 3900);
-  if (!cleaned) {
+  const chunks = splitSpeechChunks(text);
+  if (!chunks.length) {
     handlers?.onDone?.();
     return;
   }
 
   await Speech.stop();
+  const signal = { stopped: false };
+  activeSignal = signal;
+
   try {
     await enablePlaybackAudio();
   } catch {
     // still try device TTS
   }
 
-  let lastError: unknown;
-  for (const language of LANGS) {
-    try {
-      const voice = await banglaVoice(language);
-      await speakOnce(cleaned, language, voice);
-      handlers?.onDone?.();
-      return;
-    } catch (err) {
-      lastError = err;
-    }
-  }
+  const pick = await resolveBanglaVoice();
 
-  handlers?.onError?.();
-  throw lastError instanceof Error ? lastError : new Error("tts");
+  try {
+    for (let i = 0; i < chunks.length; i++) {
+      if (signal.stopped) {
+        handlers?.onStopped?.();
+        return;
+      }
+      try {
+        await speakOnce(chunks[i], pick.language, pick.voice, signal);
+      } catch {
+        // Retry chunk without a pinned voice id (some identifiers are flaky).
+        await speakOnce(chunks[i], pick.language, undefined, signal);
+      }
+      // Breath between sentences — makes speech feel fluent, not robotic dump.
+      if (i < chunks.length - 1) await pause(140, signal);
+    }
+    if (signal.stopped) handlers?.onStopped?.();
+    else handlers?.onDone?.();
+  } catch (err) {
+    handlers?.onError?.();
+    throw err instanceof Error ? err : new Error("tts");
+  } finally {
+    if (activeSignal === signal) activeSignal = null;
+  }
 }
 
 export async function stopBanglaSpeech() {
+  if (activeSignal) activeSignal.stopped = true;
   await Speech.stop();
+}
+
+/** Force re-resolve voices after OS language packs change. */
+export function resetBanglaVoiceCache() {
+  cachedPick = null;
 }

@@ -20,7 +20,6 @@ import {
 } from "@/lib/modelManager/modelManager";
 import { autoLoadLlm, unloadLlm, currentModelId } from "@/lib/modelManager/llmEngine";
 import { initSTT } from "@/lib/offlineVoice/sttEngine";
-import { initTTS } from "@/lib/offlineVoice/ttsEngine";
 import {
   pickAndInstallVision,
   visionInstallStatus,
@@ -68,13 +67,17 @@ export default function ModelsScreen() {
       if (entry.kind === "llm") {
         const loaded = await autoLoadLlm(entry.id);
         setActiveId(loaded);
-        setHint("জেমা লোড হয়েছে — সহকারী ট্যাবে কথা বলুন।");
+        setHint(
+          loaded
+            ? "জেমা লোড হয়েছে — সহকারী ট্যাবে কথা বলুন।"
+            : "ফাইল আছে, কিন্তু মেমোরিতে লোড হয়নি। ডিভাইসের RAM কম হতে পারে — ছোট জেমা (২৭০এম) ডাউনলোড করে চেষ্টা করুন।",
+        );
       } else if (entry.kind === "stt") {
-        await initSTT();
-        setHint("বাংলা STT প্রস্তুত।");
+        const ok = await initSTT();
+        setHint(ok ? "বাংলা STT প্রস্তুত।" : "STT ফাইল আছে, কিন্তু লোড ব্যর্থ।");
       } else if (entry.kind === "tts") {
-        await initTTS();
-        setHint("বাংলা TTS প্রস্তুত।");
+        // Do not call sherpa TTS.initialize — it can abort the process.
+        setHint("কণ্ঠ উচ্চারণ ডিভাইস TTS (expo-speech) দিয়ে চলবে।");
       }
     } catch {
       setError("ডাউনলোড ব্যর্থ হয়েছে। ওয়াই‑ফাই চেক করে আবার চেষ্টা করুন।");
@@ -138,23 +141,24 @@ export default function ModelsScreen() {
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
         ListFooterComponent={
           <View className="mt-6 gap-3 border-t border-border pt-4">
-            <AppText variant="bodyLg">ভিশন মডেল (ট্রেন করে ইমপোর্ট)</AppText>
+            <AppText variant="bodyLg">ভিশন মডেল</AppText>
             <AppText variant="caption" className="leading-6">
-              Colab/`ml/` থেকে `.tflite` তৈরি করে এখানে বেছে নিন। রোগ:{" "}
+              অ্যাপে ইতিমধ্যে বান্ডেল করা আছে (`assets/models/vision/`)। নিচের
+              বাটন শুধু নতুন ট্রেনিং দিয়ে রিপ্লেস করতে। রোগ:{" "}
               {vision.disease ? "আছে" : "নেই"} · হাতিয়ার:{" "}
               {vision.tool ? "আছে" : "নেই"} · class_names:{" "}
               {vision.classNames ? "আছে" : "নেই"}
             </AppText>
             <SecondaryButton
-              label="রোগ মডেল ইমপোর্ট (.tflite)"
+              label="রোগ মডেল আপডেট (.tflite)"
               onPress={() => void importVision("disease")}
             />
             <SecondaryButton
-              label="হাতিয়ার মডেল ইমপোর্ট (.tflite)"
+              label="হাতিয়ার মডেল আপডেট (.tflite)"
               onPress={() => void importVision("tool")}
             />
             <SecondaryButton
-              label="class_names.json ইমপোর্ট"
+              label="class_names.json আপডেট"
               onPress={() => void importVision("classNames")}
             />
           </View>

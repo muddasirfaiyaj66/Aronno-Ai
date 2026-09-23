@@ -33,6 +33,18 @@ export async function enablePlaybackAudio() {
     allowsRecordingIOS: false,
     playsInSilentModeIOS: true,
     staysActiveInBackground: false,
+    // Speaker, not earpiece — clearer assistant voice.
+    playThroughEarpieceAndroid: false,
+    shouldDuckAndroid: false,
+  });
+}
+
+/** Call before mic listen so recording + playback don't fight. */
+export async function enableRecordingAudio() {
+  await Audio.setAudioModeAsync({
+    allowsRecordingIOS: true,
+    playsInSilentModeIOS: true,
+    staysActiveInBackground: false,
     playThroughEarpieceAndroid: false,
     shouldDuckAndroid: true,
   });

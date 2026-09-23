@@ -43,15 +43,17 @@ app-example
 /ios
 /android
 
-# Offline AI: large STT/TTS/vision binaries (download on device / local only)
+# Offline AI: STT/TTS binaries download on device (Model Manager).
+# Vision TFLite + class_names + KB ship with the app.
 assets/models/stt/**/*
 !assets/models/stt/**/.gitkeep
 assets/models/tts/**/*
 !assets/models/tts/**/.gitkeep
-assets/models/vision/*
-!assets/models/vision/.gitkeep
-!assets/models/vision/class_names.json
-!assets/models/vision/README.md
-*.tflite
 *.onnx
 *.gguf
+# Ignore stray TFLite elsewhere, but keep bundled vision models
+*.tflite
+!assets/models/vision/*.tflite
+!assets/models/vision/class_names.json
+!assets/models/vision/README.md
+!assets/models/vision/.gitkeep

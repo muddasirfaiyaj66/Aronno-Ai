@@ -32,6 +32,16 @@ export function localDir(entry: ModelCatalogEntry): string {
 
 export async function isInstalled(entry: ModelCatalogEntry): Promise<boolean> {
   if (!FileSystem.documentDirectory) return false;
+  // Drop obsolete base (non-instruct) Gemma file if present
+  if (entry.id === "gemma3-270m-q8") {
+    const obsolete = `${localDir(entry)}gemma-3-270m-Q8_0.gguf`;
+    const dead = await FileSystem.getInfoAsync(obsolete);
+    if (dead.exists) {
+      await FileSystem.deleteAsync(obsolete, { idempotent: true }).catch(
+        () => undefined,
+      );
+    }
+  }
   if (entry.files?.length) {
     const flags = await Promise.all(
       entry.files.map(async (f) => {
@@ -44,7 +54,11 @@ export async function isInstalled(entry: ModelCatalogEntry): Promise<boolean> {
     return flags.every(Boolean);
   }
   const info = await FileSystem.getInfoAsync(localPath(entry));
-  return info.exists;
+  if (!info.exists) return false;
+  // An error page saved as .gguf is a few KB — treat anything far below the
+  // expected size as not installed.
+  const minBytes = entry.sizeMb * 1024 * 1024 * 0.5;
+  return (info.size ?? 0) >= minBytes;
 }
 
 export async function listInstalled(): Promise<ModelCatalogEntry[]> {
@@ -73,7 +87,12 @@ async function downloadOne(
     },
   );
   const result = await resumable.downloadAsync();
-  if (!result?.uri) throw new Error(`download-failed:${dest}`);
+  if (!result?.uri || (result.status && result.status >= 400)) {
+    await FileSystem.deleteAsync(dest, { idempotent: true }).catch(
+      () => undefined,
+    );
+    throw new Error(`download-failed:${result?.status ?? "none"}`);
+  }
 }
 
 export async function downloadModel(

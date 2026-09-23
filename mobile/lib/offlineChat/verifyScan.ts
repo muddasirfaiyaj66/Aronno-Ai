@@ -3,10 +3,7 @@
  * Always short-verify when LLM ready; deep pass if confidence < 70% or uncertain.
  */
 import { retrieveContextForLabel } from "@/lib/offlineNlu/retrieve";
-import {
-  buildGroundedPrompt,
-  SYSTEM_PROMPT_BN,
-} from "@/lib/offlineChat/chatLoop";
+import { buildGroundedPrompt } from "@/lib/offlineChat/chatLoop";
 import { isLlmReady, streamLlmReply } from "@/lib/modelManager/llmEngine";
 import { logMetric, markStart } from "@/lib/offline/metrics";
 
@@ -63,7 +60,7 @@ export async function verifyScanResult(
 
   const kbFacts = retrieveContextForLabel(input.kind, input.labelId);
   const shortPrompt = [
-    SYSTEM_PROMPT_BN,
+    "তুমি আরণ্য। সংক্ষেপে যাচাই করো।",
     kbFacts.length ? `তথ্য:\n${kbFacts.join("\n")}` : "",
     `মডেল বলেছে: ${input.nameBn} (${input.nameEn}), আত্মবিশ্বাস ${Math.round(input.confidence)}%.`,
     `এক লাইনে যাচাই করো। প্রথমে লিখো ok অথবা uncertain, তারপর সংক্ষিপ্ত বাংলা নোট।`,

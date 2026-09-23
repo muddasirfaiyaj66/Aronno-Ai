@@ -21,6 +21,27 @@ export function findDiseaseById(id: string): KbDisease | undefined {
   );
 }
 
+/** Match KB entry by Bangla/English display name or PlantVillage id. */
+export function findDiseaseByName(
+  nameBn?: string | null,
+  nameEn?: string | null,
+): KbDisease | undefined {
+  const bn = nameBn?.trim().toLowerCase();
+  const en = nameEn?.trim().toLowerCase();
+  if (en) {
+    const byId = findDiseaseById(en.replace(/\s+/g, "_"));
+    if (byId) return byId;
+  }
+  return kb.diseases.find((d) => {
+    const dbn = d.diseaseNameBn.toLowerCase();
+    const den = d.diseaseNameEn.toLowerCase();
+    return (
+      (bn && (dbn === bn || dbn.includes(bn) || bn.includes(dbn))) ||
+      (en && (den === en || den.includes(en) || en.includes(den)))
+    );
+  });
+}
+
 export function findToolById(id: string): KbTool | undefined {
   const key = id.trim().toLowerCase();
   return (

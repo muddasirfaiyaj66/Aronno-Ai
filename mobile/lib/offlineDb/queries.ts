@@ -214,6 +214,30 @@ export async function listChatTurns(limit = 80): Promise<LocalChatTurnRow[]> {
   return rows.map(mapChat);
 }
 
+/**
+ * Last few turns for follow-up grounding (e.g. user says «হ্যাঁ»).
+ * Kept short so small models don't copy the whole chat.
+ */
+export async function recentChatForPrompt(limit = 4): Promise<string[]> {
+  const db = await getOfflineDb();
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT role, text_bn FROM chat_turns ORDER BY created_at DESC LIMIT ?`,
+    [limit],
+  );
+  return rows
+    .reverse()
+    .map((r) => {
+      const role = String(r.role) === "user" ? "ব্যবহারকারী" : "আরণ্য";
+      const text = String(r.text_bn ?? "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 120);
+      if (!text) return null;
+      return `${role}: ${text}`;
+    })
+    .filter((s): s is string => !!s);
+}
+
 export async function listLocalHistory(): Promise<HistoryEntry[]> {
   const db = await getOfflineDb();
   const diags = await db.getAllAsync<Record<string, unknown>>(
@@ -222,7 +246,9 @@ export async function listLocalHistory(): Promise<HistoryEntry[]> {
   const out: DiseaseHistoryEntry[] = diags.map((r: Record<string, unknown>) => {
     const d = mapDiag(r);
     return {
-      id: d.serverId ?? d.localId,
+      // Always navigate with localId so offline detail lookup works.
+      id: d.localId,
+      sourceId: d.serverId ?? undefined,
       kind: "disease",
       date: d.createdAt.slice(0, 10),
       dateBn: dateBn(d.createdAt),
@@ -237,6 +263,19 @@ export async function listLocalHistory(): Promise<HistoryEntry[]> {
     };
   });
   return out;
+}
+
+/** Lookup by local_id or server_id (history can pass either). */
+export async function getDiagnosisByAnyId(
+  id: string,
+): Promise<LocalDiagnosisRow | null> {
+  if (!id) return null;
+  const db = await getOfflineDb();
+  const row = await db.getFirstAsync<Record<string, unknown>>(
+    `SELECT * FROM local_diagnoses WHERE local_id = ? OR server_id = ? LIMIT 1`,
+    [id, id],
+  );
+  return row ? mapDiag(row) : null;
 }
 
 export async function countPendingUploads(): Promise<number> {
@@ -411,30 +450,41 @@ export async function upsertChatFromServer(
   }
 }
 
-/** Recent chat + scans for Gemma grounding. */
-export async function recentChatAndScansForPrompt(
-  limit = 6,
-): Promise<string[]> {
+export async function clearChatTurns(): Promise<void> {
   const db = await getOfflineDb();
-  const chats = await db.getAllAsync<Record<string, unknown>>(
-    `SELECT role, text_bn FROM chat_turns ORDER BY created_at DESC LIMIT ?`,
+  await db.runAsync(`DELETE FROM chat_turns`);
+}
+
+export async function recentDiagnoses(limit = 3): Promise<
+  { diseaseNameBn: string; diseaseNameEn: string; labelId: string; confidence: number; createdAt: string }[]
+> {
+  const db = await getOfflineDb();
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT label_id, disease_name_bn, disease_name_en, confidence, created_at
+     FROM local_diagnoses ORDER BY created_at DESC LIMIT ?`,
     [limit],
   );
+  return rows.map((r) => ({
+    labelId: String(r.label_id ?? ""),
+    diseaseNameBn: String(r.disease_name_bn ?? ""),
+    diseaseNameEn: String(r.disease_name_en ?? ""),
+    confidence: Number(r.confidence ?? 0),
+    createdAt: String(r.created_at ?? ""),
+  }));
+}
+
+/**
+ * Recent scans for Gemma grounding. Past chat turns are deliberately left out:
+ * small on-device models copy them verbatim instead of answering.
+ */
+export async function recentScansForPrompt(): Promise<string[]> {
+  const db = await getOfflineDb();
   const diags = await db.getAllAsync<Record<string, unknown>>(
     `SELECT disease_name_bn, disease_name_en, confidence, verified_bn
-     FROM local_diagnoses ORDER BY created_at DESC LIMIT 3`,
+     FROM local_diagnoses ORDER BY created_at DESC LIMIT 2`,
   );
-  const lines: string[] = [];
-  for (const d of diags.reverse()) {
+  return diags.reverse().map((d) => {
     const note = d.verified_bn ? ` — ${String(d.verified_bn)}` : "";
-    lines.push(
-      `সাম্প্রতিক স্ক্যান: ${String(d.disease_name_bn)} (${String(d.disease_name_en)}), আত্মবিশ্বাস ${Number(d.confidence)}%${note}`,
-    );
-  }
-  for (const c of chats.reverse()) {
-    const who = String(c.role) === "user" ? "কৃষক" : "আরণ্য";
-    const text = String(c.text_bn).slice(0, 120);
-    lines.push(`${who}: ${text}`);
-  }
-  return lines.slice(0, 6);
+    return `সাম্প্রতিক স্ক্যান: ${String(d.disease_name_bn)} (${String(d.disease_name_en)}), আত্মবিশ্বাস ${Number(d.confidence)}%${note}`;
+  });
 }

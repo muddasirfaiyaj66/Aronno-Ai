@@ -3,6 +3,7 @@
  */
 import * as DocumentPicker from "expo-document-picker";
 import {
+  ensureBundledVisionInstalled,
   installVisionFile,
   visionFileExists,
   VISION_FILES,
@@ -53,6 +54,7 @@ export async function visionInstallStatus(): Promise<{
   tool: boolean;
   classNames: boolean;
 }> {
+  await ensureBundledVisionInstalled().catch(() => undefined);
   return {
     disease: await visionFileExists("disease"),
     tool: await visionFileExists("tool"),

@@ -1,0 +1,49 @@
+# EAS upload ignore — when this file exists, .gitignore is NOT used for the archive.
+# Keep vision TFLite + KB; exclude local native build caches (the ~1.3GB bloat).
+
+# dependencies
+node_modules/
+
+# Expo / Metro
+.expo/
+dist/
+web-build/
+.metro-health-check*
+expo-env.d.ts
+
+# Local native projects & Gradle/CMake outputs (EAS prebuilds on the server)
+/android/
+/ios/
+.kotlin/
+*.hprof
+
+# Secrets / env
+.env
+.env*.local
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Logs / OS
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+*.tsbuildinfo
+app-example
+
+# Large on-device downloads (Model Manager) — NOT bundled in the APK
+assets/models/stt/**/*
+!assets/models/stt/**/.gitkeep
+assets/models/tts/**/*
+!assets/models/tts/**/.gitkeep
+*.onnx
+*.gguf
+
+# Do NOT ignore vision TFLite or KB — required for offline scan in the app:
+#   assets/models/vision/*.tflite
+#   assets/models/vision/class_names.json
+#   assets/models/kb/bn_knowledge_base.json

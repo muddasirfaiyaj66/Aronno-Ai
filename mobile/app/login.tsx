@@ -13,6 +13,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [login, { isLoading, error }] = useLoginMutation();
+  const apiError = error ? getApiError(error) : undefined;
 
   const message = error
     ? userFacingError(error, "auth", "ইমেইল বা পাসওয়ার্ড ঠিক নেই।")
@@ -86,7 +87,7 @@ export default function LoginScreen() {
           </Pressable>
         </Link>
 
-        {message && apiError.code !== "EMAIL_UNVERIFIED" ? (
+        {message && apiError?.code !== "EMAIL_UNVERIFIED" ? (
           <AppText variant="caption" className="text-severity-high">
             {message}
           </AppText>

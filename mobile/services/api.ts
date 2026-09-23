@@ -79,6 +79,8 @@ export function getApiError(error: unknown): { code?: string; message?: string }
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: API_URL,
   credentials: "include",
+  // Emulator / slow networks otherwise leave isLoading=true forever → white screen.
+  timeout: 8_000,
   prepareHeaders: async (headers, { type }) => {
     if (Platform.OS !== "web") {
       const cookie = await getCookieHeader();

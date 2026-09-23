@@ -5,7 +5,7 @@
 import * as ImageManipulator from "expo-image-manipulator";
 import type { ToolResult } from "@/types/tools";
 import { toolFromKbId } from "@/lib/offlineNlu/offlineMatch";
-import { visionFileExists, visionFilePath } from "@/lib/offlineVision/paths";
+import { visionFileExists, visionFilePath, ensureBundledVisionInstalled } from "@/lib/offlineVision/paths";
 import { markStart } from "@/lib/offline/metrics";
 import kb from "@/assets/models/kb/bn_knowledge_base.json";
 
@@ -18,12 +18,14 @@ let model: TFModel | null = null;
 const TOOL_CLASS_IDS = kb.tools.map((t) => t.id);
 
 export async function isToolModelAvailable(): Promise<boolean> {
+  await ensureBundledVisionInstalled().catch(() => undefined);
   return visionFileExists("tool");
 }
 
 export async function loadToolModel(): Promise<boolean> {
   const end = markStart("vision.tool.load");
   try {
+    await ensureBundledVisionInstalled();
     if (!(await visionFileExists("tool"))) {
       end("missing-file");
       return false;

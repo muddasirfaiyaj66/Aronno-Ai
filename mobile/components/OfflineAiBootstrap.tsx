@@ -1,16 +1,16 @@
 import { useEffect } from "react";
 import { AppState } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
-import { autoLoadLlm } from "@/lib/modelManager/llmEngine";
-import { initSTT } from "@/lib/offlineVoice/sttEngine";
-import { initTTS } from "@/lib/offlineVoice/ttsEngine";
 import { initOfflineDb } from "@/lib/offlineDb/db";
 import { runSync, requestSyncSoon } from "@/lib/offlineDb/syncEngine";
-import { logMetric } from "@/lib/offline/metrics";
 import { fetchIsOnline } from "@/hooks/useIsOnline";
+import { ensureBundledVisionInstalled } from "@/lib/offlineVision/paths";
 
 /**
- * On app boot: init SQLite, load offline models, kick sync when online.
+ * On app boot: init SQLite, seed bundled vision models, kick sync when online.
+ * Do NOT eagerly init llama / sherpa STT+TTS here — a native abort in
+ * sherpa-onnx TTS kills the whole process (uncaught SIGABRT) and looks like
+ * the app "closing again and again". Those engines lazy-load on first use.
  */
 export function OfflineAiBootstrap() {
   useEffect(() => {
@@ -20,11 +20,8 @@ export function OfflineAiBootstrap() {
     (async () => {
       await initOfflineDb().catch(() => undefined);
       if (cancelled) return;
-      const llm = await autoLoadLlm();
+      await ensureBundledVisionInstalled().catch(() => undefined);
       if (cancelled) return;
-      logMetric("boot.llm", undefined, llm ?? "none");
-      await initSTT();
-      await initTTS();
       if (await fetchIsOnline()) {
         requestSyncSoon(800);
       }

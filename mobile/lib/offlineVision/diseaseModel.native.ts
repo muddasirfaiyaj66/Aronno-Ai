@@ -14,7 +14,7 @@ import bundledClassNames from "@/assets/models/vision/class_names.json";
 import {
   diagnosisFromKbId,
 } from "@/lib/offlineNlu/offlineMatch";
-import { visionFileExists, visionFilePath } from "@/lib/offlineVision/paths";
+import { visionFileExists, visionFilePath, ensureBundledVisionInstalled } from "@/lib/offlineVision/paths";
 import { logMetric, markStart } from "@/lib/offline/metrics";
 
 type TFModel = {
@@ -37,12 +37,14 @@ async function loadClassNames(): Promise<void> {
 }
 
 export async function isDiseaseModelAvailable(): Promise<boolean> {
+  await ensureBundledVisionInstalled().catch(() => undefined);
   return visionFileExists("disease");
 }
 
 export async function loadDiseaseModel(): Promise<boolean> {
   const end = markStart("vision.disease.load");
   try {
+    await ensureBundledVisionInstalled();
     if (!(await visionFileExists("disease"))) {
       end("missing-file");
       return false;

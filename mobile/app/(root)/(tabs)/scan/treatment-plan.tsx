@@ -15,6 +15,8 @@ import { WeatherAdvisoryCard } from "@/components/treatment/WeatherAdvisoryCard"
 import { colors } from "@/constants/theme";
 import type { SeverityLevel } from "@/types/diagnosis";
 import { useGetTreatmentPlanQuery } from "@/services/api";
+import { buildOfflineTreatmentPlan } from "@/lib/offlineNlu/offlineTreatment";
+import { useIsOnline } from "@/hooks/useIsOnline";
 
 function SafetyChecklistRow({
   label,
@@ -47,15 +49,41 @@ function SafetyChecklistRow({
 
 export default function TreatmentPlanScreen() {
   const router = useRouter();
+  const online = useIsOnline();
   const params = useLocalSearchParams<{
     diseaseNameBn?: string;
+    diseaseNameEn?: string;
     severity?: SeverityLevel;
     diagnosisId?: string;
   }>();
-  const { data: plan, isLoading, isError, refetch } = useGetTreatmentPlanQuery(
-    params.diagnosisId ?? "",
-    { skip: !params.diagnosisId },
+
+  const diagnosisId = params.diagnosisId?.trim() ?? "";
+  // Server UUIDs only — local offline ids like "diag-…" skip the API.
+  const looksLikeServerId =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      diagnosisId,
+    );
+
+  const {
+    data: remotePlan,
+    isLoading,
+    isError,
+    refetch,
+  } = useGetTreatmentPlanQuery(diagnosisId, {
+    skip: !looksLikeServerId || !online,
+  });
+
+  const offlinePlan = useMemo(
+    () =>
+      buildOfflineTreatmentPlan(
+        params.diseaseNameBn,
+        params.diseaseNameEn,
+        params.severity ?? "medium",
+      ),
+    [params.diseaseNameBn, params.diseaseNameEn, params.severity],
   );
+
+  const plan = remotePlan ?? offlinePlan;
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
 
   const listenText = useMemo(
@@ -70,25 +98,32 @@ export default function TreatmentPlanScreen() {
     setCheckedItems((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  if (!params.diagnosisId) {
+  if (looksLikeServerId && online && isLoading && !plan) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-neutral px-6">
-        <RetryCard
-          message="রোগ নির্ণয় পাওয়া যায়নি।"
-          onRetry={() => router.back()}
+        <AIGeneratingShimmer
+          label="পরিকল্পনা তৈরি হচ্ছে"
+          lines={5}
+          className="w-full"
         />
       </SafeAreaView>
     );
   }
 
-  if (isLoading || !plan) {
+  if (!plan) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-neutral px-6">
-        {isError ? (
-          <RetryCard message="পরিকল্পনা আনা যায়নি।" onRetry={() => refetch()} />
-        ) : (
-          <AIGeneratingShimmer label="পরিকল্পনা তৈরি হচ্ছে" lines={5} className="w-full" />
-        )}
+        <RetryCard
+          message={
+            isError
+              ? "পরিকল্পনা আনা যায়নি।"
+              : "এই রোগের চিকিৎসা পরিকল্পনা পাওয়া যায়নি।"
+          }
+          onRetry={() => {
+            if (looksLikeServerId && online) void refetch();
+            else router.back();
+          }}
+        />
       </SafeAreaView>
     );
   }
@@ -99,17 +134,15 @@ export default function TreatmentPlanScreen() {
         <AppText variant="title">চিকিৎসা পরিকল্পনা</AppText>
         <AppText variant="caption" className="mt-1">
           {plan.diseaseNameBn} এর জন্য সুপারিশকৃত পরিকল্পনা
+          {!remotePlan && offlinePlan ? " · অফলাইন" : ""}
         </AppText>
       </View>
 
       <ScrollView
         className="flex-1"
-        contentContainerClassName="gap-4 px-5 py-5"
+        contentContainerClassName="gap-4 px-5 py-5 pb-10"
       >
-        <ListenButton
-          label="পুরো পরিকল্পনা শুনুন"
-          textBn={listenText}
-        />
+        <ListenButton label="পুরো পরিকল্পনা শুনুন" textBn={listenText} />
 
         <WeatherAdvisoryCard
           level={plan.weatherAdvisory.level}
@@ -126,7 +159,10 @@ export default function TreatmentPlanScreen() {
                 size={16}
                 color={colors.primary}
               />
-              <AppText variant="caption" className="font-bengali-bold text-primary">
+              <AppText
+                variant="caption"
+                className="font-bengali-bold text-primary"
+              >
                 {plan.followUpLabelBn}
               </AppText>
             </View>
@@ -134,8 +170,11 @@ export default function TreatmentPlanScreen() {
         >
           <View className="gap-5">
             <View>
-              <AppText variant="caption">কীটনাশক</AppText>
-              <AppText variant="bodyLg" className="font-bengali-bold text-primary">
+              <AppText variant="caption">কীটনাশক / ওষুধ</AppText>
+              <AppText
+                variant="bodyLg"
+                className="font-bengali-bold text-primary"
+              >
                 {plan.pesticideNameBn}
               </AppText>
               <AppText variant="body" className="mt-0.5 text-muted">
@@ -145,7 +184,7 @@ export default function TreatmentPlanScreen() {
 
             <View className="gap-3">
               <AppText variant="body" className="font-bengali-bold text-ink">
-                মেশানোর ধাপ
+                করণীয় ধাপ
               </AppText>
               {plan.steps.map((step) => (
                 <View key={step.step} className="flex-row items-start gap-3">
@@ -165,7 +204,10 @@ export default function TreatmentPlanScreen() {
             </View>
 
             <View className="gap-1">
-              <AppText variant="body" className="mb-1 font-bengali-bold text-ink">
+              <AppText
+                variant="body"
+                className="mb-1 font-bengali-bold text-ink"
+              >
                 নিরাপত্তা চেকলিস্ট
               </AppText>
               {plan.safetyChecklist.map((item) => (
@@ -186,8 +228,9 @@ export default function TreatmentPlanScreen() {
             router.push({
               pathname: "/(root)/(tabs)/scan/report",
               params: {
-                diagnosisId: params.diagnosisId,
+                diagnosisId: diagnosisId || plan.id || "",
                 diseaseNameBn: plan.diseaseNameBn,
+                diseaseNameEn: params.diseaseNameEn ?? "",
                 severity: params.severity,
               },
             })
@@ -207,6 +250,12 @@ export default function TreatmentPlanScreen() {
           icon={
             <Ionicons name="calculator-outline" size={20} color={colors.ink} />
           }
+        />
+
+        <SecondaryButton
+          label="ফিরে যান"
+          onPress={() => router.back()}
+          icon={<Ionicons name="arrow-back" size={20} color={colors.ink} />}
         />
       </ScrollView>
     </SafeAreaView>

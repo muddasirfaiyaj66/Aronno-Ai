@@ -167,6 +167,7 @@ export default function TabLayout() {
         name="assistant"
         options={{
           title: "সহকারী",
+          tabBarHideOnKeyboard: true,
           tabBarIcon: tabIcon("chatbubbles-outline", "chatbubbles"),
           tabBarLabel: tabLabel("সহকারী"),
         }}

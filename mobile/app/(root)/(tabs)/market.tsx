@@ -47,6 +47,8 @@ type ProductCategory =
   | "fruits"
   | "seeds"
   | "fertilizers"
+  | "pesticides"
+  | "tools"
   | "fish"
   | "dairy"
   | "eggs"
@@ -54,11 +56,13 @@ type ProductCategory =
 
 const CATEGORY_FILTER_OPTIONS: { id: ProductCategory; label: string }[] = [
   { id: "all", label: "সব" },
-  { id: "crops", label: "শস্য" },
+  { id: "crops", label: "শস্য ও ফসল" },
   { id: "vegetables", label: "সবজি" },
-  { id: "fruits", label: "ফল" },
+  { id: "fruits", label: "ফলমূল" },
   { id: "seeds", label: "বীজ" },
   { id: "fertilizers", label: "সার" },
+  { id: "pesticides", label: "কীটনাশক" },
+  { id: "tools", label: "যন্ত্রপাতি ও সরঞ্জাম" },
   { id: "fish", label: "মাছ" },
   { id: "dairy", label: "দুধ ও দুগ্ধজাত পণ্য" },
   { id: "eggs", label: "ডিম" },

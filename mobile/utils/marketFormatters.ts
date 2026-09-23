@@ -29,16 +29,16 @@ export const formatPriceBn = (price?: number | null, unit?: string): string => {
 };
 
 export const CATEGORY_BN: Record<string, string> = {
-  crops: "শস্য",
+  crops: "শস্য ও ফসল",
   vegetables: "সবজি",
-  fruits: "ফল",
+  fruits: "ফলমূল",
   seeds: "বীজ",
   fertilizers: "সার",
   pesticides: "কীটনাশক",
+  tools: "যন্ত্রপাতি ও সরঞ্জাম",
   fish: "মাছ",
   dairy: "দুধ ও দুগ্ধজাত পণ্য",
   eggs: "ডিম",
-  tools: "যন্ত্রপাতি",
   other: "অন্যান্য",
 };
 

@@ -29,6 +29,8 @@ type ProductCategoryKey =
   | "fruits"
   | "seeds"
   | "fertilizers"
+  | "pesticides"
+  | "tools"
   | "fish"
   | "dairy"
   | "eggs"
@@ -37,11 +39,13 @@ type ProductCategoryKey =
 type ProductUnitKey = "kg" | "mon" | "ton" | "piece" | "liter" | "bag";
 
 const CATEGORIES: { id: ProductCategoryKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { id: "crops", label: "শস্য", icon: "leaf-outline" },
+  { id: "crops", label: "শস্য ও ফসল", icon: "leaf-outline" },
   { id: "vegetables", label: "সবজি", icon: "basket-outline" },
-  { id: "fruits", label: "ফল", icon: "nutrition-outline" },
+  { id: "fruits", label: "ফলমূল", icon: "nutrition-outline" },
   { id: "seeds", label: "বীজ", icon: "flower-outline" },
   { id: "fertilizers", label: "সার", icon: "flask-outline" },
+  { id: "pesticides", label: "কীটনাশক", icon: "shield-outline" },
+  { id: "tools", label: "যন্ত্রপাতি ও সরঞ্জাম", icon: "construct-outline" },
   { id: "fish", label: "মাছ", icon: "fish-outline" },
   { id: "dairy", label: "দুধ ও দুগ্ধজাত পণ্য", icon: "water-outline" },
   { id: "eggs", label: "ডিম", icon: "egg-outline" },

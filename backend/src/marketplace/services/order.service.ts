@@ -196,6 +196,16 @@ export class OrderService {
     });
   }
 
+  /** Seller-allowed status state machine transitions */
+  private static readonly SELLER_TRANSITIONS: Record<string, string[]> = {
+    pending: ['confirmed', 'cancelled'],
+    confirmed: ['processing', 'cancelled'],
+    processing: ['shipped'],
+    shipped: ['delivered'],
+    delivered: [],
+    cancelled: [],
+  };
+
   async updateOrderStatus(
     userId: string,
     orderId: string,
@@ -211,12 +221,24 @@ export class OrderService {
       throw new ForbiddenException('You do not have permission to view or update this order.');
     }
 
+    // Buyer can only cancel a pending order
     if (isBuyer) {
       if (dto.status !== 'cancelled') {
-        throw new ForbiddenException('Buyers can only cancel pending orders.');
+        throw new ForbiddenException('Buyers can only cancel orders.');
       }
       if (order.status !== 'pending') {
-        throw new BadRequestException('Order can only be cancelled while in pending status.');
+        throw new BadRequestException('Buyers can only cancel orders that are still pending.');
+      }
+    }
+
+    // Seller must follow the state machine
+    if (isSeller) {
+      const allowed = OrderService.SELLER_TRANSITIONS[order.status] ?? [];
+      if (!allowed.includes(dto.status)) {
+        throw new BadRequestException(
+          `Cannot transition order from "${order.status}" to "${dto.status}". ` +
+            `Allowed next statuses: [${allowed.join(', ') || 'none'}].`,
+        );
       }
     }
 

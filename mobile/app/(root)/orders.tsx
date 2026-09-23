@@ -20,6 +20,7 @@ import {
   useGetShopOrdersQuery,
   useUpdateOrderStatusMutation,
 } from "@/services/api";
+import { toBn } from "@/utils/marketFormatters";
 
 type OrderTab = "buyer" | "seller";
 
@@ -56,13 +57,11 @@ export default function OrdersScreen() {
     refetch: refetchBuyer,
   } = useGetBuyerOrdersQuery();
 
-  const {
-    data: shopOrders = [],
-    isLoading: sellerLoading,
-    isError: sellerError,
-    refetch: refetchSeller,
-  } = useGetShopOrdersQuery();
+  // Seller orders — fetched only to show a count badge on the tab
+  const { data: shopOrders = [] } = useGetShopOrdersQuery();
+  const pendingCount = shopOrders.filter((o: any) => o.status === "pending").length;
 
+  // Kept for buyer cancel action
   const [updateStatus, { isLoading: updatingStatus }] = useUpdateOrderStatusMutation();
 
   const openReviewModal = (orderId: string, productId: string, productName: string) => {
@@ -185,110 +184,39 @@ export default function OrdersScreen() {
           )
         ) : null}
 
+        {/* ── Seller tab: navigate to dedicated screen ── */}
         {tab === "seller" ? (
-          sellerError ? (
-            <RetryCard message="বিক্রির তথ্য লোড করা যায়নি। আপনি কি দোকান তৈরি করেছেন?" onRetry={refetchSeller} />
-          ) : sellerLoading ? (
-            <AIGeneratingShimmer label="বিক্রির তথ্য লোড হচ্ছে" lines={3} className="w-full" />
-          ) : shopOrders.length === 0 ? (
-            <EmptyState
-              icon={<Ionicons name="cube-outline" size={40} color={colors.primary} />}
-              message="আপনার দোকানে এখনো কোনো কাস্টমার অর্ডার আসেনি।"
-              ctaLabel="রিফ্রেশ করুন"
-              onCta={refetchSeller}
-            />
-          ) : (
-            shopOrders.map((order) => {
-              const statusInfo = STATUS_LABEL[order.status] ?? STATUS_LABEL.pending;
-
-              return (
-                <StructuredCard
-                  key={order.id}
-                  title={`ক্রেতা: ${order.buyer?.displayName ?? "কাস্টমার"}`}
-                  icon={<Ionicons name="person" size={20} color={colors.primary} />}
-                >
-                  <View className="gap-3">
-                    <View className="flex-row items-center justify-between">
-                      <AppText variant="caption" className="font-bengali-semibold text-muted">
-                        অর্ডার নং: #{order.orderNumber}
-                      </AppText>
-                      <View className="rounded-full px-3 py-1" style={{ backgroundColor: statusInfo.bg }}>
-                        <AppText variant="caption" className="font-bengali-bold" style={{ color: statusInfo.color }}>
-                          {statusInfo.label}
-                        </AppText>
-                      </View>
-                    </View>
-
-                    <AppText variant="caption" className="text-muted">
-                      📍 ঠিকানা: {order.shippingAddress} · 📞 {order.contactPhone}
+          <View className="gap-4">
+            {/* Quick-navigate card */}
+            <Pressable
+              onPress={() => router.push("/(root)/seller-orders")}
+              className="rounded-2xl border border-border bg-white p-5 shadow-sm flex-row items-center gap-4"
+              style={{ elevation: 2 }}
+            >
+              <View className="h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+                <Ionicons name="storefront" size={28} color={colors.primary} />
+              </View>
+              <View className="flex-1">
+                <AppText variant="subtitle" className="font-bengali-bold text-ink">
+                  দোকানের অর্ডার ব্যবস্থাপনা
+                </AppText>
+                <AppText variant="caption" className="text-muted font-bengali-medium mt-0.5">
+                  {shopOrders.length > 0
+                    ? `মোট ${toBn(shopOrders.length)}টি অর্ডার`
+                    : "অর্ডার দেখুন ও পরিচালনা করুন"}
+                </AppText>
+                {pendingCount > 0 ? (
+                  <View className="mt-1.5 flex-row items-center gap-1.5">
+                    <View className="h-2 w-2 rounded-full bg-amber-500" />
+                    <AppText variant="caption" className="text-amber-600 font-bengali-semibold">
+                      {toBn(pendingCount)}টি নতুন অর্ডার অপেক্ষমাণ
                     </AppText>
-
-                    {/* Order Line Items */}
-                    <View className="gap-2 border-t border-b border-border/50 py-2">
-                      {order.items.map((item: any, i: number) => (
-                        <View key={i} className="flex-row items-center justify-between">
-                          <AppText variant="body" className="font-bengali-semibold text-ink flex-1 pr-2">
-                            {item.productName} ({item.quantity} {item.unit})
-                          </AppText>
-                          <AppText variant="body" className="font-bengali-bold text-ink">
-                            ৳ {item.totalPrice}
-                          </AppText>
-                        </View>
-                      ))}
-                    </View>
-
-                    <View className="flex-row items-center justify-between">
-                      <AppText variant="caption" className="text-muted">
-                        মোট বিল
-                      </AppText>
-                      <AppText variant="subtitle" className="font-bengali-bold text-primary">
-                        ৳ {order.totalBdt}
-                      </AppText>
-                    </View>
-
-                    {/* Status Update Actions for Seller */}
-                    {order.status !== "delivered" && order.status !== "cancelled" ? (
-                      <View className="gap-2 pt-2 border-t border-border/50">
-                        <AppText variant="caption" className="font-bengali-semibold text-ink">
-                          অর্ডারের স্ট্যাটাস পরিবর্তন করুন:
-                        </AppText>
-                        <View className="flex-row flex-wrap gap-2">
-                          {order.status === "pending" ? (
-                            <PrimaryButton
-                              label="নিশ্চিত করুন"
-                              onPress={() => updateStatus({ id: order.id, status: "confirmed" })}
-                              loading={updatingStatus}
-                            />
-                          ) : null}
-                          {order.status === "confirmed" ? (
-                            <PrimaryButton
-                              label="প্রক্রিয়াধীন করুন"
-                              onPress={() => updateStatus({ id: order.id, status: "processing" })}
-                              loading={updatingStatus}
-                            />
-                          ) : null}
-                          {order.status === "processing" ? (
-                            <PrimaryButton
-                              label="পাঠানো হয়েছে (Shipped)"
-                              onPress={() => updateStatus({ id: order.id, status: "shipped" })}
-                              loading={updatingStatus}
-                            />
-                          ) : null}
-                          {order.status === "shipped" ? (
-                            <PrimaryButton
-                              label="পৌঁছেছে (Delivered)"
-                              onPress={() => updateStatus({ id: order.id, status: "delivered" })}
-                              loading={updatingStatus}
-                            />
-                          ) : null}
-                        </View>
-                      </View>
-                    ) : null}
                   </View>
-                </StructuredCard>
-              );
-            })
-          )
+                ) : null}
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+            </Pressable>
+          </View>
         ) : null}
       </ScrollView>
 

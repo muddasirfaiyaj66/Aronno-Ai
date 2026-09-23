@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { DiagnosisSource, Severity } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
+import { resolveDiagnosisLocation } from '../diagnoses/diagnosis-location';
 
 type OfflineDiagnosisIn = {
   clientLocalId: string;
@@ -13,6 +14,8 @@ type OfflineDiagnosisIn = {
   verifiedBn?: string | null;
   source?: DiagnosisSource | string;
   imageObjectKey?: string;
+  lat?: number;
+  lon?: number;
 };
 
 type OfflineToolIn = {
@@ -60,10 +63,15 @@ export class SyncService {
         continue;
       }
       const source = this.mapSource(d.source);
+      const location = await resolveDiagnosisLocation(this.prisma, user.id, {
+        lat: typeof d.lat === 'number' ? d.lat : undefined,
+        lon: typeof d.lon === 'number' ? d.lon : undefined,
+      });
       const created = await this.prisma.withTransaction(async (tx) => {
         const row = await tx.diagnosis.create({
           data: {
             userId: user.id,
+            ...location,
             source,
             imageObjectKey: d.imageObjectKey,
             diseaseNameBn: d.diseaseNameBn,

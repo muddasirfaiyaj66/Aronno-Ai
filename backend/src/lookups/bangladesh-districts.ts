@@ -87,3 +87,31 @@ export const DISTRICT_COORDS: Record<string, { lat: number; lon: number }> =
   Object.fromEntries(
     BANGLADESH_DISTRICTS.map((d) => [d.slug, { lat: d.lat, lon: d.lon }]),
   );
+
+/** Rough bounding box of Bangladesh — rejects GPS fixes from outside. */
+const BD_BOUNDS = { minLat: 20.4, maxLat: 26.8, minLon: 87.9, maxLon: 92.8 };
+
+/** District whose HQ is closest to the point, or null when outside Bangladesh. */
+export function nearestDistrict(lat: number, lon: number): BdDistrict | null {
+  if (
+    lat < BD_BOUNDS.minLat ||
+    lat > BD_BOUNDS.maxLat ||
+    lon < BD_BOUNDS.minLon ||
+    lon > BD_BOUNDS.maxLon
+  ) {
+    return null;
+  }
+  const cosLat = Math.cos((lat * Math.PI) / 180);
+  let best: BdDistrict | null = null;
+  let bestDist = Infinity;
+  for (const d of BANGLADESH_DISTRICTS) {
+    const dLat = d.lat - lat;
+    const dLon = (d.lon - lon) * cosLat;
+    const dist = dLat * dLat + dLon * dLon;
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = d;
+    }
+  }
+  return best;
+}

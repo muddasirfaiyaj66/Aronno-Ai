@@ -22,6 +22,8 @@ const offlineBodySchema = z
             .enum(['offline_photo', 'offline_voice', 'photo', 'voice'])
             .optional(),
           imageObjectKey: z.string().optional(),
+          lat: z.number().min(-90).max(90).optional(),
+          lon: z.number().min(-180).max(180).optional(),
         }),
       )
       .optional()

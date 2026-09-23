@@ -1,17 +1,8 @@
 import { useEffect, useState } from "react";
-import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import {
-  AIGeneratingShimmer,
-  AppText,
-  EmptyState,
-  ListenButton,
-  LoanStatusCard,
-  SecondaryButton,
-  StructuredCard,
-} from "@/components/ui";
+import { AIGeneratingShimmer, EmptyState } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import { useGetHistoryEntryQuery } from "@/services/api";
 import { getDiagnosisByAnyId } from "@/lib/offlineDb/queries";
@@ -71,7 +62,7 @@ export default function HistoryDetailScreen() {
       return;
     }
 
-    if (entry?.kind === "disease") {
+    if (entry) {
       router.replace({
         pathname: "/(root)/(tabs)/scan/result",
         params: {
@@ -95,82 +86,24 @@ export default function HistoryDetailScreen() {
     );
   }
 
-  // Disease path redirects above — blank while navigating.
-  if (localDiag || entry?.kind === "disease") {
+  // Disease entries redirect above — blank while navigating.
+  if (localDiag || (entry && !isError)) {
     return <SafeAreaView className="flex-1 bg-neutral" edges={["top"]} />;
   }
 
-  if (!entry || isError) {
-    return (
-      <SafeAreaView
-        className="flex-1 items-center justify-center bg-neutral px-6"
-        edges={["top"]}
-      >
-        <EmptyState
-          icon={
-            <Ionicons
-              name="alert-circle-outline"
-              size={32}
-              color={colors.primary}
-            />
-          }
-          message="এই তথ্য পাওয়া যায়নি।"
-          ctaLabel="ফিরে যান"
-          onCta={() => router.back()}
-        />
-      </SafeAreaView>
-    );
-  }
-
   return (
-    <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-neutral-200 bg-white px-5 py-4">
-        <AppText variant="title">বিস্তারিত</AppText>
-        <AppText variant="caption" className="mt-1">
-          {entry.dateBn}
-        </AppText>
-      </View>
-
-      <View className="flex-1 gap-4 px-5 py-5">
-        <ListenButton
-          label="বিস্তারিত শুনুন"
-          textBn={
-            entry.kind === "yield"
-              ? `${entry.cropNameBn} ফলন ${entry.yieldValue} ${entry.yieldUnitBn}`
-              : `${entry.title} ${entry.amount}`
-          }
-        />
-
-        {entry.kind === "yield" ? (
-          <StructuredCard
-            title={`${entry.cropNameBn} · ফলন পূর্বাভাস`}
-            icon={
-              <Ionicons name="stats-chart" size={22} color={colors.primary} />
-            }
-          >
-            <View className="flex-row items-end gap-3">
-              <AppText variant="hero">{entry.yieldValue}</AppText>
-              <AppText variant="bodyLg" className="mb-2 text-muted">
-                {entry.yieldUnitBn}
-              </AppText>
-            </View>
-          </StructuredCard>
-        ) : (
-          <LoanStatusCard
-            title={entry.title}
-            amount={entry.amount}
-            status={entry.status}
-            nextPaymentLabel="পরবর্তী কিস্তি"
-            nextPaymentDate={entry.nextPaymentDate}
-          />
-        )}
-
-        <SecondaryButton
-          label="ফিরে যান"
-          onPress={() => router.back()}
-          icon={<Ionicons name="arrow-back" size={20} color={colors.ink} />}
-        />
-      </View>
+    <SafeAreaView
+      className="flex-1 items-center justify-center bg-neutral px-6"
+      edges={["top"]}
+    >
+      <EmptyState
+        icon={
+          <Ionicons name="alert-circle-outline" size={32} color={colors.primary} />
+        }
+        message="এই তথ্য পাওয়া যায়নি।"
+        ctaLabel="ফিরে যান"
+        onCta={() => router.back()}
+      />
     </SafeAreaView>
   );
 }

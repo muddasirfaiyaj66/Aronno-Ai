@@ -1,19 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import {
-  HistoryKind,
-  RepaymentPeriod,
-  type HistoryEvent,
-} from '@prisma/client';
+import type { HistoryEvent, HistoryKind } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { Errors } from '../common/errors';
 import type { AuthUser } from '../auth/auth.types';
 
-const PERIOD_BN: Record<RepaymentPeriod, string> = {
-  THREE_MONTHS: '৩ মাস',
-  SIX_MONTHS: '৬ মাস',
-  TWELVE_MONTHS: '১২ মাস',
-};
+/**
+ * Only disease events are surfaced. Older `yield` / `loan` rows may still sit
+ * in the database from retired features; they are never returned.
+ */
+const VISIBLE_KINDS: HistoryKind[] = ['disease'];
 
 function dateBn(d: Date) {
   return new Intl.DateTimeFormat('bn-BD', {
@@ -39,7 +35,11 @@ export class HistoryService {
   ) {
     const ownerId = user.role === 'USER' ? user.id : (userId ?? user.id);
     const events: HistoryEvent[] = await this.prisma.historyEvent.findMany({
-      where: { userId: ownerId, ...(kind ? { kind } : {}) },
+      where: {
+        userId: ownerId,
+        kind:
+          kind && VISIBLE_KINDS.includes(kind) ? kind : { in: VISIBLE_KINDS },
+      },
       take: Math.min(limit, 50),
       skip: cursor ? 1 : 0,
       cursor: cursor ? { id: cursor } : undefined,
@@ -54,6 +54,7 @@ export class HistoryService {
     if (!event) throw Errors.notFound();
     if (event.userId !== user.id && user.role === 'USER')
       throw Errors.forbidden();
+    if (!VISIBLE_KINDS.includes(event.kind)) throw Errors.notFound();
     const assembled = await this.assemble(event);
     if (!assembled) throw Errors.notFound();
     return assembled;
@@ -95,56 +96,22 @@ export class HistoryService {
       date: event.occurredAt.toISOString().slice(0, 10),
       dateBn: dateBn(event.occurredAt),
     };
-    if (event.kind === 'disease') {
-      const d = await this.prisma.diagnosis.findUnique({
-        where: { id: event.sourceId },
-        include: { crop: true },
-      });
-      if (!d) return null;
-      return {
-        ...base,
-        kind: 'disease' as const,
-        sourceId: d.id,
-        cropNameBn: d.crop?.nameBn ?? 'ফসল',
-        diseaseNameBn: d.diseaseNameBn,
-        diseaseNameEn: d.diseaseNameEn,
-        severity: d.severity,
-        confidence: d.confidence,
-        imageUrl: d.imageObjectKey ? this.storage.urlFor(d.imageObjectKey) : '',
-      };
-    }
-    if (event.kind === 'yield') {
-      const y = await this.prisma.yieldEstimate.findUnique({
-        where: { id: event.sourceId },
-        include: { crop: true },
-      });
-      if (!y) return null;
-      return {
-        ...base,
-        kind: 'yield' as const,
-        sourceId: y.id,
-        cropNameBn: y.crop.nameBn,
-        yieldValue: y.estimatedMaxMon,
-        yieldUnitBn: 'মণ',
-        trend: y.trend,
-      };
-    }
-    const loan = await this.prisma.loanApplication.findUnique({
+    if (event.kind !== 'disease') return null;
+    const d = await this.prisma.diagnosis.findUnique({
       where: { id: event.sourceId },
-      include: { purpose: true },
+      include: { crop: true },
     });
-    if (!loan) return null;
+    if (!d) return null;
     return {
       ...base,
-      kind: 'loan' as const,
-      sourceId: loan.id,
-      title: `কৃষি ঋণ — ${loan.purpose.nameBn}`,
-      amount: `৳ ${loan.amountBdt.toLocaleString('bn-BD')}`,
-      status: loan.status,
-      nextPaymentDate: loan.nextPaymentDue
-        ? dateBn(loan.nextPaymentDue)
-        : undefined,
-      repaymentPeriodBn: PERIOD_BN[loan.repaymentPeriod],
+      kind: 'disease' as const,
+      sourceId: d.id,
+      cropNameBn: d.crop?.nameBn ?? 'ফসল',
+      diseaseNameBn: d.diseaseNameBn,
+      diseaseNameEn: d.diseaseNameEn,
+      severity: d.severity,
+      confidence: d.confidence,
+      imageUrl: d.imageObjectKey ? this.storage.urlFor(d.imageObjectKey) : '',
     };
   }
 }

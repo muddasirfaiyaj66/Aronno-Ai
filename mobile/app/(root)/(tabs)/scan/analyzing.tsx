@@ -33,6 +33,8 @@ import {
 import { requestSyncSoon } from "@/lib/offlineDb/syncEngine";
 import { speakOffline } from "@/lib/offlineVoice/ttsEngine";
 import { logMetric } from "@/lib/offline/metrics";
+import { prepareReceiptImage } from "@/lib/receiptImage";
+import { scanLocation } from "@/lib/scanLocation";
 import type { DiagnosisResult } from "@/types/diagnosis";
 import type { ToolResult } from "@/types/tools";
 
@@ -311,7 +313,9 @@ export default function AnalyzingScreen() {
 
         if (flow === "receipt") {
           const result = await scanReceipt({
-            imageUrl: await uploadImageToCloudinary(params.imageUri!),
+            imageUrl: await uploadImageToCloudinary(
+              await prepareReceiptImage(params.imageUri!),
+            ),
           }).unwrap();
           if (cancelled) return;
           router.replace({
@@ -321,12 +325,15 @@ export default function AnalyzingScreen() {
           return;
         }
 
+        const where = (await scanLocation()) ?? {};
         const result = params.transcript
           ? await createVoiceDiagnosis({
               transcriptBn: params.transcript,
+              ...where,
             }).unwrap()
           : await createPhotoDiagnosis({
               imageUrl: await uploadImageToCloudinary(params.imageUri!),
+              ...where,
             }).unwrap();
         if (cancelled) return;
         try {

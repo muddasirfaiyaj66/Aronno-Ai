@@ -2,6 +2,8 @@ import type { SprayLevel } from '@prisma/client';
 import type { GeoPoint } from './coords';
 import type { WeatherKind } from './wmo';
 
+export type OutlookSource = 'seasonal' | 'climatology';
+
 export type CurrentWeather = {
   tempC: number;
   humidity: number;
@@ -17,6 +19,8 @@ export type CurrentWeather = {
 };
 
 export type MonthOutlook = {
+  /** Calendar month, `YYYY-MM`. */
+  monthIso: string;
   monthBn: string;
   weatherIcon: string;
   recommendedCropBn: string;
@@ -33,5 +37,7 @@ export interface WeatherPort {
   sixMonthPlan(point: GeoPoint): Promise<{
     recommendationBn: string;
     months: MonthOutlook[];
+    /** `seasonal` = Open-Meteo forecast, `climatology` = BD monthly normals. */
+    source: OutlookSource;
   }>;
 }

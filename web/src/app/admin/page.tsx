@@ -86,9 +86,6 @@ export default function AdminOverviewPage() {
           <Link href="/admin/users" className="btn btn-primary !min-h-10 text-sm">
             ব্যবহারকারী
           </Link>
-          <Link href="/admin/loans" className="btn btn-ghost !min-h-10 text-sm">
-            ঋণ আবেদন
-          </Link>
           <Link href="/admin/create" className="btn btn-soft !min-h-10 text-sm">
             নতুন অ্যাডমিন
           </Link>

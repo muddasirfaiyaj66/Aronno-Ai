@@ -17,12 +17,10 @@ import type { DiagnosisResult } from "@/types/diagnosis";
 import type { CostEstimateResult, TreatmentPlan } from "@/types/treatment";
 import type { HistoryEntry, HistoryEntryKind } from "@/types/history";
 import type { ToolResult } from "@/types/tools";
-import type { ReceiptSummary } from "@/types/receipt";
+import type { ReceiptReviewItem, ReceiptSummary } from "@/types/receipt";
 import type { FertilizerAdvice } from "@/types/fertilizer";
-import type { YieldEstimate } from "@/types/yield";
 import type { CropPlan } from "@/types/planning";
-import type { HeatMapRegion, MarketListing, MarketPriceEntry } from "@/types/market";
-import type { LoanApplication } from "@/types/loan";
+import type { HeatmapResponse, MarketListing, MarketPriceEntry } from "@/types/market";
 import type { CurrentWeather } from "@/types/weather";
 
 export const API_URL =
@@ -156,10 +154,8 @@ export const api = createApi({
     "Tool",
     "Receipt",
     "Fertilizer",
-    "Yield",
     "CropPlan",
     "Market",
-    "Loan",
     "Report",
     "AdminUsers",
     "Weather",
@@ -275,7 +271,10 @@ export const api = createApi({
         }
       },
     }),
-    createPhotoDiagnosis: builder.mutation<DiagnosisResult & { id: string }, { imageUrl: string }>({
+    createPhotoDiagnosis: builder.mutation<
+      DiagnosisResult & { id: string },
+      { imageUrl: string; lat?: number; lon?: number }
+    >({
       query: (body) => ({ url: "/diagnoses/photo", method: "POST", body }),
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Diagnosis", "History"],
@@ -286,7 +285,7 @@ export const api = createApi({
     }),
     createVoiceDiagnosis: builder.mutation<
       DiagnosisResult & { id: string },
-      { transcriptBn: string; cropSlug?: string }
+      { transcriptBn: string; cropSlug?: string; lat?: number; lon?: number }
     >({
       query: (body) => ({ url: "/diagnoses/voice", method: "POST", body }),
       transformResponse: (r) => unwrap(r),
@@ -438,6 +437,15 @@ export const api = createApi({
     getReceipt: builder.query<ReceiptSummary, string>({
       query: (id) => `/receipts/${id}`,
       transformResponse: (r) => unwrap(r),
+      providesTags: (_r, _e, id) => [{ type: "Receipt", id }],
+    }),
+    reviewReceipt: builder.mutation<
+      ReceiptSummary,
+      { id: string; items: ReceiptReviewItem[]; totalBdt?: number }
+    >({
+      query: ({ id, ...body }) => ({ url: `/receipts/${id}`, method: "PATCH", body }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: (_r, _e, { id }) => [{ type: "Receipt", id }],
     }),
     recommendFertilizer: builder.mutation<
       FertilizerAdvice & { id: string },
@@ -449,28 +457,24 @@ export const api = createApi({
         landSizeBigha: number;
         cropAgeDays: number;
         hasDisease: "yes" | "no" | "unsure";
+        /** Latest diagnosis from History, when the farmer links it. */
+        diagnosisId?: string;
+        diseaseNameBn?: string;
+        diseaseSeverity?: "low" | "medium" | "high";
       }
     >({
       query: (body) => ({ url: "/fertilizer/recommend", method: "POST", body }),
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Fertilizer"],
     }),
-    predictYield: builder.mutation<
-      YieldEstimate & { id: string },
-      { lat?: number; lon?: number } | void
-    >({
-      query: (body) => ({ url: "/yield/predict", method: "POST", body: body ?? {} }),
-      transformResponse: (r) => unwrap(r),
-      invalidatesTags: ["Yield", "History"],
-    }),
-    getLatestYield: builder.query<(YieldEstimate & { id: string }) | null, void>({
-      query: () => "/yield/latest",
-      transformResponse: (r) => unwrap(r),
-      providesTags: ["Yield"],
-    }),
     generateCropPlan: builder.mutation<
       CropPlan & { id: string },
-      { lat?: number; lon?: number } | void
+      {
+        lat?: number;
+        lon?: number;
+        landSize?: number;
+        landUnit?: "bigha" | "acre";
+      } | void
     >({
       query: (body) => ({ url: "/crop-plans/generate", method: "POST", body: body ?? {} }),
       transformResponse: (r) => unwrap(r),
@@ -539,22 +543,9 @@ export const api = createApi({
       query: (id) => ({ url: `/market/listings/${id}/share`, method: "POST" }),
       transformResponse: (r) => unwrap(r),
     }),
-    getHeatmap: builder.query<{ regions: HeatMapRegion[] }, void>({
-      query: () => "/market/heatmap",
+    getHeatmap: builder.query<HeatmapResponse, { days?: number } | void>({
+      query: (arg) => `/market/heatmap${arg?.days ? `?days=${arg.days}` : ""}`,
       transformResponse: (r) => unwrap(r),
-    }),
-    getCurrentLoan: builder.query<LoanApplication | null, void>({
-      query: () => "/loans/current",
-      transformResponse: (r) => unwrap(r),
-      providesTags: ["Loan"],
-    }),
-    applyLoan: builder.mutation<
-      LoanApplication,
-      { amountBdt: number; purposeSlug: string; repaymentPeriod: string }
-    >({
-      query: (body) => ({ url: "/loans", method: "POST", body }),
-      transformResponse: (r) => unwrap(r),
-      invalidatesTags: ["Loan", "History"],
     }),
     getAdminUsers: builder.query<AuthUser[], void>({
       query: () => "/admin/users?limit=50",
@@ -616,9 +607,8 @@ export const {
   useGetToolQuery,
   useScanReceiptMutation,
   useGetReceiptQuery,
+  useReviewReceiptMutation,
   useRecommendFertilizerMutation,
-  usePredictYieldMutation,
-  useGetLatestYieldQuery,
   useGenerateCropPlanMutation,
   useGetLatestCropPlanQuery,
   useGetWeatherQuery,
@@ -627,8 +617,6 @@ export const {
   useCreateMarketListingMutation,
   useShareListingMutation,
   useGetHeatmapQuery,
-  useGetCurrentLoanQuery,
-  useApplyLoanMutation,
   useGetAdminUsersQuery,
   useCreateAdminMutation,
   usePatchAdminRoleMutation,

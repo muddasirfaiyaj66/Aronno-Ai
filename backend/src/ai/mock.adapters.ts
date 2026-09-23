@@ -1,19 +1,28 @@
 import { Injectable } from '@nestjs/common';
 import type { CostEstimatePort, TtsPort } from './ports';
+import {
+  cultivationCost,
+  toBigha,
+  type CostCropSlug,
+} from '../cost/cultivation-costs';
 
-/** Local spray-cost formula — not an AI mock. */
+/** Local spray-cost formula + per-crop cultivation table — not an AI mock. */
 @Injectable()
 export class MockCostAdapter implements CostEstimatePort {
-  estimate(landSize: number, landUnit: 'bigha' | 'acre') {
+  estimate(
+    cropSlug: CostCropSlug,
+    landSize: number,
+    landUnit: 'bigha' | 'acre',
+  ) {
     const COST_PER_BIGHA_BDT = 220;
-    const BIGHA_PER_ACRE = 3;
     const PESTICIDE_ML_PER_BIGHA = 50;
-    const bigha = landUnit === 'acre' ? landSize * BIGHA_PER_ACRE : landSize;
+    const bigha = toBigha(landSize, landUnit);
     const spraySessions = bigha > 5 ? 3 : bigha > 2 ? 2 : 1;
     return {
       pesticideQuantity: `${Math.round(bigha * PESTICIDE_ML_PER_BIGHA)} মিলি`,
       totalCostBdt: Math.round(bigha * COST_PER_BIGHA_BDT * spraySessions),
       spraySessions,
+      cultivation: cultivationCost(cropSlug, bigha),
     };
   }
 }

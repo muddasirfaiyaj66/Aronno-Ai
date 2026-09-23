@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Inject, Param, Post } from '@nestjs/common';
 import { z } from 'zod';
+import type { FertilizerAdvice } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AI_FERTILIZER } from '../ai/ai.tokens';
 import type { AiFertilizerPort } from '../ai/ports';
@@ -17,6 +18,11 @@ const schema = z
     landSizeBigha: z.number().positive().max(500),
     cropAgeDays: z.number().int().min(0).max(400),
     hasDisease: z.enum(['yes', 'no', 'unsure']),
+    /** Linked from the farmer's latest diagnosis instead of re-asking. */
+    diagnosisId: z.string().min(1).optional(),
+    /** Same, for a scan that has not synced to the server yet. */
+    diseaseNameBn: z.string().trim().min(2).max(80).optional(),
+    diseaseSeverity: z.enum(['low', 'medium', 'high']).optional(),
   })
   .strict();
 
@@ -36,7 +42,21 @@ export class FertilizerController {
       where: { slug: body.cropSlug },
     });
     if (!crop) throw Errors.notFound();
-    const ai = await this.ai.recommend(body);
+    const { diagnosisId, diseaseNameBn, diseaseSeverity, ...inputs } = body;
+    const diagnosis =
+      diagnosisId && body.hasDisease === 'yes'
+        ? await this.prisma.diagnosis.findFirst({
+            where: { id: diagnosisId, userId: user.id },
+          })
+        : null;
+    const linked =
+      body.hasDisease === 'yes'
+        ? {
+            diseaseNameBn: diagnosis?.diseaseNameBn ?? diseaseNameBn,
+            diseaseSeverity: diagnosis?.severity ?? diseaseSeverity,
+          }
+        : {};
+    const ai = await this.ai.recommend({ ...inputs, ...linked });
     const row = await this.prisma.fertilizerAdvice.create({
       data: {
         userId: user.id,
@@ -47,17 +67,11 @@ export class FertilizerController {
         landSizeBigha: body.landSizeBigha,
         cropAgeDays: body.cropAgeDays,
         hasDisease: body.hasDisease,
+        diseaseNameBn: linked.diseaseNameBn,
         ...ai,
       },
     });
-    return {
-      id: row.id,
-      fertilizerNameBn: row.fertilizerNameBn,
-      dosagePerBigha: row.dosagePerBigha,
-      applicationMethodBn: row.applicationMethodBn,
-      timingBn: row.timingBn,
-      warningBn: row.warningBn ?? undefined,
-    };
+    return this.dto(row);
   }
 
   @Get(':id')
@@ -68,6 +82,10 @@ export class FertilizerController {
     if (!row) throw Errors.notFound();
     if (row.userId !== user.id && user.role === 'USER')
       throw Errors.forbidden();
+    return this.dto(row);
+  }
+
+  private dto(row: FertilizerAdvice) {
     return {
       id: row.id,
       fertilizerNameBn: row.fertilizerNameBn,
@@ -75,6 +93,11 @@ export class FertilizerController {
       applicationMethodBn: row.applicationMethodBn,
       timingBn: row.timingBn,
       warningBn: row.warningBn ?? undefined,
+      reasonBn: row.reasonBn ?? undefined,
+      landSizeBigha: row.landSizeBigha ?? undefined,
+      cropAgeDays: row.cropAgeDays ?? undefined,
+      hasDisease: row.hasDisease ?? undefined,
+      diseaseNameBn: row.diseaseNameBn ?? undefined,
     };
   }
 }

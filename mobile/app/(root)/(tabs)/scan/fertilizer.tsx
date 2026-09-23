@@ -1,34 +1,38 @@
-import { useState } from "react";
-import { ScrollView, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import {
   AppText,
-  FieldInput,
   IconPickerRow,
+  LandSizeInput,
   ListenButton,
   PrimaryButton,
   RetryCard,
+  SecondaryButton,
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import type { CropType } from "@/types/treatment";
-import type { FertilizerAdvice, GrowthStage, SoilColor, SoilMoisture } from "@/types/fertilizer";
-import {
-  useRecommendFertilizerMutation,
-} from "@/services/api";
+import { CROP_OPTIONS, cropLabel } from "@/constants/crops";
+import type { CropType, LandUnit } from "@/types/treatment";
+import type {
+  DiseaseStatus,
+  FertilizerAdvice,
+  GrowthStage,
+  SoilColor,
+  SoilMoisture,
+} from "@/types/fertilizer";
+import type { DiseaseHistoryEntry } from "@/types/history";
+import { useGetHistoryQuery, useRecommendFertilizerMutation } from "@/services/api";
+import { listLocalHistory } from "@/lib/offlineDb/queries";
+import { useIsOnline } from "@/hooks/useIsOnline";
 import { userFacingError } from "@/lib/userFacingError";
+import { parseNumberInput } from "@/utils/number";
 
-const CROP_OPTIONS: {
-  id: CropType;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-}[] = [
-  { id: "rice", label: "ধান", icon: "leaf-outline" },
-  { id: "potato", label: "আলু", icon: "ellipse-outline" },
-  { id: "tomato", label: "টমেটো", icon: "nutrition-outline" },
-  { id: "vegetable", label: "সবজি", icon: "basket-outline" },
-];
+const BIGHA_PER_ACRE = 3;
+/** A diagnosis older than this is not treated as the crop's current disease. */
+const RECENT_DIAGNOSIS_DAYS = 60;
 
 const STAGE_OPTIONS: {
   id: GrowthStage;
@@ -40,6 +44,28 @@ const STAGE_OPTIONS: {
   { id: "flowering", label: "ফুল", icon: "flower-outline" },
   { id: "maturity", label: "পরিপক্ব", icon: "checkmark-circle-outline" },
 ];
+
+/** Age (days) at which each crop leaves seedling / vegetative / flowering. */
+const STAGE_AGE_LIMITS: Record<CropType, [number, number, number]> = {
+  rice: [20, 50, 85],
+  potato: [25, 50, 75],
+  tomato: [20, 45, 80],
+  vegetable: [15, 35, 60],
+  onion: [25, 60, 90],
+  mustard: [20, 35, 60],
+  lentil: [20, 45, 75],
+  corn: [25, 55, 85],
+};
+
+function stageForAge(crop: CropType, days: number): GrowthStage {
+  const [seedling, vegetative, flowering] = STAGE_AGE_LIMITS[crop];
+  if (days < seedling) return "seedling";
+  if (days < vegetative) return "vegetative";
+  if (days < flowering) return "flowering";
+  return "maturity";
+}
+
+const AGE_PRESETS = [15, 30, 45, 60, 90];
 
 const SOIL_COLOR_OPTIONS: { id: SoilColor; label: string; swatch: string }[] = [
   { id: "dark", label: "গাঢ়", swatch: "#3F2A1D" },
@@ -58,7 +84,7 @@ const MOISTURE_OPTIONS: {
 ];
 
 const DISEASE_OPTIONS: {
-  id: "yes" | "no" | "unsure";
+  id: DiseaseStatus;
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
 }[] = [
@@ -67,25 +93,111 @@ const DISEASE_OPTIONS: {
   { id: "unsure", label: "জানি না", icon: "help-circle-outline" },
 ];
 
-export default function FertilizerRecommendationScreen() {
-  const [crop, setCrop] = useState<CropType | null>(null);
-  const [landSizeBigha, setLandSizeBigha] = useState("");
-  const [cropAgeDays, setCropAgeDays] = useState("");
-  const [hasDisease, setHasDisease] = useState<"yes" | "no" | "unsure" | null>(
-    null,
+const toBnDigits = (n: number) => new Intl.NumberFormat("bn-BD").format(n);
+
+/** Newest recent diagnosis, preferring one recorded for the chosen crop. */
+function latestRelevantDiagnosis(
+  entries: DiseaseHistoryEntry[],
+  crop: CropType | null,
+): DiseaseHistoryEntry | null {
+  const cutoff = new Date(Date.now() - RECENT_DIAGNOSIS_DAYS * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const recent = entries
+    .filter((e) => e.date >= cutoff)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const label = cropLabel(crop);
+  return (
+    (label ? recent.find((e) => e.cropNameBn.includes(label)) : undefined) ??
+    recent[0] ??
+    null
   );
+}
+
+function ChipRow<T extends string | number>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { id: T; label: string }[];
+  value: T | null;
+  onChange: (id: T) => void;
+}) {
+  return (
+    <View className="flex-row flex-wrap gap-2">
+      {options.map((option) => {
+        const selected = option.id === value;
+        return (
+          <Pressable
+            key={String(option.id)}
+            onPress={() => onChange(option.id)}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            accessibilityLabel={option.label}
+            className={`min-h-touch items-center justify-center rounded-full border px-4 ${
+              selected ? "border-primary bg-primary" : "border-border bg-white"
+            }`}
+          >
+            <AppText
+              variant="caption"
+              className={`font-bengali-bold ${selected ? "text-white" : "text-ink"}`}
+            >
+              {option.label}
+            </AppText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+export default function FertilizerRecommendationScreen() {
+  const router = useRouter();
+  const online = useIsOnline();
+  const [crop, setCrop] = useState<CropType | null>(null);
+  const [landSize, setLandSize] = useState("");
+  const [landUnit, setLandUnit] = useState<LandUnit>("bigha");
+  const [cropAgeDays, setCropAgeDays] = useState("");
+  const [hasDisease, setHasDisease] = useState<DiseaseStatus | null>(null);
+  const [useLatestDiagnosis, setUseLatestDiagnosis] = useState(true);
   const [stage, setStage] = useState<GrowthStage | null>(null);
+  const [stageTouched, setStageTouched] = useState(false);
   const [soilColor, setSoilColor] = useState<SoilColor | null>(null);
   const [soilMoisture, setSoilMoisture] = useState<SoilMoisture | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [advice, setAdvice] = useState<FertilizerAdvice | null>(null);
   const [recommend, { isLoading }] = useRecommendFertilizerMutation();
   const [aiError, setAiError] = useState<string | null>(null);
+  const [localHistory, setLocalHistory] = useState<DiseaseHistoryEntry[]>([]);
 
-  const landNum = Number(landSizeBigha.replace(/,/g, "."));
-  const ageNum = Number(cropAgeDays);
+  const { data: remoteHistory = [] } = useGetHistoryQuery(undefined, {
+    skip: !online,
+  });
+
+  useEffect(() => {
+    listLocalHistory()
+      .then(setLocalHistory)
+      .catch(() => setLocalHistory([]));
+  }, []);
+
+  const latestDiagnosis = useMemo(
+    () => latestRelevantDiagnosis([...remoteHistory, ...localHistory], crop),
+    [remoteHistory, localHistory, crop],
+  );
+
+  const landNum = parseNumberInput(landSize);
+  const ageNum = parseNumberInput(cropAgeDays);
   const landOk = Number.isFinite(landNum) && landNum > 0;
   const ageOk = Number.isFinite(ageNum) && ageNum >= 0 && ageNum <= 400;
+  const suggestedStage = crop && ageOk ? stageForAge(crop, ageNum) : null;
+
+  // Age implies a stage; keep it in sync until the farmer picks one by hand.
+  useEffect(() => {
+    if (!stageTouched && suggestedStage) setStage(suggestedStage);
+  }, [stageTouched, suggestedStage]);
+
+  const linkedDiagnosis =
+    hasDisease === "yes" && useLatestDiagnosis ? latestDiagnosis : null;
 
   const canSubmit =
     !!crop &&
@@ -95,6 +207,39 @@ export default function FertilizerRecommendationScreen() {
     !!stage &&
     !!soilColor &&
     !!soilMoisture;
+
+  const submit = async () => {
+    if (!crop || !stage || !soilColor || !soilMoisture || !hasDisease || !landOk || !ageOk) {
+      return;
+    }
+    setAiError(null);
+    try {
+      const data = await recommend({
+        cropSlug: crop,
+        growthStage: stage,
+        soilColor,
+        soilMoisture,
+        landSizeBigha: landUnit === "acre" ? landNum * BIGHA_PER_ACRE : landNum,
+        cropAgeDays: Math.round(ageNum),
+        hasDisease,
+        ...(linkedDiagnosis
+          ? linkedDiagnosis.sourceId
+            ? { diagnosisId: linkedDiagnosis.sourceId }
+            : {
+                diseaseNameBn: linkedDiagnosis.diseaseNameBn,
+                diseaseSeverity: linkedDiagnosis.severity,
+              }
+          : {}),
+      }).unwrap();
+      setAdvice(data);
+      setShowResult(true);
+    } catch (err) {
+      setShowResult(false);
+      setAiError(
+        userFacingError(err, "generic", "সার সুপারিশ করা যায়নি। আবার চেষ্টা করুন।"),
+      );
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
@@ -107,7 +252,7 @@ export default function FertilizerRecommendationScreen() {
 
       <ScrollView
         className="flex-1"
-        contentContainerClassName="gap-6 px-5 py-5"
+        contentContainerClassName="gap-6 px-5 py-5 pb-16"
         keyboardShouldPersistTaps="handled"
       >
         <View className="gap-3">
@@ -125,21 +270,55 @@ export default function FertilizerRecommendationScreen() {
           />
         </View>
 
-        <FieldInput
-          label="জমির পরিমাণ (বিঘা)"
-          value={landSizeBigha}
-          onChangeText={setLandSizeBigha}
-          placeholder="যেমন: ২ অথবা ১.৫"
-          keyboardType="decimal-pad"
+        <LandSizeInput
+          value={landSize}
+          onChangeText={setLandSize}
+          unit={landUnit}
+          onUnitChange={setLandUnit}
         />
 
-        <FieldInput
-          label="ফসল কত দিনের"
-          value={cropAgeDays}
-          onChangeText={setCropAgeDays}
-          placeholder="যেমন: ৩০"
-          keyboardType="number-pad"
-        />
+        <View className="gap-3">
+          <AppText variant="body" className="font-bengali-bold text-ink">
+            ফসল কত দিনের? (রোপণ/বোনার পর)
+          </AppText>
+          <ChipRow
+            options={AGE_PRESETS.map((d) => ({ id: d, label: `${toBnDigits(d)} দিন` }))}
+            value={ageOk ? ageNum : null}
+            onChange={(d) => setCropAgeDays(toBnDigits(d))}
+          />
+          <TextInput
+            value={cropAgeDays}
+            onChangeText={setCropAgeDays}
+            keyboardType="number-pad"
+            placeholder="অথবা লিখুন, যেমন: ৩৮"
+            placeholderTextColor={colors.muted}
+            accessibilityLabel="ফসলের বয়স, দিন"
+            className="min-h-touch-lg rounded-2xl bg-white px-4 font-bengali-medium text-body-lg text-ink"
+          />
+        </View>
+
+        <View className="gap-3">
+          <AppText variant="body" className="font-bengali-bold text-ink">
+            বৃদ্ধির ধাপ
+          </AppText>
+          {suggestedStage && !stageTouched ? (
+            <AppText variant="caption" className="text-primary">
+              বয়স দেখে ধাপ বেছে দেওয়া হয়েছে — ঠিক না হলে বদলে দিন।
+            </AppText>
+          ) : null}
+          <IconPickerRow
+            options={STAGE_OPTIONS.map((s) => ({
+              id: s.id,
+              label: s.label,
+              icon: <Ionicons name={s.icon} size={22} color={colors.primary} />,
+            }))}
+            value={stage}
+            onChange={(id) => {
+              setStageTouched(true);
+              setStage(id as GrowthStage);
+            }}
+          />
+        </View>
 
         <View className="gap-3">
           <AppText variant="body" className="font-bengali-bold text-ink">
@@ -152,23 +331,47 @@ export default function FertilizerRecommendationScreen() {
               icon: <Ionicons name={d.icon} size={22} color={colors.primary} />,
             }))}
             value={hasDisease}
-            onChange={(id) => setHasDisease(id as "yes" | "no" | "unsure")}
+            onChange={(id) => setHasDisease(id as DiseaseStatus)}
           />
-        </View>
 
-        <View className="gap-3">
-          <AppText variant="body" className="font-bengali-bold text-ink">
-            বৃদ্ধির ধাপ
-          </AppText>
-          <IconPickerRow
-            options={STAGE_OPTIONS.map((s) => ({
-              id: s.id,
-              label: s.label,
-              icon: <Ionicons name={s.icon} size={22} color={colors.primary} />,
-            }))}
-            value={stage}
-            onChange={(id) => setStage(id as GrowthStage)}
-          />
+          {hasDisease === "yes" ? (
+            latestDiagnosis ? (
+              <View className="gap-3 rounded-2xl border border-border bg-white p-4">
+                <View className="flex-row items-center gap-3">
+                  <Ionicons name="time-outline" size={20} color={colors.primary} />
+                  <View className="flex-1">
+                    <AppText variant="caption" className="text-muted">
+                      আপনার সর্বশেষ স্ক্যান
+                    </AppText>
+                    <AppText variant="body" className="font-bengali-bold text-ink">
+                      {latestDiagnosis.diseaseNameBn}
+                    </AppText>
+                    <AppText variant="caption">{latestDiagnosis.dateBn}</AppText>
+                  </View>
+                </View>
+                <ChipRow
+                  options={[
+                    { id: "linked", label: "এই রোগটিই" },
+                    { id: "other", label: "অন্য রোগ" },
+                  ]}
+                  value={useLatestDiagnosis ? "linked" : "other"}
+                  onChange={(id) => setUseLatestDiagnosis(id === "linked")}
+                />
+              </View>
+            ) : (
+              <View className="gap-3 rounded-2xl border border-border bg-white p-4">
+                <AppText variant="body" className="text-ink">
+                  সাম্প্রতিক কোনো স্ক্যান পাওয়া যায়নি। রোগটি নিশ্চিত হতে পাতার ছবি
+                  স্ক্যান করতে পারেন।
+                </AppText>
+                <SecondaryButton
+                  label="পাতা স্ক্যান করুন"
+                  onPress={() => router.push("/(root)/(tabs)/scan")}
+                  icon={<Ionicons name="scan-outline" size={20} color={colors.ink} />}
+                />
+              </View>
+            )
+          ) : null}
         </View>
 
         <View className="gap-3">
@@ -212,38 +415,7 @@ export default function FertilizerRecommendationScreen() {
 
         <PrimaryButton
           label="সুপারিশ দেখুন"
-          onPress={async () => {
-            if (
-              !crop ||
-              !stage ||
-              !soilColor ||
-              !soilMoisture ||
-              !hasDisease ||
-              !landOk ||
-              !ageOk
-            ) {
-              return;
-            }
-            setAiError(null);
-            try {
-              const data = await recommend({
-                cropSlug: crop,
-                growthStage: stage,
-                soilColor,
-                soilMoisture,
-                landSizeBigha: landNum,
-                cropAgeDays: Math.round(ageNum),
-                hasDisease,
-              }).unwrap();
-              setAdvice(data);
-              setShowResult(true);
-            } catch (err) {
-              setShowResult(false);
-              setAiError(
-                userFacingError(err, "generic", "সার সুপারিশ করা যায়নি। আবার চেষ্টা করুন।"),
-              );
-            }
-          }}
+          onPress={submit}
           disabled={!canSubmit}
           loading={isLoading}
           icon={<Ionicons name="flask-outline" size={20} color={colors.white} />}
@@ -299,6 +471,20 @@ export default function FertilizerRecommendationScreen() {
               ) : null}
             </View>
           </StructuredCard>
+        ) : null}
+
+        {showResult && advice?.reasonBn ? (
+          <View className="flex-row items-start gap-3 rounded-2xl bg-secondary px-4 py-3">
+            <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
+            <View className="flex-1">
+              <AppText variant="caption" className="font-bengali-bold text-primary">
+                কেন এই সুপারিশ
+              </AppText>
+              <AppText variant="body" className="mt-0.5 leading-6 text-ink">
+                {advice.reasonBn}
+              </AppText>
+            </View>
+          </View>
         ) : null}
       </ScrollView>
     </SafeAreaView>

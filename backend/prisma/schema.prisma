@@ -34,6 +34,7 @@ model District {
   markets         Market[]
   listings        Listing[]
   heatMapStats    HeatMapStat[]
+  diagnoses       Diagnosis[]
 }
 
 model Crop {
@@ -184,12 +185,20 @@ model Diagnosis {
   clientLocalId   String?         @unique
   offlineLabelId  String?
   verifiedBn      String?
+  /// Where the scan happened: district from GPS (nearest centroid) or the
+  /// farmer's profile district. Drives the market heat map.
+  districtId      String?         @db.ObjectId
+  lat             Float?
+  lon             Float?
   createdAt       DateTime        @default(now())
 
   user           User            @relation(fields: [userId], references: [id])
   crop           Crop?           @relation(fields: [cropId], references: [id])
+  district       District?       @relation(fields: [districtId], references: [id])
   treatmentPlan  TreatmentPlan?
   reports        Report[]
+
+  @@index([createdAt, districtId])
 }
 
 enum HistoryKind {
@@ -291,6 +300,9 @@ model CostEstimate {
   pesticideQuantity  String
   totalCostBdt       Int
   spraySessions      Int
+  /// Per-crop cultivation cost (seed, fertilizer, pesticide, labour …).
+  cultivationTotalBdt Int?
+  breakdown          Json?
   createdAt          DateTime @default(now())
   user               User     @relation(fields: [userId], references: [id])
   crop               Crop     @relation(fields: [cropId], references: [id])
@@ -347,6 +359,8 @@ model Receipt {
   imageObjectKey String
   totalBdt       Int
   summaryBn      String
+  /// Set once the farmer has checked / corrected the extracted items.
+  reviewedAt     DateTime?
   createdAt      DateTime      @default(now())
   user           User          @relation(fields: [userId], references: [id])
   items          ReceiptItem[]
@@ -358,6 +372,7 @@ model ReceiptItem {
   nameBn     String
   quantity   String
   priceBn    String
+  priceBdt   Int?
   sortOrder  Int
   receipt    Receipt @relation(fields: [receiptId], references: [id])
 }
@@ -399,11 +414,13 @@ model FertilizerAdvice {
   landSizeBigha        Float?
   cropAgeDays          Int?
   hasDisease           String?
+  diseaseNameBn        String?
   fertilizerNameBn     String
   dosagePerBigha       String
   applicationMethodBn  String
   timingBn             String
   warningBn            String?
+  reasonBn             String?
   createdAt            DateTime     @default(now())
   user                 User         @relation(fields: [userId], references: [id])
   crop                 Crop         @relation(fields: [cropId], references: [id])
@@ -429,6 +446,7 @@ model CropPlan {
   id               String          @id @default(auto()) @map("_id") @db.ObjectId
   userId           String          @db.ObjectId
   recommendationBn String
+  costEstimate     Json?
   createdAt        DateTime        @default(now())
   user             User            @relation(fields: [userId], references: [id])
   months           MonthForecast[]
@@ -442,10 +460,22 @@ model MonthForecast {
   recommendedCropBn String
   tempC             Int?
   precipMm          Int?
+  cropSlug          String?
+  plantingWindowBn  String?
+  harvestWindowBn   String?
+  reasonBn          String?
   sortOrder         Int
   cropPlan          CropPlan @relation(fields: [cropPlanId], references: [id])
 
   @@unique([cropPlanId, sortOrder])
+}
+
+/// Seasonal outlook cache — survives serverless cold starts (refreshed daily).
+model WeatherCache {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  key       String   @unique
+  payload   Json
+  fetchedAt DateTime
 }
 
 // --- Sprint 6: market + loan ---

@@ -7,6 +7,7 @@ import type { AiVisionPort } from '../ai/ports';
 import { GeminiClient } from '../ai/gemini.client';
 import { StorageService } from '../storage/storage.service';
 import { Errors } from '../common/errors';
+import { resolveDiagnosisLocation, type Geo } from './diagnosis-location';
 import type { AuthUser } from '../auth/auth.types';
 
 const transcriptSchema = z.object({ transcriptBn: z.string().trim() });
@@ -42,9 +43,9 @@ export class DiagnosesService {
     };
   }
 
-  async createPhoto(user: AuthUser, imageUrl: string) {
+  async createPhoto(user: AuthUser, imageUrl: string, geo: Geo = {}) {
     const ai = await this.vision.diagnose({ imageUrl });
-    return this.persist(user.id, {
+    return this.persist(user.id, geo, {
       source: 'photo',
       imageObjectKey: imageUrl,
       ...ai,
@@ -81,12 +82,17 @@ If the clip is silent or unintelligible, return {"transcriptBn":""}.`;
     }
   }
 
-  async createVoice(user: AuthUser, transcriptBn: string, cropSlug?: string) {
+  async createVoice(
+    user: AuthUser,
+    transcriptBn: string,
+    cropSlug?: string,
+    geo: Geo = {},
+  ) {
     const crop = cropSlug
       ? await this.prisma.crop.findUnique({ where: { slug: cropSlug } })
       : null;
     const ai = await this.vision.diagnose({ transcriptBn });
-    return this.persist(user.id, {
+    return this.persist(user.id, geo, {
       source: 'voice',
       transcriptBn,
       cropId: crop?.id,
@@ -96,6 +102,7 @@ If the clip is silent or unintelligible, return {"transcriptBn":""}.`;
 
   private async persist(
     userId: string,
+    geo: Geo,
     data: {
       source: 'photo' | 'voice';
       imageObjectKey?: string;
@@ -107,10 +114,12 @@ If the clip is silent or unintelligible, return {"transcriptBn":""}.`;
       severity: 'low' | 'medium' | 'high';
     },
   ) {
+    const location = await resolveDiagnosisLocation(this.prisma, userId, geo);
     const row = await this.prisma.withTransaction(async (tx) => {
       const created = await tx.diagnosis.create({
         data: {
           userId,
+          ...location,
           source: data.source,
           imageObjectKey: data.imageObjectKey,
           transcriptBn: data.transcriptBn,

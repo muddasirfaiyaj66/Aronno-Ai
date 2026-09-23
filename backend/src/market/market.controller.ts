@@ -9,6 +9,7 @@ import { ZodPipe } from '../common/pipes/zod.pipe';
 import { Errors } from '../common/errors';
 import { httpUrl } from '../common/schemas';
 import type { AuthUser } from '../auth/auth.types';
+import { HeatmapService, clampWindowDays } from './heatmap.service';
 
 const listingSchema = z
   .object({
@@ -43,6 +44,7 @@ export class MarketController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly heatmapService: HeatmapService,
   ) {}
 
   @Get('prices')
@@ -195,26 +197,12 @@ export class MarketController {
     return { shareUrl: `https://aronno.app/market/${id}` };
   }
 
+  /**
+   * Disease heat map built purely from stored diagnoses (each carries the
+   * district where it was scanned). `days` picks the window (default 60).
+   */
   @Get('heatmap')
-  async heatmap() {
-    // TODO(product): data source needs product confirmation
-    // (disease-report aggregation vs. price-index aggregation).
-    const stats = await this.prisma.heatMapStat.findMany({
-      include: { district: true },
-      orderBy: { capturedAt: 'desc' },
-    });
-    const seen = new Set<string>();
-    const regions = [];
-    for (const s of stats) {
-      if (seen.has(s.districtId)) continue;
-      seen.add(s.districtId);
-      regions.push({
-        id: s.id,
-        district: s.district.slug,
-        diseaseIntensity: s.diseaseIntensity,
-        priceIntensity: s.priceIntensity,
-      });
-    }
-    return { regions };
+  heatmap(@Query('days') days?: string) {
+    return this.heatmapService.aggregate(clampWindowDays(days));
   }
 }

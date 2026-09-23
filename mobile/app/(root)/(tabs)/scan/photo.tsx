@@ -24,7 +24,10 @@ export default function PhotoCaptureScreen() {
     if (!cameraRef.current || capturing) return;
     setCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.45 });
+      // Receipts need legible small print; leaf / tool photos stay light.
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: flow === "receipt" ? 0.9 : 0.45,
+      });
       if (photo?.uri) setPhotoUri(photo.uri);
     } finally {
       setCapturing(false);

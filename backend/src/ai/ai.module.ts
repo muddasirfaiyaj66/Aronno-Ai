@@ -6,20 +6,18 @@ import {
   AI_TREATMENT,
   AI_TTS,
   AI_VISION,
-  AI_YIELD,
   COST_ESTIMATE,
 } from './ai.tokens';
 import { MockCostAdapter, MockTtsAdapter } from './mock.adapters';
 import { GeminiClient } from './gemini.client';
 import {
-  GeminiFertilizerAdapter,
   GeminiReceiptAdapter,
   GeminiToolsAdapter,
   GeminiTreatmentAdapter,
   GeminiVisionAdapter,
-  GeminiYieldAdapter,
 } from './gemini.adapters';
 import { WeatherModule } from '../weather/weather.module';
+import { RulesFertilizerAdapter } from '../fertilizer/fertilizer.rules';
 
 @Module({
   imports: [WeatherModule],
@@ -29,8 +27,7 @@ import { WeatherModule } from '../weather/weather.module';
     { provide: AI_TREATMENT, useClass: GeminiTreatmentAdapter },
     { provide: AI_TOOLS, useClass: GeminiToolsAdapter },
     { provide: AI_RECEIPT, useClass: GeminiReceiptAdapter },
-    { provide: AI_FERTILIZER, useClass: GeminiFertilizerAdapter },
-    { provide: AI_YIELD, useClass: GeminiYieldAdapter },
+    { provide: AI_FERTILIZER, useClass: RulesFertilizerAdapter },
     { provide: AI_TTS, useClass: MockTtsAdapter },
     { provide: COST_ESTIMATE, useClass: MockCostAdapter },
   ],
@@ -40,7 +37,6 @@ import { WeatherModule } from '../weather/weather.module';
     AI_TOOLS,
     AI_RECEIPT,
     AI_FERTILIZER,
-    AI_YIELD,
     AI_TTS,
     WeatherModule,
     COST_ESTIMATE,

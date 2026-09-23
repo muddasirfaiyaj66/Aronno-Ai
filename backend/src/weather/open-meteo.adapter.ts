@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 import type { SprayLevel } from '@prisma/client';
 import { Errors } from '../common/errors';
 import type { GeoPoint } from './coords';
@@ -12,13 +14,14 @@ import {
 import type {
   CurrentWeather,
   MonthOutlook,
+  OutlookSource,
   WeatherPort,
 } from './weather.types';
 
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast';
 const SEASONAL_URL = 'https://seasonal-api.open-meteo.com/v1/seasonal';
 
-const BN_GREGORIAN = [
+export const BN_GREGORIAN = [
   'জানুয়ারি',
   'ফেব্রুয়ারি',
   'মার্চ',
@@ -39,10 +42,19 @@ const BD_TEMP_C = [19, 22, 26, 29, 30, 29, 29, 29, 29, 27, 24, 20];
 
 type CacheEntry<T> = { at: number; value: T };
 
+/** Seasonal runs update monthly; one fetch per area per day is plenty. */
+const SEASONAL_TTL_MS = 24 * 60 * 60_000;
+/** Retry the real API soon when we had to fall back to normals. */
+const CLIMATOLOGY_TTL_MS = 60 * 60_000;
+
+type Outlook = { months: MonthOutlook[]; source: OutlookSource };
+
 @Injectable()
 export class OpenMeteoWeatherAdapter implements WeatherPort {
   private readonly logger = new Logger(OpenMeteoWeatherAdapter.name);
   private readonly cache = new Map<string, CacheEntry<unknown>>();
+
+  constructor(private readonly prisma: PrismaService) {}
 
   async current(point: GeoPoint): Promise<CurrentWeather> {
     const key = `cur:${round(point.lat)}:${round(point.lon)}`;
@@ -128,7 +140,8 @@ export class OpenMeteoWeatherAdapter implements WeatherPort {
   }
 
   async sixMonthPlan(point: GeoPoint) {
-    const months = (await this.monthlyOutlook(point)).slice(0, 6);
+    const { months: all, source } = await this.monthlyOutlook(point);
+    const months = all.slice(0, 6);
     const rainy = months
       .filter((m) => (m.precipMm ?? 0) >= 140)
       .map((m) => m.monthBn);
@@ -146,18 +159,69 @@ export class OpenMeteoWeatherAdapter implements WeatherPort {
       'এটি এলাকাভিত্তিক সম্ভাব্য পূর্বাভাস, দৈনিক আবহাওয়া বদলাতে পারে।',
     ].join(' ');
 
-    return { recommendationBn, months };
+    return { recommendationBn, months, source };
   }
 
-  private async monthlyOutlook(point: GeoPoint): Promise<MonthOutlook[]> {
-    const key = `m6:${round(point.lat)}:${round(point.lon)}`;
-    const hit = this.read<MonthOutlook[]>(key, 6 * 60 * 60_000);
+  /**
+   * Memory → Mongo (`WeatherCache`, 24 h) → Open-Meteo seasonal API.
+   * The Mongo layer survives serverless cold starts; climate normals are only
+   * kept in memory so the next request retries the real forecast.
+   */
+  private async monthlyOutlook(point: GeoPoint): Promise<Outlook> {
+    // Seasonal model cells are ~1°; 0.25° keeps neighbouring districts apart.
+    const key = `seasonal:${quarter(point.lat)}:${quarter(point.lon)}`;
+    const hit = this.read<Outlook>(key, SEASONAL_TTL_MS);
     if (hit) return hit;
 
+    const stored = await this.readStored(key);
+    if (stored) {
+      this.write(key, stored);
+      return stored;
+    }
+
     const seasonal = await this.trySeasonal(point);
-    const value = seasonal ?? this.climatologyMonths();
-    this.write(key, value);
+    if (seasonal) {
+      const value: Outlook = { months: seasonal, source: 'seasonal' };
+      this.write(key, value);
+      await this.store(key, value);
+      return value;
+    }
+
+    const value: Outlook = {
+      months: this.climatologyMonths(),
+      source: 'climatology',
+    };
+    this.cache.set(key, {
+      at: Date.now() - (SEASONAL_TTL_MS - CLIMATOLOGY_TTL_MS),
+      value,
+    });
     return value;
+  }
+
+  private async readStored(key: string): Promise<Outlook | null> {
+    try {
+      const row = await this.prisma.weatherCache.findUnique({ where: { key } });
+      if (!row || Date.now() - row.fetchedAt.getTime() > SEASONAL_TTL_MS)
+        return null;
+      const value = row.payload as unknown as Outlook;
+      return Array.isArray(value?.months) && value.months.length ? value : null;
+    } catch (err) {
+      this.logger.warn(`Weather cache read failed: ${String(err)}`);
+      return null;
+    }
+  }
+
+  private async store(key: string, value: Outlook) {
+    const payload = value as unknown as Prisma.InputJsonValue;
+    try {
+      await this.prisma.weatherCache.upsert({
+        where: { key },
+        update: { payload, fetchedAt: new Date() },
+        create: { key, payload, fetchedAt: new Date() },
+      });
+    } catch (err) {
+      this.logger.warn(`Weather cache write failed: ${String(err)}`);
+    }
   }
 
   private async trySeasonal(point: GeoPoint): Promise<MonthOutlook[] | null> {
@@ -215,6 +279,7 @@ function monthRow(iso: string, tempC: number, precipMm: number): MonthOutlook {
   const t = Number.isFinite(tempC) ? Math.round(tempC) : 28;
   const p = Number.isFinite(precipMm) ? Math.round(precipMm) : 0;
   return {
+    monthIso: iso.slice(0, 7),
     monthBn: BN_GREGORIAN[(monthIdx + 12) % 12] ?? iso,
     weatherIcon: iconFromKind(kind),
     recommendedCropBn: cropFor(monthIdx, p, t),
@@ -234,6 +299,10 @@ function cropFor(monthIdx: number, precipMm: number, tempC: number): string {
 
 function round(n: number) {
   return Math.round(n * 20) / 20;
+}
+
+function quarter(n: number) {
+  return (Math.round(n * 4) / 4).toFixed(2);
 }
 
 async function getJson(url: string) {

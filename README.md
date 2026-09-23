@@ -36,7 +36,7 @@ Aronno helps farmers and agri stakeholders in Bangladesh:
 - Chat with an on-device / online **Bangla assistant** (text + voice when models are installed)
 - Use a Bangla-first UI with on-device **listen** (text-to-speech)
 
-Product scope changes (yield/loan removal, market overhaul, heat map, etc.): **[docs/product_corrections.md](docs/product_corrections.md)**.
+Product scope changes (market overhaul, heat map, etc.): **[docs/product_corrections.md](docs/product_corrections.md)**.
 
 AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. When offline, the app can use **on-device Gemma**, Bangla STT/TTS, and optional TFLite vision — see **[docs/offline_ai/README.md](docs/offline_ai/README.md)**. Weather uses **Open-Meteo** (no API key). Photos upload to **Cloudinary** from the phone; the API stores HTTPS URLs only. If Gemini is unavailable, the API returns a clear error — it does **not** invent mock diagnoses. Offline scan can still answer from on-device models or the local knowledge base when those are installed.
 
@@ -126,10 +126,9 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
 | Capability | Status | Backend | Mobile / client |
 |------------|--------|---------|-----------------|
 | Farm tool identification | Done | Gemini tools adapter | Tools + tool-result screens |
-| Receipt OCR / line items | Done (needs Bangla OCR upgrade) | Gemini receipt adapter | Receipt + receipt-result screens |
-| Fertilizer recommendation | Done | Gemini fertilizer adapter (land size, crop age, disease) | Fertilizer screen |
-| 6-month crop plan | Done (needs cost + specificity) | Open-Meteo seasonal / forecast APIs | Planning screen |
-| Yield prediction | Removed from farmer UI | API retained dormant | Hidden — see product corrections |
+| Receipt OCR / line items | Done | Gemini receipt adapter (Bangla-digit prompt, Cloudinary contrast/sharpen) + `PATCH /receipts/:id` review | Receipt screens with edit-before-save step |
+| Fertilizer recommendation | Done | Rules engine behind `AiFertilizerPort` (crop, stage, age, land, disease from History, soil) | Fertilizer screen |
+| 6-month crop plan | Done | Open-Meteo seasonal (cached 24 h in Mongo) → Gemini per-month priorities + windows, cultivation cost | Planning screen |
 | Offline / voice chat assistant | Done (baseline) | — | Assistant tab + Gemma/sherpa when installed |
 | Soil sensor (Bluetooth + Wi‑Fi) | Done (app wiring) | — | Home → মাটি; demo + live; [hardware doc](docs/hardware_soil_sensor.md) |
 
@@ -140,9 +139,7 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
 | Market prices by district / crop | Done | Market module, Prisma | Market tab |
 | Create listing (optional photo) | Done | Listings + Cloudinary URL | Market UI |
 | Full marketplace (orders, buyer/seller roles) | Planned | — | See [product corrections](docs/product_corrections.md) |
-| District heat-map stats (prices) | Done | `HeatMapStat` | Market UI |
-| Disease outbreak heat map | Planned | — | See [product corrections](docs/product_corrections.md) |
-| Loan application | Removed from farmer UI | API retained dormant | Hidden — banking scope deferred |
+| Disease outbreak heat map | Done | `GET /market/heatmap` aggregates diagnoses by district | Market → হিট ম্যাপ (Leaflet + OpenStreetMap) |
 
 ### Home, UX & platform
 
@@ -159,9 +156,9 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
 | Area | Behavior |
 |------|----------|
 | Server-side TTS (`POST /api/tts`) | Returns a stub WAV via `MockTtsAdapter` — farmers use **device TTS** (`expo-speech`) instead |
-| Cost estimates | Deterministic local formula, not Gemini |
-| Crop plans | Driven by **Open-Meteo**, not Gemini |
-| Gemini outage / missing key | `AI_UNAVAILABLE` — no fake disease/treatment/tool/receipt/fertilizer/yield data |
+| Cost estimates / fertilizer | Deterministic local tables and rules, not Gemini |
+| Crop plans | **Open-Meteo** seasonal outlook + Gemini (rule-based fallback) |
+| Gemini outage / missing key | `AI_UNAVAILABLE` — no fake disease/treatment/tool/receipt data |
 | File uploads to API | Not supported — always Cloudinary (or other) `https://` URLs |
 
 ---

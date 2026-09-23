@@ -17,14 +17,7 @@ import {
 } from '../auth/auth.dto';
 import type { AuthUser } from '../auth/auth.types';
 import { AdminService } from './admin.service';
-import { z } from 'zod';
 
-const loanStatusSchema = z
-  .object({
-    status: z.enum(['pending', 'approved', 'repaying', 'rejected']),
-  })
-  .strict();
-// users
 @Controller('admin')
 @Roles('ADMIN')
 export class AdminController {
@@ -62,20 +55,5 @@ export class AdminController {
     body: ReturnType<typeof patchActiveSchema.parse>,
   ) {
     return this.admin.patchActive(actor, id, body.isActive);
-  }
-
-  @Get('loans')
-  listLoans(@Query('cursor') cursor?: string, @Query('limit') limit?: string) {
-    return this.admin.listLoans(cursor, Number(limit) || 50);
-  }
-
-  @Patch('loans/:id/status')
-  patchLoan(
-    @CurrentUser() actor: AuthUser,
-    @Param('id') id: string,
-    @Body(new ZodPipe(loanStatusSchema))
-    body: ReturnType<typeof loanStatusSchema.parse>,
-  ) {
-    return this.admin.patchLoanStatus(actor, id, body.status);
   }
 }

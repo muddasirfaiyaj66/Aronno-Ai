@@ -39,10 +39,10 @@ This document is written so someone who is **not a developer** can clone the pro
 - Create an account, verify email, log in, and reset a forgotten password
 - Photograph a crop (or speak) and get a **disease diagnosis**
 - Open a **treatment plan**, **cost estimate**, and a **report**
-- Identify a **tool**, scan a **receipt**, get **fertilizer** advice, **yield** and **crop planning**
-- See **market prices**, post a **listing**, apply for a **loan**
+- Identify a **tool**, scan a **receipt**, get **fertilizer** advice and a **crop plan** with cost
+- See **market prices** and the disease **heat map**, post a **listing**
 
-**Honest status:** the screens and APIs are connected. Disease, treatment, tools, receipts, fertilizer, and yield call **gemini-3.5-flash-lite** (free). If the key is missing or Gemini fails, the API returns `AI_UNAVAILABLE` — it does **not** invent mock answers. Crop plans use **Open-Meteo** (no key). TTS is still a stub. Photos **are** uploaded for real: the phone sends them to **Cloudinary**, then the API stores the HTTPS URL.
+**Honest status:** the screens and APIs are connected. Disease, treatment, tools, receipts, and crop-plan wording call **gemini-3.5-flash-lite** (free). If the key is missing or Gemini fails, the API returns `AI_UNAVAILABLE` — it does **not** invent mock answers. Crop plans use the **Open-Meteo** seasonal forecast (no key); fertilizer advice and cost estimates are local rules. TTS is still a stub. Photos **are** uploaded for real: the phone sends them to **Cloudinary**, then the API stores the HTTPS URL.
 
 ---
 
@@ -169,7 +169,7 @@ Leave `GOOGLE_CLIENT_ID` empty if you only use email/password.
 
 | Variable | Free source | Used today? |
 |----------|-------------|-------------|
-| `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | **Required for AI screens** — disease, treatment, tools, receipts, fertilizer, yield use **gemini-3.5-flash-lite** (free). Failures return `AI_UNAVAILABLE`, not mock data. |
+| `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | **Required for AI screens** — disease, treatment, tools, receipts, crop plans use **gemini-3.5-flash-lite** (free). Failures return `AI_UNAVAILABLE`, not mock data. |
 | `TTS_PROVIDER_KEY` | Provider of your choice | **No** — mock WAV |
 | `S3_BUCKET` | Cloudflare R2 / AWS | **No** — images go to Cloudinary |
 
@@ -319,7 +319,8 @@ Lookup seed complete
 On first boot the server also creates:
 
 - Roles: `SUPERADMIN`, `ADMIN`, `USER`
-- Professions, districts, crops, loan purposes
+- Professions, districts, crops
+- Demo disease reports across districts for the heat map (disable with `SEED_HEATMAP_DEMO=false`)
 - Superadmin from `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` in `.env` (if none exists yet)
 
 Check health in a browser: [http://localhost:3000/api/health](http://localhost:3000/api/health)
@@ -360,7 +361,7 @@ The first screen is **onboarding**, then **login**.
 | Email | `demo@gmail.com` |
 | Password | `demo1234` |
 
-A new registered account starts empty until that farmer uses the APIs. Sample diagnoses, yield, loan, and listings are attached only to the demo farmer.
+A new registered account starts empty until that farmer uses the APIs. Sample diagnoses, receipts, and listings are attached only to the demo farmer.
 
 **Superadmin** — use the email and password you set in `backend/.env` (`SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD`). After login open **আমি → অ্যাডমিন তৈরি** to add staff. Those admins can create further admins the same way.
 
@@ -445,19 +446,18 @@ iOS installable builds need a Mac and an Apple Developer account. This repo is d
 | Security | Argon2id, cookie JWT, CSRF, lockout, RBAC, Zod, Helmet, rate limits |
 | Profile | Patch name / phone / profession / district |
 | Lookups | Professions, districts, crops |
-| Admin | List users, change role, activate/deactivate, loan status (ADMIN+) |
+| Admin | List users, change role, activate/deactivate (ADMIN+) |
 | Diagnosis | Photo (Cloudinary URL) and voice → persisted result + history |
 | Treatment / cost | Plan + weather advisory + cost estimate |
 | History / reports | List, detail, report create, PDF stub, TTS stub |
-| Tools / receipts | Photo or voice tool ID; receipt scan from image URL |
-| Fertilizer / yield / plan | Recommend, predict, generate crop plan |
-| Market | Prices, listings (optional image URL), share, heatmap |
-| Loans | Apply, current application |
+| Tools / receipts | Photo or voice tool ID; receipt scan from image URL, then farmer review |
+| Fertilizer / plan | Recommend, generate crop plan with cultivation cost |
+| Market | Prices, listings (optional image URL), share, disease heat map |
 | Images | Phone → Cloudinary → `{ imageUrl }` JSON to API |
 
 ### Still mocked or local
 
-TTS (WAV stub) and PDF generation stay mocked. Cost estimates are a local formula (not Gemini). Crop plans come from Open-Meteo, not Gemini. If Gemini is down or `GEMINI_API_KEY` is empty, disease / treatment / tools / receipts / fertilizer / yield return `AI_UNAVAILABLE` instead of fake data.
+TTS (WAV stub) and PDF generation stay mocked. Cost estimates and fertilizer advice are local rules (not Gemini). Crop plans use Open-Meteo data; Gemini writes the per-month priorities, with a rule-based fallback. If Gemini is down or `GEMINI_API_KEY` is empty, disease / treatment / tools / receipts return `AI_UNAVAILABLE` instead of fake data.
 
 ### Intentionally not on Vercel disk
 
@@ -514,9 +514,8 @@ MongoDB via **Prisma**. Independent facts live in their own collections (3NF-sty
 |------------|------------|---------|
 | `Role` | `slug` (`SUPERADMIN` / `ADMIN` / `USER`) | `User.roleId` |
 | `Profession` | `slug` | `User.professionId` |
-| `District` | `slug` | User, Market, Listing, HeatMapStat |
-| `Crop` | `slug` | Diagnosis, costs, fertilizer, yield, prices, listings |
-| `LoanPurpose` | `slug` | LoanApplication |
+| `District` | `slug` | User, Market, Listing, Diagnosis |
+| `Crop` | `slug` | Diagnosis, costs, fertilizer, prices, listings |
 
 ### 14.2 Identity
 
@@ -528,19 +527,20 @@ MongoDB via **Prisma**. Independent facts live in their own collections (3NF-sty
 
 ### 14.3 Farm features
 
-- `Diagnosis` → User, Crop? ; optional `TreatmentPlan` and `Report`s
+- `Diagnosis` → User, Crop?, District? (where it was scanned) ; optional `TreatmentPlan` and `Report`s
 - `HistoryEvent` is a **thin pointer** (`kind` + `sourceId`), not a copy of the diagnosis
 - `TreatmentPlan` → Diagnosis (1:1), User ; children: `WeatherAdvisory`, `TreatmentStep`, `SafetyItem`
 - `CostEstimate` → User, Crop
 - `Report` → User, Diagnosis, TreatmentPlan?
 - `ToolIdentification` → User ; children `ToolListing`
 - `Receipt` → User ; children `ReceiptItem`
-- `FertilizerAdvice` / `YieldEstimate` → User, Crop
+- `FertilizerAdvice` → User, Crop
 - `CropPlan` → User ; children `MonthForecast`
 - `Market` → District ; `MarketPrice` → Market + Crop
 - `Listing` → User (seller), Crop, District
-- `HeatMapStat` → District
-- `LoanApplication` → User, LoanPurpose
+- `WeatherCache` — seasonal outlook cache keyed by area
+
+Legacy collections from retired features (`LoanPurpose`, `LoanApplication`, `YieldEstimate`, `HeatMapStat`) stay in the schema only so existing rows remain readable; no API or screen uses them.
 
 Image fields (`imageObjectKey`, `thumbnailObjectKey`) store a **Cloudinary HTTPS URL** (or empty), not a server filename.
 
@@ -553,14 +553,11 @@ erDiagram
   District ||--o{ User : optional
   District ||--o{ Market : has
   District ||--o{ Listing : location
-  District ||--o{ HeatMapStat : stats
   Crop ||--o{ Diagnosis : optional
   Crop ||--o{ CostEstimate : for
   Crop ||--o{ FertilizerAdvice : for
-  Crop ||--o{ YieldEstimate : for
   Crop ||--o{ MarketPrice : priced
   Crop ||--o{ Listing : sold
-  LoanPurpose ||--o{ LoanApplication : purpose
 
   User ||--o{ OAuthAccount : accounts
   User ||--o{ RefreshToken : sessions
@@ -574,10 +571,8 @@ erDiagram
   User ||--o{ ToolIdentification : tools
   User ||--o{ Receipt : receipts
   User ||--o{ FertilizerAdvice : advice
-  User ||--o{ YieldEstimate : yields
   User ||--o{ CropPlan : plans
   User ||--o{ Listing : sells
-  User ||--o{ LoanApplication : applies
 
   Diagnosis ||--o| TreatmentPlan : one_plan
   Diagnosis ||--o{ Report : reports
@@ -624,9 +619,8 @@ Public POSTs do not need CSRF. Logged-in POSTs/PATCHes need cookie + `X-CSRF-Tok
 | POST | `/admin/users` | ADMIN+ | Create a verified `ADMIN` (`{ email, password, displayName }`) |
 | PATCH | `/admin/users/:id/role` | ADMIN+ | Admins cannot grant or change `SUPERADMIN` |
 | PATCH | `/admin/users/:id/active` | ADMIN+ | |
-| PATCH | `/admin/loans/:id/status` | ADMIN+ | |
-| POST | `/diagnoses/photo` | cookie | `{ imageUrl }` |
-| POST | `/diagnoses/voice` | cookie | `{ transcriptBn, cropSlug? }` |
+| POST | `/diagnoses/photo` | cookie | `{ imageUrl, lat?, lon? }` |
+| POST | `/diagnoses/voice` | cookie | `{ transcriptBn, cropSlug?, lat?, lon? }` |
 | GET | `/diagnoses` | cookie | |
 | GET | `/diagnoses/:id` | cookie | |
 | GET | `/treatment-plans?diagnosisId=` | cookie | |
@@ -638,17 +632,15 @@ Public POSTs do not need CSRF. Logged-in POSTs/PATCHes need cookie + `X-CSRF-Tok
 | POST | `/tools/identify/photo` | cookie | `{ imageUrl }` |
 | POST | `/tools/identify/voice` | cookie | |
 | POST | `/receipts/scan` | cookie | `{ imageUrl }` |
+| PATCH | `/receipts/:id` | cookie | Farmer-reviewed `{ items: [{ nameBn, quantity, priceBdt }], totalBdt? }` |
 | POST | `/fertilizer/recommend` | cookie | |
-| POST | `/yield/predict` | cookie | |
 | POST | `/crop-plans/generate` | cookie | |
 | GET | `/crop-plans/latest` | cookie | |
 | GET | `/weather/current` | cookie | Open-Meteo; optional `?lat=&lon=` else user district |
 | GET | `/market/prices` | cookie | |
 | GET | `/market/listings` | cookie | |
 | POST | `/market/listings` | cookie | JSON + optional `imageUrl` |
-| GET | `/market/heatmap` | cookie | |
-| POST | `/loans` | cookie | |
-| GET | `/loans/current` | cookie | |
+| GET | `/market/heatmap` | cookie | `?days=` (default 60) → `{ entries, areas }` by district |
 
 ---
 

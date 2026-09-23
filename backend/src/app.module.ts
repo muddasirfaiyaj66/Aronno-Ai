@@ -20,10 +20,8 @@ import { ReportsModule } from './reports/reports.module';
 import { ToolsModule } from './tools/tools.module';
 import { ReceiptsModule } from './receipts/receipts.module';
 import { FertilizerModule } from './fertilizer/fertilizer.module';
-import { YieldModule } from './yield/yield.module';
 import { PlanningModule } from './planning/planning.module';
 import { MarketModule } from './market/market.module';
-import { LoansModule } from './loans/loans.module';
 import { StorageModule } from './storage/storage.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -66,10 +64,8 @@ import { SyncModule } from './sync/sync.module';
     ToolsModule,
     ReceiptsModule,
     FertilizerModule,
-    YieldModule,
     PlanningModule,
     MarketModule,
-    LoansModule,
     HealthModule,
     WeatherModule,
     SyncModule,

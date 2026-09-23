@@ -17,6 +17,7 @@ import type { ToolResult } from "@/types/tools";
 import type { ReceiptItem, ReceiptSummary } from "@/types/receipt";
 import { logMetric, markStart } from "@/lib/offline/metrics";
 import { newLocalId } from "@/lib/offlineDb/db";
+import { formatTakaBn, parseNumberInput } from "@/utils/number";
 
 async function ensureVisionReady(): Promise<boolean> {
   if (isVisionLlmReady()) return true;
@@ -162,11 +163,12 @@ export async function scanReceiptWithGemma(
   }
 
   const prompt = [
-    "You are Aronno. Read this Bangla/English shop receipt photo.",
-    "Extract line items and total in Bangladeshi Taka.",
-    'Reply ONLY JSON: {"totalBdt":number,"summaryBn":"বাংলায় এক বাক্য সারাংশ","items":[{"nameBn":"...","quantity":"...","price":"..."}]}',
+    "You are Aronno. Read this Bangla/English shop receipt photo line by line.",
+    "Bangla digits: ০=0 ১=1 ২=2 ৩=3 ৪=4 ৫=5 ৬=6 ৭=7 ৮=8 ৯=9. ৪ is FOUR (not 8), ৭ is SEVEN (not 9).",
+    "Extract each purchased item and the grand total in Bangladeshi Taka. Ignore phone numbers, dates and memo numbers.",
+    'Reply ONLY JSON: {"totalBdt":number,"summaryBn":"বাংলায় এক বাক্য সারাংশ","items":[{"nameBn":"...","quantity":"...","priceBdt":number}]}',
+    "totalBdt and priceBdt use ASCII digits. If an amount is unreadable use 0 — never guess.",
     "If unreadable, reply {\"totalBdt\":0,\"summaryBn\":\"রসিদ পড়া যায়নি।\",\"items\":[]}",
-    "Use digits for totalBdt. Do not invent items you cannot see.",
   ].join("\n");
 
   try {
@@ -176,7 +178,7 @@ export async function scanReceiptWithGemma(
       end("parse-fail");
       return null;
     }
-    const total = Number(json.totalBdt);
+    const total = parseNumberInput(String(json.totalBdt ?? ""));
     const summaryBn =
       String(json.summaryBn ?? "").trim() ||
       (Number.isFinite(total) && total > 0
@@ -187,11 +189,14 @@ export async function scanReceiptWithGemma(
       .slice(0, 40)
       .map((it, i) => {
         const row = (it ?? {}) as Record<string, unknown>;
+        const parsed = parseNumberInput(String(row.priceBdt ?? row.price ?? ""));
+        const priceBdt = Number.isFinite(parsed) ? parsed : 0;
         return {
           id: `ri_${i}`,
           nameBn: String(row.nameBn ?? row.name ?? "আইটেম").trim() || "আইটেম",
           quantity: String(row.quantity ?? "১").trim() || "১",
-          price: String(row.price ?? "").trim() || "—",
+          price: priceBdt > 0 ? `৳ ${formatTakaBn(priceBdt)}` : "অস্পষ্ট",
+          priceBdt,
         };
       })
       .filter((it) => it.nameBn.length > 0);

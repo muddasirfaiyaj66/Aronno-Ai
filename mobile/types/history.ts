@@ -1,7 +1,6 @@
-import type { LoanStatus } from "@/components/ui";
 import type { SeverityLevel } from "./diagnosis";
 
-export type HistoryEntryKind = "disease" | "yield" | "loan";
+export type HistoryEntryKind = "disease";
 
 type HistoryEntryBase = {
   id: string;
@@ -22,26 +21,4 @@ export type DiseaseHistoryEntry = HistoryEntryBase & {
   sourceId?: string;
 };
 
-export type YieldTrend = "up" | "down" | "flat";
-
-export type YieldHistoryEntry = HistoryEntryBase & {
-  kind: "yield";
-  cropNameBn: string;
-  yieldValue: number;
-  yieldUnitBn: string;
-  /** Relative to the prior yield entry for the same crop. */
-  trend: YieldTrend;
-};
-
-export type LoanHistoryEntry = HistoryEntryBase & {
-  kind: "loan";
-  title: string;
-  amount: string;
-  status: LoanStatus;
-  nextPaymentDate?: string;
-};
-
-export type HistoryEntry =
-  | DiseaseHistoryEntry
-  | YieldHistoryEntry
-  | LoanHistoryEntry;
+export type HistoryEntry = DiseaseHistoryEntry;

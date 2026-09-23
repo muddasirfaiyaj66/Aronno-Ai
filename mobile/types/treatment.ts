@@ -29,7 +29,15 @@ export type TreatmentPlan = {
   weatherAdvisory: WeatherAdvisory;
 };
 
-export type CropType = "rice" | "potato" | "tomato" | "vegetable";
+export type CropType =
+  | "rice"
+  | "potato"
+  | "tomato"
+  | "vegetable"
+  | "onion"
+  | "mustard"
+  | "lentil"
+  | "corn";
 export type LandUnit = "bigha" | "acre";
 
 export type CostEstimateInput = {
@@ -38,8 +46,25 @@ export type CostEstimateInput = {
   landUnit: LandUnit;
 };
 
+export type CultivationCostItem = {
+  labelBn: string;
+  quantityBn: string;
+  costBdt: number;
+};
+
+/** Full input cost (seed, fertilizer, labour, …) for a crop on given land. */
+export type CultivationCost = {
+  cropSlug: CropType;
+  cropNameBn: string;
+  landSizeBigha: number;
+  items: CultivationCostItem[];
+  totalBdt: number;
+};
+
 export type CostEstimateResult = {
+  /** Spray-only figures. */
   pesticideQuantity: string;
   totalCostBdt: number;
   spraySessions: number;
+  cultivation?: CultivationCost;
 };

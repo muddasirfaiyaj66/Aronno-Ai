@@ -10,7 +10,6 @@ import { isStaff, type AuthUser } from "@/lib/types";
 const NAV = [
   { href: "/admin", label: "সারাংশ", icon: "◈" },
   { href: "/admin/users", label: "ব্যবহারকারী", icon: "◎" },
-  { href: "/admin/loans", label: "ঋণ আবেদন", icon: "◇" },
   { href: "/admin/create", label: "অ্যাডমিন তৈরি", icon: "＋" },
 ];
 

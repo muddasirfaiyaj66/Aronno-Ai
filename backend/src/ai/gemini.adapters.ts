@@ -2,20 +2,17 @@ import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { GeminiClient } from './gemini.client';
 import { ApiError, Errors } from '../common/errors';
+import { formatTakaBn, parseTaka } from '../common/bn-digits';
 import type {
-  AiFertilizerPort,
   AiReceiptPort,
   AiToolsPort,
   AiTreatmentPort,
   AiVisionPort,
-  AiYieldPort,
-  FertilizerResult,
   ReceiptResult,
   ToolResult,
   TreatmentResult,
   VisionInput,
   VisionResult,
-  YieldResult,
 } from './ports';
 
 const bn = z.string().trim().min(1);
@@ -39,8 +36,6 @@ const severitySchema = z.preprocess(
   },
   z.enum(['low', 'medium', 'high']),
 );
-
-const num = z.coerce.number();
 
 const visionSchema = z.object({
   diseaseNameBn: bn.min(2),
@@ -90,48 +85,81 @@ const toolsSchema = z.object({
     .default([]),
 });
 
+/** Accepts 1200, "1200", "১,২০০", "৳ 1,200/-" — Gemini mixes scripts. */
+const taka = z.preprocess(parseTaka, z.number().nonnegative());
+
 const receiptSchema = z.object({
-  totalBdt: z.coerce.number().nonnegative(),
+  totalBdt: taka,
   summaryBn: bn.min(2),
   items: z
     .array(
-      z.object({
-        nameBn: bn.min(1),
-        quantity: bn.min(1),
-        priceBn: bn.min(1),
-      }),
+      z
+        .object({
+          nameBn: bn.min(1),
+          quantity: z.string().trim().default(''),
+          priceBn: z.string().trim().default(''),
+          priceBdt: taka.optional(),
+        })
+        .transform((item) => {
+          const priceBdt = item.priceBdt ?? parseTaka(item.priceBn);
+          return {
+            nameBn: item.nameBn,
+            quantity: item.quantity || '—',
+            priceBdt,
+            priceBn:
+              item.priceBn ||
+              (priceBdt > 0 ? `৳ ${formatTakaBn(priceBdt)}` : 'অস্পষ্ট'),
+          };
+        }),
     )
     .min(1)
-    .max(16),
+    .max(24),
 });
 
-const fertilizerSchema = z.object({
-  fertilizerNameBn: bn.min(2),
-  dosagePerBigha: bn.min(1),
-  applicationMethodBn: bn.min(2),
-  timingBn: bn.min(1),
-  warningBn: z.string().optional(),
-});
+/**
+ * Cloudinary delivery transform for faded / low-contrast receipts: cap size,
+ * force JPEG, auto-contrast and sharpen. EXIF rotation is applied by default.
+ */
+const RECEIPT_TRANSFORM = 'c_limit,w_2000,f_jpg/e_auto_contrast/e_sharpen:60';
 
-const yieldSchema = z.object({
-  landSizeBn: bn.min(1),
-  weatherSummaryBn: bn.min(2),
-  estimatedMinMon: num,
-  estimatedMaxMon: num,
-  lastSeasonMon: num,
-  trend: z.preprocess(
-    (value) => {
-      if (typeof value !== 'string') return value;
-      const s = value.trim().toLowerCase();
-      if (s === 'up' || s === 'increase' || s === 'rising') return 'up';
-      if (s === 'down' || s === 'decrease' || s === 'falling') return 'down';
-      if (s === 'flat' || s === 'same' || s === 'stable') return 'flat';
-      return s;
-    },
-    z.enum(['up', 'down', 'flat']),
-  ),
-  changePercent: num,
-});
+export function enhancedReceiptUrl(imageUrl: string): string | null {
+  const marker = '/image/upload/';
+  if (!/^https:\/\/res\.cloudinary\.com\//.test(imageUrl)) return null;
+  const at = imageUrl.indexOf(marker);
+  if (at < 0) return null;
+  const head = imageUrl.slice(0, at + marker.length);
+  return `${head}${RECEIPT_TRANSFORM}/${imageUrl.slice(at + marker.length)}`;
+}
+
+async function fetchImage(url: string): Promise<Buffer | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    return buf.length >= 80 && buf.length <= 4_000_000 ? buf : null;
+  } catch {
+    return null;
+  }
+}
+
+const RECEIPT_PROMPT = `You are reading a photo of a Bangladeshi shop / agro-input receipt (cash memo). It may be printed or handwritten, in Bangla, English or both. Read it slowly, line by line.
+
+Bangla numerals: ০=0 ১=1 ২=2 ৩=3 ৪=4 ৫=5 ৬=6 ৭=7 ৮=8 ৯=9.
+Check every digit: ৪ is FOUR even though it looks like the Latin 8; ৭ is SEVEN even though it looks like 9; ০ is zero, not the letter o. Do not mix Bangla and Latin digits inside one number.
+"৳", "Tk", "টাকা" and a trailing "/-" all mark taka. Commas are thousand separators.
+
+For each purchased line item return:
+- nameBn: product name in Bangla (write English brand names in Bangla script, e.g. "Urea" → "ইউরিয়া")
+- quantity: exactly as written, with Bangla digits (e.g. "২ কেজি", "১ বোতল")
+- priceBdt: the line amount in taka as a plain number with ASCII digits (e.g. 1200). If only unit price × quantity is shown, multiply.
+- priceBn: the same amount written like "৳ ১,২০০"
+If an amount cannot be read with confidence, set priceBdt to 0 and priceBn to "অস্পষ্ট" — never guess.
+Ignore shop name, address, phone numbers, dates and memo numbers.
+totalBdt: the printed grand total as an ASCII-digit number; if none is printed, the sum of priceBdt.
+summaryBn: one short Bangla sentence with the total and the biggest cost.
+
+JSON only:
+{"totalBdt":3200,"summaryBn":"মোট ৩,২০০ টাকা খরচ হয়েছে। সবচেয়ে বেশি খরচ ইউরিয়া সারে।","items":[{"nameBn":"ইউরিয়া সার","quantity":"২ ব্যাগ","priceBdt":2000,"priceBn":"৳ ২,০০০"}]}`;
 
 function shopListings(toolNameEn: string): ToolResult['listings'] {
   const q = encodeURIComponent(toolNameEn);
@@ -155,12 +183,6 @@ function shopListings(toolNameEn: string): ToolResult['listings'] {
       externalUrl: `https://www.google.com/search?q=${q}+কৃষি+যন্ত্র+বাংলাদেশ`,
     },
   ];
-}
-
-function takaFromPrice(priceBn: string): number {
-  const digits = priceBn.replace(/[^\d.]/g, '');
-  const n = Number(digits);
-  return Number.isFinite(n) ? n : 0;
 }
 
 function failAi(logger: Logger, label: string, err: unknown): never {
@@ -254,78 +276,24 @@ export class GeminiReceiptAdapter implements AiReceiptPort {
     imageBuffer?: Buffer;
   }): Promise<ReceiptResult> {
     try {
+      const enhancedUrl = input.imageUrl
+        ? enhancedReceiptUrl(input.imageUrl)
+        : null;
+      const enhanced = enhancedUrl ? await fetchImage(enhancedUrl) : null;
       const raw = await this.gemini.generateJson<unknown>(
-        `Read this Bangladeshi shop/agro receipt (Bangla or English handwriting or print).
-Extract every line item. Quantities like "২ কেজি" or "1 pcs". Prices in BDT.
-JSON only:
-{"totalBdt":3200,"summaryBn":"মোট ৩২০০ টাকা খরচ হয়েছে। প্রধান খরচ: ...","items":[{"nameBn":"...","quantity":"...","priceBn":"৳ 1200"}]}
-totalBdt must be a number (not a string). If the printed total is missing, sum the line items.`,
-        { imageUrl: input.imageUrl, imageBuffer: input.imageBuffer },
+        RECEIPT_PROMPT,
+        enhanced
+          ? { imageBuffer: enhanced }
+          : { imageUrl: input.imageUrl, imageBuffer: input.imageBuffer },
       );
       const parsed = receiptSchema.parse(raw);
-      const summed = parsed.items.reduce(
-        (acc, item) => acc + takaFromPrice(item.priceBn),
-        0,
+      const summed = parsed.items.reduce((acc, item) => acc + item.priceBdt, 0);
+      const totalBdt = Math.round(
+        parsed.totalBdt > 0 ? parsed.totalBdt : summed,
       );
-      const totalBdt = parsed.totalBdt > 0 ? parsed.totalBdt : summed;
       return { ...parsed, totalBdt };
     } catch (err) {
       failAi(this.logger, 'Receipt', err);
-    }
-  }
-}
-
-@Injectable()
-export class GeminiFertilizerAdapter implements AiFertilizerPort {
-  private readonly logger = new Logger(GeminiFertilizerAdapter.name);
-  constructor(private readonly gemini: GeminiClient) {}
-
-  async recommend(input: {
-    cropSlug: string;
-    growthStage: string;
-    soilColor: string;
-    soilMoisture: string;
-    landSizeBigha: number;
-    cropAgeDays: number;
-    hasDisease: 'yes' | 'no' | 'unsure';
-  }): Promise<FertilizerResult> {
-    try {
-      const diseaseNote =
-        input.hasDisease === 'yes'
-          ? 'Crop currently has disease — avoid excess nitrogen; prefer balanced/safer doses and warn about spray timing.'
-          : input.hasDisease === 'unsure'
-            ? 'Disease status unknown — give cautious dosage and suggest leaf scan if leaves look unhealthy.'
-            : 'No known disease.';
-      const raw = await this.gemini.generateJson<unknown>(
-        `Recommend fertilizer for a Bangladeshi farmer.
-Crop slug: ${input.cropSlug}. Growth stage: ${input.growthStage}. Soil colour: ${input.soilColor}. Moisture: ${input.soilMoisture}.
-Land size: ${input.landSizeBigha} bigha. Crop age: ${input.cropAgeDays} days. ${diseaseNote}
-Scale total dose to the given land size (also show per-bigha). Keep Bangla simple for farmers.
-JSON:
-{"fertilizerNameBn":"...","dosagePerBigha":"...","applicationMethodBn":"...","timingBn":"...","warningBn":"..."}`,
-      );
-      return fertilizerSchema.parse(raw);
-    } catch (err) {
-      failAi(this.logger, 'Fertilizer', err);
-    }
-  }
-}
-
-@Injectable()
-export class GeminiYieldAdapter implements AiYieldPort {
-  private readonly logger = new Logger(GeminiYieldAdapter.name);
-  constructor(private readonly gemini: GeminiClient) {}
-
-  async predict(cropSlug: string): Promise<YieldResult> {
-    try {
-      const raw = await this.gemini.generateJson<unknown>(
-        `Estimate rice/aman-style yield in mon for a typical 2 bigha Bangladeshi plot. Crop: ${cropSlug}.
-JSON:
-{"landSizeBn":"২ বিঘা","weatherSummaryBn":"...","estimatedMinMon":30,"estimatedMaxMon":38,"lastSeasonMon":30,"trend":"up"|"down"|"flat","changePercent":10}`,
-      );
-      return yieldSchema.parse(raw);
-    } catch (err) {
-      failAi(this.logger, 'Yield', err);
     }
   }
 }

@@ -13,6 +13,8 @@ import {
   ScreenHeader,
   StructuredCard,
 } from "@/components/ui";
+import { CostEstimatorPanel } from "@/components/cost/CostEstimatorPanel";
+import { CultivationCostCard } from "@/components/cost/CultivationCostCard";
 import { colors } from "@/constants/theme";
 import {
   useGenerateCropPlanMutation,
@@ -20,10 +22,15 @@ import {
 } from "@/services/api";
 import { userFacingError } from "@/lib/userFacingError";
 import { useFarmLocation } from "@/hooks/useFarmLocation";
+import type { CropType } from "@/types/treatment";
+
+const toBn = (n: number) =>
+  new Intl.NumberFormat("bn-BD", { maximumFractionDigits: 1 }).format(n);
 
 export default function CropPlanningScreen() {
   const { data: latest, isLoading, isError, refetch } = useGetLatestCropPlanQuery();
-  const [generate, { isLoading: generating }] = useGenerateCropPlanMutation();
+  const [generate, { isLoading: generating, data: generated }] =
+    useGenerateCropPlanMutation();
   const [planError, setPlanError] = useState<string | null>(null);
   const location = useFarmLocation();
   const plan = latest;
@@ -36,6 +43,16 @@ export default function CropPlanningScreen() {
       setPlanError(userFacingError(err, "generic", "পরিকল্পনা তৈরি করা যায়নি। আবার চেষ্টা করুন।"));
     }
   };
+
+  const priorityCrops = [
+    ...new Set(
+      (plan?.months ?? [])
+        .map((m) => m.cropSlug)
+        .filter((slug): slug is CropType => !!slug),
+    ),
+  ];
+  const usedNormals =
+    generated?.id === plan?.id && generated?.outlookSource === "climatology";
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
@@ -84,6 +101,52 @@ export default function CropPlanningScreen() {
                 precipMm: month.precipMm,
               }))}
             />
+            {usedNormals ? (
+              <AppText variant="caption" className="-mt-2 px-1 text-muted">
+                মৌসুমি পূর্বাভাস এই মুহূর্তে পাওয়া যায়নি — বাংলাদেশের দীর্ঘমেয়াদি মাসিক
+                গড় ব্যবহার করা হয়েছে।
+              </AppText>
+            ) : null}
+
+            {plan.months.some((m) => m.plantingWindowBn) ? (
+              <StructuredCard
+                title="মাসভিত্তিক অগ্রাধিকার"
+                icon={<Ionicons name="list-outline" size={22} color={colors.primary} />}
+              >
+                <View className="gap-3">
+                  {plan.months.map((month, index) => (
+                    <View
+                      key={`${month.month}-${index}`}
+                      className="gap-1 rounded-2xl bg-neutral px-4 py-3"
+                    >
+                      <View className="flex-row items-center justify-between gap-2">
+                        <AppText variant="body" className="font-bengali-bold text-ink">
+                          {month.month}
+                        </AppText>
+                        <AppText variant="body" className="font-bengali-bold text-primary">
+                          {month.recommendedCropBn}
+                        </AppText>
+                      </View>
+                      {month.plantingWindowBn ? (
+                        <AppText variant="caption" className="text-ink">
+                          রোপণ/বোনা: {month.plantingWindowBn}
+                        </AppText>
+                      ) : null}
+                      {month.harvestWindowBn ? (
+                        <AppText variant="caption" className="text-ink">
+                          কাটার সম্ভাব্য সময়: {month.harvestWindowBn}
+                        </AppText>
+                      ) : null}
+                      {month.reasonBn ? (
+                        <AppText variant="caption" className="text-muted">
+                          {month.reasonBn}
+                        </AppText>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+              </StructuredCard>
+            ) : null}
 
             <StructuredCard
               title="চাষের পরামর্শ"
@@ -98,6 +161,24 @@ export default function CropPlanningScreen() {
               label="সুপারিশ শুনুন"
               textBn={plan.recommendationBn}
             />
+
+            {plan.costEstimate ? (
+              <CultivationCostCard
+                cost={plan.costEstimate}
+                caption={`প্রথম অগ্রাধিকার: ${plan.costEstimate.cropNameBn} · ${toBn(plan.costEstimate.landSizeBigha)} বিঘা ধরে`}
+              />
+            ) : null}
+
+            <View className="gap-3">
+              <AppText variant="bodyLg" className="font-bengali-bold text-ink">
+                আপনার জমির খরচ হিসাব করুন
+              </AppText>
+              <CostEstimatorPanel
+                crops={priorityCrops}
+                initialCrop={priorityCrops[0] ?? null}
+                showSpray={false}
+              />
+            </View>
 
             <PrimaryButton label="আবার তৈরি করুন" onPress={requestPlan} />
           </>

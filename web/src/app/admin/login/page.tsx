@@ -44,7 +44,7 @@ export default function AdminLoginPage() {
         <div className="relative flex h-full flex-col justify-end p-12 text-sand">
           <p className="font-display text-6xl leading-none">আরণ্য</p>
           <p className="mt-6 max-w-sm text-lg text-sand/75">
-            দলের জন্য নিরাপদ অ্যাডমিন প্যানেল — ব্যবহারকারী, ঋণ ও বিশ্লেষণ।
+            দলের জন্য নিরাপদ অ্যাডমিন প্যানেল — ব্যবহারকারী ও বিশ্লেষণ।
           </p>
         </div>
       </div>

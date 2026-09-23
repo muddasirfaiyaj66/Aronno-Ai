@@ -38,12 +38,38 @@ export type MarketListing = {
   thumbnailUrl?: string;
 };
 
-export type HeatMapDimension = "disease" | "price";
+export type HeatLevel = "low" | "medium" | "high";
 
-export type HeatMapRegion = {
-  id: string;
-  district: District;
-  /** 0-1 intensity from the market heatmap API. */
-  diseaseIntensity: number;
-  priceIntensity: number;
+export type HeatmapLocation = {
+  slug: District;
+  nameBn: string;
+  lat: number;
+  lon: number;
+};
+
+export type HeatmapDisease = {
+  diseaseType: { nameBn: string; nameEn: string };
+  caseCount: number;
+  /** Sum of severity weights (low 1, medium 2, high 3). */
+  severityScore: number;
+};
+
+/** One district × disease row of the aggregated diagnoses. */
+export type HeatmapEntry = HeatmapDisease & { location: HeatmapLocation };
+
+/** Per-district roll-up used for the map zones. */
+export type HeatmapArea = {
+  location: HeatmapLocation;
+  caseCount: number;
+  severityScore: number;
+  level: HeatLevel;
+  diseases: HeatmapDisease[];
+};
+
+export type HeatmapResponse = {
+  windowDays: number;
+  since: string;
+  generatedAt: string;
+  entries: HeatmapEntry[];
+  areas: HeatmapArea[];
 };

@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Prisma, Severity } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PasswordService } from '../auth/password.service';
 import { DEMO_EMAIL, DEMO_NAME, DEMO_PASSWORD } from './demo-account';
@@ -32,13 +33,54 @@ const CROPS = [
   { slug: 'onion', nameBn: 'পেঁয়াজ', nameEn: 'Onion' },
   { slug: 'corn', nameBn: 'ভুট্টা', nameEn: 'Corn' },
   { slug: 'lentil', nameBn: 'মসুর ডাল', nameEn: 'Lentil' },
+  { slug: 'mustard', nameBn: 'সরিষা', nameEn: 'Mustard' },
 ];
 
-const LOAN_PURPOSES = [
-  { slug: 'seed', nameBn: 'বীজ' },
-  { slug: 'fertilizer', nameBn: 'সার' },
-  { slug: 'equipment', nameBn: 'যন্ত্র' },
-  { slug: 'other', nameBn: 'অন্যান্য' },
+const HEATMAP_DEMO_EMAIL = 'heatmap-demo@aronno.local';
+const HEATMAP_DEMO_PREFIX = 'heatmap-demo-';
+
+const DEMO_DISEASES = [
+  { crop: 'rice', nameBn: 'ধানের ব্লাস্ট রোগ', nameEn: 'Rice Blast' },
+  { crop: 'rice', nameBn: 'বাদামি দাগ রোগ', nameEn: 'Brown Spot Disease' },
+  { crop: 'rice', nameBn: 'খোলপচা রোগ', nameEn: 'Sheath Blight' },
+  { crop: 'potato', nameBn: 'আলুর নাবি ধসা রোগ', nameEn: 'Potato Late Blight' },
+  {
+    crop: 'tomato',
+    nameBn: 'টমেটোর আগাম ধসা রোগ',
+    nameEn: 'Tomato Early Blight',
+  },
+  {
+    crop: 'vegetable',
+    nameBn: 'পাতা কোঁকড়ানো ভাইরাস',
+    nameEn: 'Leaf Curl Virus',
+  },
+  {
+    crop: 'rice',
+    nameBn: 'ব্যাকটেরিয়াজনিত পাতা পোড়া',
+    nameEn: 'Bacterial Leaf Blight',
+  },
+];
+
+/** [district slug, disease index, case count, severity] */
+const HEATMAP_DEMO: [string, number, number, Severity][] = [
+  ['rangpur', 0, 5, 'high'],
+  ['rangpur', 1, 3, 'medium'],
+  ['dinajpur', 0, 3, 'medium'],
+  ['dinajpur', 6, 2, 'medium'],
+  ['bogura', 3, 4, 'high'],
+  ['bogura', 2, 2, 'low'],
+  ['munshiganj', 3, 6, 'high'],
+  ['jashore', 1, 3, 'medium'],
+  ['jashore', 4, 2, 'medium'],
+  ['comilla', 2, 3, 'medium'],
+  ['mymensingh', 6, 2, 'medium'],
+  ['mymensingh', 1, 1, 'low'],
+  ['rajshahi', 4, 2, 'low'],
+  ['kushtia', 5, 2, 'medium'],
+  ['tangail', 1, 1, 'low'],
+  ['sylhet', 2, 1, 'low'],
+  ['barishal', 6, 2, 'low'],
+  ['khulna', 5, 1, 'low'],
 ];
 
 @Injectable()
@@ -80,16 +122,9 @@ export class SeedService implements OnModuleInit {
         create: row,
       });
     }
-    for (const row of LOAN_PURPOSES) {
-      await this.prisma.loanPurpose.upsert({
-        where: { slug: row.slug },
-        update: { nameBn: row.nameBn },
-        create: row,
-      });
-    }
-
     await this.seedSuperadmin();
     await this.seedDemoUser();
+    await this.seedHeatmapDemo();
     this.logger.log('Lookup seed complete');
   }
 
@@ -157,11 +192,7 @@ export class SeedService implements OnModuleInit {
     const potato = await this.prisma.crop.findUnique({
       where: { slug: 'potato' },
     });
-    const seedPurpose = await this.prisma.loanPurpose.findUnique({
-      where: { slug: 'fertilizer' },
-    });
-    if (!userRole || !farmer || !jashore || !rice || !potato || !seedPurpose)
-      return;
+    if (!userRole || !farmer || !jashore || !rice || !potato) return;
 
     let user = await this.prisma.user.findUnique({
       where: { email: DEMO_EMAIL },
@@ -217,6 +248,7 @@ export class SeedService implements OnModuleInit {
       data: {
         userId: user.id,
         cropId: rice.id,
+        districtId: jashore.id,
         source: 'photo',
         diseaseNameBn: 'বাদামি দাগ রোগ',
         diseaseNameEn: 'Brown Spot Disease',
@@ -364,29 +396,6 @@ export class SeedService implements OnModuleInit {
       },
     });
 
-    const yieldRow = await this.prisma.yieldEstimate.create({
-      data: {
-        userId: user.id,
-        cropId: rice.id,
-        landSizeBn: '২ বিঘা',
-        weatherSummaryBn: 'স্বাভাবিক বৃষ্টিপাত প্রত্যাশিত',
-        estimatedMinMon: 32,
-        estimatedMaxMon: 38,
-        lastSeasonMon: 30,
-        trend: 'up',
-        changePercent: 15,
-        createdAt: daysAgo(5),
-      },
-    });
-    await this.prisma.historyEvent.create({
-      data: {
-        userId: user.id,
-        kind: 'yield',
-        sourceId: yieldRow.id,
-        occurredAt: daysAgo(5),
-      },
-    });
-
     await this.prisma.cropPlan.create({
       data: {
         userId: user.id,
@@ -435,26 +444,6 @@ export class SeedService implements OnModuleInit {
       },
     });
 
-    const loan = await this.prisma.loanApplication.create({
-      data: {
-        userId: user.id,
-        amountBdt: 50000,
-        purposeId: seedPurpose.id,
-        repaymentPeriod: 'SIX_MONTHS',
-        status: 'repaying',
-        nextPaymentDue: daysAgo(-20),
-        createdAt: daysAgo(12),
-      },
-    });
-    await this.prisma.historyEvent.create({
-      data: {
-        userId: user.id,
-        kind: 'loan',
-        sourceId: loan.id,
-        occurredAt: daysAgo(12),
-      },
-    });
-
     await this.prisma.listing.create({
       data: {
         sellerUserId: user.id,
@@ -467,5 +456,74 @@ export class SeedService implements OnModuleInit {
     });
 
     this.logger.log(`Seeded demo farm records for ${DEMO_EMAIL}`);
+  }
+
+  /**
+   * Demo disease reports spread over several districts so the market heat map
+   * is testable before real scans accumulate. Owned by an inactive account (no
+   * history events), refreshed every 20 days so it stays inside the window.
+   * Set SEED_HEATMAP_DEMO=false to disable.
+   */
+  private async seedHeatmapDemo() {
+    if (this.config.get<string>('SEED_HEATMAP_DEMO') === 'false') return;
+
+    const newest = await this.prisma.diagnosis.findFirst({
+      where: { clientLocalId: { startsWith: HEATMAP_DEMO_PREFIX } },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+    const staleBefore = Date.now() - 20 * 24 * 60 * 60 * 1000;
+    if (newest && newest.createdAt.getTime() > staleBefore) return;
+
+    const userRole = await this.prisma.role.findUnique({
+      where: { slug: 'USER' },
+    });
+    if (!userRole) return;
+    const owner = await this.prisma.user.upsert({
+      where: { email: HEATMAP_DEMO_EMAIL },
+      update: {},
+      create: {
+        email: HEATMAP_DEMO_EMAIL,
+        displayName: 'হিট ম্যাপ ডেমো',
+        roleId: userRole.id,
+        isActive: false,
+      },
+    });
+
+    await this.prisma.diagnosis.deleteMany({
+      where: { clientLocalId: { startsWith: HEATMAP_DEMO_PREFIX } },
+    });
+
+    const districts = await this.prisma.district.findMany({
+      where: { slug: { in: [...new Set(HEATMAP_DEMO.map((r) => r[0]))] } },
+    });
+    const districtId = new Map(districts.map((d) => [d.slug, d.id]));
+    const crops = await this.prisma.crop.findMany();
+    const cropId = new Map(crops.map((c) => [c.slug, c.id]));
+
+    const data: Prisma.DiagnosisCreateManyInput[] = [];
+    let n = 0;
+    for (const [slug, diseaseIdx, count, severity] of HEATMAP_DEMO) {
+      const disease = DEMO_DISEASES[diseaseIdx];
+      const dId = districtId.get(slug);
+      if (!disease || !dId) continue;
+      for (let i = 0; i < count; i++) {
+        n += 1;
+        data.push({
+          userId: owner.id,
+          cropId: cropId.get(disease.crop),
+          districtId: dId,
+          source: 'photo',
+          diseaseNameBn: disease.nameBn,
+          diseaseNameEn: disease.nameEn,
+          confidence: 70 + ((n * 7) % 25),
+          severity,
+          clientLocalId: `${HEATMAP_DEMO_PREFIX}${n}`,
+          createdAt: new Date(Date.now() - (((n * 11) % 50) + 1) * 86_400_000),
+        });
+      }
+    }
+    if (data.length) await this.prisma.diagnosis.createMany({ data });
+    this.logger.log(`Seeded ${data.length} heat map demo diagnoses`);
   }
 }

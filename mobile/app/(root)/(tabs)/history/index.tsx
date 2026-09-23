@@ -3,13 +3,7 @@ import { Alert, Image, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import {
-  AppText,
-  EmptyState,
-  LoanStatusBadge,
-  SegmentedTabs,
-  SeverityBadge,
-} from "@/components/ui";
+import { AppText, EmptyState, SeverityBadge } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import {
   useDeleteHistoryEntryMutation,
@@ -28,20 +22,7 @@ import {
 } from "@/lib/offlineDb/syncEngine";
 import { useIsOnline } from "@/hooks/useIsOnline";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
-import type {
-  DiseaseHistoryEntry,
-  HistoryEntry,
-  HistoryEntryKind,
-  LoanHistoryEntry,
-  YieldHistoryEntry,
-} from "@/types/history";
-
-type FilterValue = "all" | HistoryEntryKind;
-
-const FILTERS: { id: FilterValue; label: string }[] = [
-  { id: "all", label: "সব" },
-  { id: "disease", label: "রোগ" },
-];
+import type { DiseaseHistoryEntry, HistoryEntry } from "@/types/history";
 
 function RowShell({
   onPress,
@@ -111,62 +92,6 @@ function DiseaseRow({ entry }: { entry: DiseaseHistoryEntry }) {
   );
 }
 
-function YieldRow({ entry }: { entry: YieldHistoryEntry }) {
-  const trendIcon =
-    entry.trend === "up"
-      ? "trending-up"
-      : entry.trend === "down"
-        ? "trending-down"
-        : "remove";
-  const trendColor =
-    entry.trend === "up"
-      ? "#047857"
-      : entry.trend === "down"
-        ? "#B42318"
-        : colors.muted;
-
-  return (
-    <>
-      <View className="h-14 w-14 items-center justify-center rounded-2xl bg-secondary">
-        <Ionicons name="stats-chart" size={24} color={colors.primary} />
-      </View>
-      <View className="flex-1">
-        <View className="flex-row items-end gap-1.5">
-          <AppText variant="title" className="text-primary">
-            {entry.yieldValue}
-          </AppText>
-          <AppText variant="caption" className="mb-0.5">
-            {entry.yieldUnitBn}
-          </AppText>
-        </View>
-        <AppText variant="caption" className="mt-0.5">
-          {entry.cropNameBn} · {entry.dateBn}
-        </AppText>
-      </View>
-      <Ionicons name={trendIcon} size={22} color={trendColor} />
-    </>
-  );
-}
-
-function LoanRow({ entry }: { entry: LoanHistoryEntry }) {
-  return (
-    <>
-      <View className="h-14 w-14 items-center justify-center rounded-2xl bg-secondary">
-        <Ionicons name="cash" size={24} color={colors.primary} />
-      </View>
-      <View className="flex-1">
-        <AppText variant="body" className="font-bengali-bold text-ink">
-          {entry.amount}
-        </AppText>
-        <AppText variant="caption" className="mt-0.5">
-          {entry.title} · {entry.dateBn}
-        </AppText>
-      </View>
-      <LoanStatusBadge status={entry.status} />
-    </>
-  );
-}
-
 function TimelineItem({
   entry,
   isLast,
@@ -186,13 +111,7 @@ function TimelineItem({
       </View>
       <View className="flex-1 pb-4">
         <RowShell onPress={onPress} onDelete={onDelete}>
-          {entry.kind === "disease" ? (
-            <DiseaseRow entry={entry} />
-          ) : entry.kind === "yield" ? (
-            <YieldRow entry={entry} />
-          ) : (
-            <LoanRow entry={entry} />
-          )}
+          <DiseaseRow entry={entry} />
         </RowShell>
       </View>
     </View>
@@ -201,16 +120,12 @@ function TimelineItem({
 
 function isHiddenEntry(entry: HistoryEntry, hidden: Set<string>): boolean {
   if (hidden.has(entry.id)) return true;
-  if (entry.kind === "disease" && entry.sourceId && hidden.has(entry.sourceId)) {
-    return true;
-  }
-  return false;
+  return !!entry.sourceId && hidden.has(entry.sourceId);
 }
 
 export default function CropHealthHistoryScreen() {
   const router = useRouter();
   const online = useIsOnline();
-  const [filter, setFilter] = useState<FilterValue>("all");
   const [localEntries, setLocalEntries] = useState<HistoryEntry[]>([]);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState(0);
@@ -218,7 +133,7 @@ export default function CropHealthHistoryScreen() {
   const [deleteHistoryEntry] = useDeleteHistoryEntryMutation();
 
   const { data: remote = [], refetch: refetchRemote } = useGetHistoryQuery(
-    filter === "all" ? undefined : { kind: filter },
+    undefined,
     { skip: !online },
   );
 
@@ -270,11 +185,9 @@ export default function CropHealthHistoryScreen() {
     for (const e of remote) {
       if (isHiddenEntry(e, hiddenIds)) continue;
       // Prefer local row when same diagnosis already listed under localId.
-      if (e.kind === "disease" && e.sourceId) {
+      if (e.sourceId) {
         const localMatch = [...byKey.values()].find(
-          (x) =>
-            x.kind === "disease" &&
-            (x.id === e.sourceId || x.sourceId === e.sourceId),
+          (x) => x.id === e.sourceId || x.sourceId === e.sourceId,
         );
         if (localMatch) continue;
       }
@@ -283,19 +196,8 @@ export default function CropHealthHistoryScreen() {
     return [...byKey.values()].sort((a, b) => b.date.localeCompare(a.date));
   }, [localEntries, remote, hiddenIds]);
 
-  const filteredEntries = useMemo(
-    () =>
-      (filter === "all"
-        ? merged
-        : merged.filter((entry) => entry.kind === filter)
-      ).filter((entry) => entry.kind === "disease"),
-    [merged, filter],
-  );
-
   const confirmDelete = (entry: HistoryEntry) => {
-    const title =
-      entry.kind === "disease" ? entry.diseaseNameBn : "এই রেকর্ড";
-    Alert.alert("মুছে ফেলবেন?", `"${title}" ইতিহাস থেকে মুছে যাবে।`, [
+    Alert.alert("মুছে ফেলবেন?", `"${entry.diseaseNameBn}" ইতিহাস থেকে মুছে যাবে।`, [
       { text: "বাতিল", style: "cancel" },
       {
         text: "মুছুন",
@@ -303,9 +205,7 @@ export default function CropHealthHistoryScreen() {
         onPress: () => {
           void (async () => {
             const ids = [entry.id];
-            if (entry.kind === "disease" && entry.sourceId) {
-              ids.push(entry.sourceId);
-            }
+            if (entry.sourceId) ids.push(entry.sourceId);
             await hideHistoryIds(ids);
             setHiddenIds((prev) => {
               const next = new Set(prev);
@@ -317,28 +217,22 @@ export default function CropHealthHistoryScreen() {
                 (e) =>
                   e.id !== entry.id &&
                   !(
-                    entry.kind === "disease" &&
-                    e.kind === "disease" &&
                     entry.sourceId &&
                     (e.id === entry.sourceId || e.sourceId === entry.sourceId)
                   ),
               ),
             );
 
-            if (entry.kind === "disease") {
-              await deleteLocalDiagnosis(entry.id).catch(() => undefined);
-              if (entry.sourceId && entry.sourceId !== entry.id) {
-                await deleteLocalDiagnosis(entry.sourceId).catch(
-                  () => undefined,
-                );
-              }
+            await deleteLocalDiagnosis(entry.id).catch(() => undefined);
+            if (entry.sourceId && entry.sourceId !== entry.id) {
+              await deleteLocalDiagnosis(entry.sourceId).catch(
+                () => undefined,
+              );
             }
 
             if (online) {
               const remoteIds = [entry.id];
-              if (entry.kind === "disease" && entry.sourceId) {
-                remoteIds.push(entry.sourceId);
-              }
+              if (entry.sourceId) remoteIds.push(entry.sourceId);
               for (const rid of remoteIds) {
                 await deleteHistoryEntry(rid)
                   .unwrap()
@@ -366,15 +260,9 @@ export default function CropHealthHistoryScreen() {
               ? " · সিঙ্ক হচ্ছে…"
               : ""}
         </AppText>
-        <SegmentedTabs
-          className="mt-3"
-          options={FILTERS}
-          value={filter}
-          onChange={setFilter}
-        />
       </View>
 
-      {filteredEntries.length === 0 ? (
+      {merged.length === 0 ? (
         <ScrollView
           className="flex-1"
           contentContainerClassName="flex-grow"
@@ -383,9 +271,9 @@ export default function CropHealthHistoryScreen() {
         >
           <EmptyState
             icon={<Ionicons name="time" size={32} color={colors.primary} />}
-            message="এই বিভাগে এখনো কোনো ইতিহাস নেই।"
-            ctaLabel="সব দেখুন"
-            onCta={() => setFilter("all")}
+            message="এখনো কোনো স্ক্যানের ইতিহাস নেই।"
+            ctaLabel="পাতা স্ক্যান করুন"
+            onCta={() => router.push("/(root)/(tabs)/scan")}
           />
         </ScrollView>
       ) : (
@@ -395,22 +283,18 @@ export default function CropHealthHistoryScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={refreshControl}
         >
-          {filteredEntries.map((entry, index) => (
+          {merged.map((entry, index) => (
             <TimelineItem
               key={entry.id}
               entry={entry}
-              isLast={index === filteredEntries.length - 1}
+              isLast={index === merged.length - 1}
               onPress={() =>
                 router.push({
                   pathname: "/(root)/(tabs)/history/[id]",
                   params: { id: entry.id },
                 })
               }
-              onDelete={
-                entry.kind === "disease"
-                  ? () => confirmDelete(entry)
-                  : undefined
-              }
+              onDelete={() => confirmDelete(entry)}
             />
           ))}
         </ScrollView>

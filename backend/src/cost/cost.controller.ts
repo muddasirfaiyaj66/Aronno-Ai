@@ -7,10 +7,11 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ZodPipe } from '../common/pipes/zod.pipe';
 import { Errors } from '../common/errors';
 import type { AuthUser } from '../auth/auth.types';
+import { COST_CROP_SLUGS, type CultivationCost } from './cultivation-costs';
 
 const createSchema = z
   .object({
-    cropSlug: z.enum(['rice', 'potato', 'tomato', 'vegetable']),
+    cropSlug: z.enum(COST_CROP_SLUGS),
     landSize: z.number().positive(),
     landUnit: z.enum(['bigha', 'acre']),
   })
@@ -32,22 +33,23 @@ export class CostController {
       where: { slug: body.cropSlug },
     });
     if (!crop) throw Errors.notFound();
-    const result = this.port.estimate(body.landSize, body.landUnit);
+    const { cultivation, ...spray } = this.port.estimate(
+      body.cropSlug,
+      body.landSize,
+      body.landUnit,
+    );
     const row = await this.prisma.costEstimate.create({
       data: {
         userId: user.id,
         cropId: crop.id,
         landSize: body.landSize,
         landUnit: body.landUnit,
-        ...result,
+        ...spray,
+        cultivationTotalBdt: cultivation.totalBdt,
+        breakdown: cultivation,
       },
     });
-    return {
-      id: row.id,
-      pesticideQuantity: row.pesticideQuantity,
-      totalCostBdt: row.totalCostBdt,
-      spraySessions: row.spraySessions,
-    };
+    return this.dto(row);
   }
 
   @Get(':id')
@@ -56,11 +58,22 @@ export class CostController {
     if (!row) throw Errors.notFound();
     if (row.userId !== user.id && user.role === 'USER')
       throw Errors.forbidden();
+    return this.dto(row);
+  }
+
+  private dto(row: {
+    id: string;
+    pesticideQuantity: string;
+    totalCostBdt: number;
+    spraySessions: number;
+    breakdown: unknown;
+  }) {
     return {
       id: row.id,
       pesticideQuantity: row.pesticideQuantity,
       totalCostBdt: row.totalCostBdt,
       spraySessions: row.spraySessions,
+      cultivation: (row.breakdown as CultivationCost | null) ?? undefined,
     };
   }
 }

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { LoanStatus, type Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { PasswordService } from '../auth/password.service';
@@ -122,64 +122,5 @@ export class AdminService {
       },
     });
     return this.auth.me(userId);
-  }
-
-  async listLoans(cursor?: string, limit = 20) {
-    const take = Math.min(limit, 50);
-    const rows = await this.prisma.loanApplication.findMany({
-      take,
-      skip: cursor ? 1 : 0,
-      cursor: cursor ? { id: cursor } : undefined,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        purpose: true,
-        user: { select: { id: true, displayName: true, email: true } },
-      },
-    });
-    return rows.map((loan) => ({
-      id: loan.id,
-      amountBdt: loan.amountBdt,
-      status: loan.status,
-      repaymentPeriod: loan.repaymentPeriod,
-      nextPaymentDue: loan.nextPaymentDue?.toISOString() ?? null,
-      createdAt: loan.createdAt.toISOString(),
-      purpose: {
-        id: loan.purpose.id,
-        nameBn: loan.purpose.nameBn,
-      },
-      user: loan.user,
-    }));
-  }
-
-  async patchLoanStatus(actor: AuthUser, loanId: string, status: LoanStatus) {
-    const loan = await this.prisma.loanApplication.update({
-      where: { id: loanId },
-      data: { status },
-      include: {
-        purpose: true,
-        user: { select: { id: true, displayName: true, email: true } },
-      },
-    });
-    await this.prisma.auditLog.create({
-      data: {
-        actorUserId: actor.id,
-        action: 'LOAN_STATUS_CHANGE',
-        target: loanId,
-        metadata: { status },
-      },
-    });
-    return {
-      id: loan.id,
-      amountBdt: loan.amountBdt,
-      status: loan.status,
-      repaymentPeriod: loan.repaymentPeriod,
-      nextPaymentDue: loan.nextPaymentDue?.toISOString() ?? null,
-      createdAt: loan.createdAt.toISOString(),
-      purpose: {
-        id: loan.purpose.id,
-        nameBn: loan.purpose.nameBn,
-      },
-      user: loan.user,
-    };
   }
 }

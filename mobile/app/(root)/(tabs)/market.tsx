@@ -4,17 +4,21 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
+  AIGeneratingShimmer,
   AppText,
   DistrictPicker,
   EmptyState,
   IconPickerRow,
   ListingCard,
   PrimaryButton,
+  RetryCard,
   SecondaryButton,
   SegmentedTabs,
   StructuredCard,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
+import { HeatMapView } from "@/components/market/HeatMapView";
+import { HEAT_COLORS } from "@/components/market/heatmapHtml";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import {
   useCreateMarketListingMutation,
@@ -27,7 +31,7 @@ import {
 import { uploadImageToCloudinary } from "@/services/cloudinary";
 import {
   type District,
-  type HeatMapDimension,
+  type HeatLevel,
   type MarketCropType,
   type PriceTrend,
 } from "@/types/market";
@@ -60,10 +64,13 @@ const CROP_FILTER_OPTIONS: { id: MarketCropType | "all"; label: string }[] = [
   ...CROP_OPTIONS.map((c) => ({ id: c.id, label: c.label })),
 ];
 
-const HEATMAP_DIMENSION_OPTIONS: { id: HeatMapDimension; label: string }[] = [
-  { id: "disease", label: "রোগের প্রাদুর্ভাব" },
-  { id: "price", label: "দাম" },
-];
+const HEAT_LEVEL_LABEL: Record<HeatLevel, string> = {
+  low: "কম",
+  medium: "মাঝারি",
+  high: "বেশি",
+};
+
+const toBn = (n: number) => new Intl.NumberFormat("bn-BD").format(n);
 
 function cropLabel(cropType: MarketCropType | null) {
   return CROP_OPTIONS.find((c) => c.id === cropType)?.label ?? "";
@@ -162,9 +169,8 @@ export default function MarketScreen() {
   );
   const [sortDesc, setSortDesc] = useState(true);
 
-  // Heat Map
-  const [heatMapDimension, setHeatMapDimension] =
-    useState<HeatMapDimension>("disease");
+  // Heat Map — built from stored diagnoses, no input needed.
+  const [heatSlug, setHeatSlug] = useState<string | null>(null);
 
   // Direct Sell form — kept at screen level so it survives the round trip
   // to PhotoCaptureScreen and back.
@@ -189,7 +195,14 @@ export default function MarketScreen() {
       districtSlug: marketDistrict === "all" ? undefined : marketDistrict,
       sort: sortDesc ? "price_desc" : "price_asc",
     });
-  const { data: heatmap, refetch: refetchHeatmap } = useGetHeatmapQuery();
+  const {
+    data: heatmap,
+    isLoading: heatmapLoading,
+    isError: heatmapError,
+    refetch: refetchHeatmap,
+  } = useGetHeatmapQuery();
+  const heatAreas = heatmap?.areas ?? [];
+  const selectedArea = heatAreas.find((a) => a.location.slug === heatSlug);
   const { data: districts = [], refetch: refetchDistricts } =
     useGetDistrictsQuery();
 
@@ -458,77 +471,76 @@ export default function MarketScreen() {
 
         {tab === "heatmap" ? (
           <>
-            <DraftBanner />
-            {/* TODO(product): the real data source (disease-report vs.
-                price-index aggregation) needs product confirmation before
-                this toggle can be wired to anything real. */}
-            <SegmentedTabs
-              options={HEATMAP_DIMENSION_OPTIONS}
-              value={heatMapDimension}
-              onChange={setHeatMapDimension}
-            />
             <AppText variant="caption" className="text-muted">
-              এলাকাভিত্তিক আভাস — পূর্ণ মানচিত্র শীঘ্রই আসছে
+              গত {toBn(heatmap?.windowDays ?? 60)} দিনে কৃষকদের স্ক্যান থেকে জেলাভিত্তিক রোগের
+              প্রাদুর্ভাব। কোনো এলাকায় চাপ দিন।
             </AppText>
 
-            {(heatmap?.regions ?? []).length === 0 ? (
+            {heatmapError ? (
+              <RetryCard
+                message="হিট ম্যাপ আনা যায়নি। ইন্টারনেট দেখে আবার চেষ্টা করুন।"
+                onRetry={() => refetchHeatmap()}
+              />
+            ) : heatmapLoading ? (
+              <AIGeneratingShimmer label="মানচিত্র তৈরি হচ্ছে" lines={4} className="w-full" />
+            ) : (
+              <HeatMapView areas={heatAreas} onSelect={setHeatSlug} />
+            )}
+
+            <View className="flex-row items-center justify-center gap-4">
+              {(["low", "medium", "high"] as const).map((level) => (
+                <View key={level} className="flex-row items-center gap-1.5">
+                  <View
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: HEAT_COLORS[level] }}
+                  />
+                  <AppText variant="caption" className="text-muted">
+                    {HEAT_LEVEL_LABEL[level]}
+                  </AppText>
+                </View>
+              ))}
+            </View>
+
+            {!heatmapLoading && !heatmapError && heatAreas.length === 0 ? (
               <AppText variant="body" className="text-center text-muted">
-                এখনো কোনো হিট ম্যাপ তথ্য নেই।
+                এই সময়ে কোনো রোগের রিপোর্ট নেই।
               </AppText>
             ) : null}
 
-            <View className="flex-row flex-wrap gap-3">
-              {(heatmap?.regions ?? []).map((region) => {
-                const intensity =
-                  heatMapDimension === "disease"
-                    ? region.diseaseIntensity
-                    : region.priceIntensity;
-                const tone =
-                  intensity > 0.66 ? "high" : intensity > 0.33 ? "medium" : "low";
-                const bgClass =
-                  tone === "high"
-                    ? "bg-severity-high-bg"
-                    : tone === "medium"
-                      ? "bg-severity-medium-bg"
-                      : "bg-severity-low-bg";
-                const textClass =
-                  tone === "high"
-                    ? "text-severity-high"
-                    : tone === "medium"
-                      ? "text-severity-medium"
-                      : "text-severity-low";
-
-                return (
-                  <View
-                    key={region.id}
-                    style={{ width: "47%" }}
-                    className={`gap-1 rounded-3xl px-4 py-5 ${bgClass}`}
-                  >
-                    <AppText variant="body" className={`font-bengali-bold ${textClass}`}>
-                      {districtLabel(region.district)}
-                    </AppText>
-                    <AppText variant="caption" className={textClass}>
-                      {Math.round(intensity * 100)}%
-                    </AppText>
-                  </View>
-                );
-              })}
-            </View>
-
-            <View className="flex-row items-center justify-center gap-4">
-              <View className="flex-row items-center gap-1.5">
-                <View className="h-2.5 w-2.5 rounded-full bg-severity-low" />
-                <AppText variant="caption" className="text-muted">কম</AppText>
-              </View>
-              <View className="flex-row items-center gap-1.5">
-                <View className="h-2.5 w-2.5 rounded-full bg-severity-medium" />
-                <AppText variant="caption" className="text-muted">মাঝারি</AppText>
-              </View>
-              <View className="flex-row items-center gap-1.5">
-                <View className="h-2.5 w-2.5 rounded-full bg-severity-high" />
-                <AppText variant="caption" className="text-muted">বেশি</AppText>
-              </View>
-            </View>
+            {selectedArea ? (
+              <StructuredCard
+                title={selectedArea.location.nameBn}
+                icon={
+                  <Ionicons name="location" size={20} color={HEAT_COLORS[selectedArea.level]} />
+                }
+                footer={
+                  <AppText variant="caption">
+                    মোট {toBn(selectedArea.caseCount)}টি রিপোর্ট · প্রাদুর্ভাব{" "}
+                    {HEAT_LEVEL_LABEL[selectedArea.level]}
+                  </AppText>
+                }
+              >
+                <View className="gap-2">
+                  {selectedArea.diseases.map((d) => (
+                    <View
+                      key={d.diseaseType.nameEn}
+                      className="flex-row items-center justify-between rounded-2xl bg-neutral px-4 py-3"
+                    >
+                      <AppText variant="body" className="flex-1 pr-3 font-bengali-semibold text-ink">
+                        {d.diseaseType.nameBn}
+                      </AppText>
+                      <AppText variant="body" className="font-bengali-bold text-ink">
+                        {toBn(d.caseCount)}টি
+                      </AppText>
+                    </View>
+                  ))}
+                </View>
+              </StructuredCard>
+            ) : heatAreas.length > 0 ? (
+              <AppText variant="caption" className="text-center text-muted">
+                বিস্তারিত দেখতে মানচিত্রে কোনো বৃত্তে চাপ দিন।
+              </AppText>
+            ) : null}
           </>
         ) : null}
 

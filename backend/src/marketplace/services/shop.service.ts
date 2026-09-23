@@ -159,7 +159,18 @@ export class ShopService {
     if (!shop || !shop.isActive) {
       throw new NotFoundException('Shop not found or inactive.');
     }
-    return shop;
+
+    const reviewStats = await this.prisma.review.aggregate({
+      where: { product: { shopId } },
+      _avg: { rating: true },
+      _count: { rating: true },
+    });
+
+    return {
+      ...shop,
+      avgRating: Math.round((reviewStats._avg.rating ?? 0) * 10) / 10,
+      reviewCount: reviewStats._count.rating ?? 0,
+    };
   }
 
   async updateShop(ownerUserId: string, dto: UpdateShopDto) {

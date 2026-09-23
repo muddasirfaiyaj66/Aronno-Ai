@@ -202,6 +202,17 @@ export default function PublicShopScreen() {
                       {shop.phone}
                     </AppText>
                   </View>
+
+                  {/* Shop Rating */}
+                  <View className="flex-row items-center gap-1.5 mt-1 bg-amber-50 self-start px-2.5 py-1 rounded-full border border-amber-200">
+                    <Ionicons name="star" size={14} color="#F59E0B" />
+                    <AppText variant="caption" className="font-bengali-bold text-amber-800">
+                      {shop.avgRating ? toBn(shop.avgRating.toFixed(1)) : "০.০"}
+                    </AppText>
+                    <AppText variant="caption" className="font-bengali-medium text-amber-700">
+                      ({toBn(shop.reviewCount ?? 0)}টি রেটিং)
+                    </AppText>
+                  </View>
                 </View>
 
                 {shop.description ? (

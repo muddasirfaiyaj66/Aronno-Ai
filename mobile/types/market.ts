@@ -103,4 +103,6 @@ export type ShopData = {
     reviewCount?: number;
   }>;
   _count?: { products: number; orders: number };
+  avgRating?: number;
+  reviewCount?: number;
 };

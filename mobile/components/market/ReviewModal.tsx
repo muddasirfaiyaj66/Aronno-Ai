@@ -51,17 +51,18 @@ export function ReviewModal({
       <View className="flex-1 bg-black/50 items-center justify-center px-5">
         <View className="w-full rounded-3xl bg-white p-6 gap-4">
           <View className="flex-row items-center justify-between border-b border-border pb-3">
-            <AppText variant="subtitle" className="font-bengali-bold text-ink">
-              পণ্যের রিভিউ দিন
-            </AppText>
+            <View>
+              <AppText variant="subtitle" className="font-bengali-bold text-ink">
+                পণ্যটি কেমন লেগেছে?
+              </AppText>
+              <AppText variant="caption" className="font-bengali-medium text-muted mt-0.5">
+                {productName}
+              </AppText>
+            </View>
             <Pressable onPress={onClose} className="h-8 w-8 items-center justify-center rounded-full bg-neutral">
               <Ionicons name="close" size={18} color={colors.ink} />
             </Pressable>
           </View>
-
-          <AppText variant="body" className="font-bengali-semibold text-ink">
-            {productName}
-          </AppText>
 
           {/* Star Rating Picker */}
           <View className="flex-row items-center justify-center gap-3 py-2">
@@ -69,21 +70,25 @@ export function ReviewModal({
               <Pressable key={star} onPress={() => setRating(star)}>
                 <Ionicons
                   name={star <= rating ? "star" : "star-outline"}
-                  size={32}
+                  size={36}
                   color={star <= rating ? "#F59E0B" : colors.border}
                 />
               </Pressable>
             ))}
           </View>
 
+          <AppText variant="caption" className="font-bengali-semibold text-muted">
+            আপনার মতামত লিখুন
+          </AppText>
+
           <TextInput
             value={comment}
             onChangeText={setComment}
             multiline
             numberOfLines={3}
-            placeholder="পণ্যের মান ও অভিজ্ঞতার কথা লিখুন (ঐচ্ছিক)..."
+            placeholder="আপনার মতামত লিখুন..."
             placeholderTextColor={colors.muted}
-            className="min-h-[80px] rounded-2xl bg-neutral p-4 font-bengali-medium text-body text-ink"
+            className="min-h-[80px] rounded-2xl bg-neutral p-4 font-bengali-medium text-body text-ink border border-border/50"
           />
 
           {errorMsg ? (
@@ -93,7 +98,7 @@ export function ReviewModal({
           ) : null}
 
           <PrimaryButton
-            label="রিভিউ জমা দিন"
+            label="জমা দিন"
             onPress={handleSubmit}
             loading={isLoading}
             icon={<Ionicons name="checkmark-circle" size={18} color={colors.white} />}

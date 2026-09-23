@@ -74,4 +74,15 @@ export class ReviewService {
 
     return review;
   }
+
+  async getProductReviews(productId: string) {
+    return this.prisma.review.findMany({
+      where: { productId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: { select: { id: true, displayName: true, avatarUrl: true } },
+        order: { select: { id: true, orderNumber: true } },
+      },
+    });
+  }
 }

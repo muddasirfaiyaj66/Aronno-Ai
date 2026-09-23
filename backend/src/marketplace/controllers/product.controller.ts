@@ -14,6 +14,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import type { AuthUser } from '../../auth/auth.types';
 import { ProductService } from '../services/product.service';
+import { ReviewService } from '../services/review.service';
 import {
   CreateProductDto,
   FilterProductsDto,
@@ -23,7 +24,10 @@ import {
 @Controller('marketplace/products')
 @UseGuards(JwtAuthGuard)
 export class ProductController {
-  constructor(private readonly productService: ProductService) {}
+  constructor(
+    private readonly productService: ProductService,
+    private readonly reviewService: ReviewService,
+  ) {}
 
   @Public()
   @Get()
@@ -42,6 +46,13 @@ export class ProductController {
   @Get(':id')
   async getProduct(@Param('id') id: string) {
     const data = await this.productService.getProductById(id);
+    return { success: true, data };
+  }
+
+  @Public()
+  @Get(':id/reviews')
+  async getProductReviews(@Param('id') id: string) {
+    const data = await this.reviewService.getProductReviews(id);
     return { success: true, data };
   }
 

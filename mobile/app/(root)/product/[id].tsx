@@ -355,8 +355,13 @@ export default function ProductDetailScreen() {
                           </View>
                         </View>
                         {rev.comment ? (
-                          <AppText variant="caption" className="text-ink">
+                          <AppText variant="caption" className="text-ink font-bengali-medium mt-0.5">
                             {rev.comment}
+                          </AppText>
+                        ) : null}
+                        {rev.createdAt ? (
+                          <AppText variant="caption" className="text-muted font-bengali-medium mt-1">
+                            {formatDateBn(rev.createdAt)}
                           </AppText>
                         ) : null}
                       </View>

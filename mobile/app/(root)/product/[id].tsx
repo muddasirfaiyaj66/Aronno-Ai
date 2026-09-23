@@ -13,12 +13,21 @@ import {
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import { useAddItemMutation, useGetProductQuery } from "@/services/api";
+import {
+  formatCategoryBn,
+  formatDateBn,
+  formatGradeBn,
+  formatPriceBn,
+  formatUnitBn,
+  toBn,
+} from "@/utils/marketFormatters";
 
 export default function ProductDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [quantity, setQuantity] = useState(1);
   const [addedSuccess, setAddedSuccess] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   const {
     data: product,
@@ -39,7 +48,7 @@ export default function ProductDetailScreen() {
       setAddedSuccess(true);
       setTimeout(() => setAddedSuccess(false), 3000);
     } catch {
-      // Error handling
+      // Error handling handled via state
     }
   };
 
@@ -51,6 +60,16 @@ export default function ProductDetailScreen() {
 
   const minQty = product?.minOrderQuantity ?? 1;
 
+  const shopLocation = product?.shop
+    ? [
+        product.district?.nameBn ?? product.shop.district?.nameBn,
+        product.shop.upazila,
+        product.shop.address,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
+
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       {/* Header Bar */}
@@ -61,7 +80,7 @@ export default function ProductDetailScreen() {
         >
           <Ionicons name="arrow-back" size={20} color={colors.ink} />
         </Pressable>
-        <AppText variant="subtitle" className="font-bengali-bold text-ink" numberOfLines={1}>
+        <AppText variant="subtitle" className="font-bengali-bold text-ink flex-1 text-center mx-2" numberOfLines={1}>
           {product?.name ?? "পণ্যের বিবরণ"}
         </AppText>
         <Pressable
@@ -86,27 +105,60 @@ export default function ProductDetailScreen() {
           <AIGeneratingShimmer label="পণ্যের তথ্য লোড হচ্ছে" lines={5} className="w-full" />
         ) : product ? (
           <>
-            {/* Image Preview */}
-            <View className="relative h-64 w-full rounded-3xl bg-white shadow-sm overflow-hidden">
-              {product.images && product.images.length > 0 ? (
-                <Image
-                  source={{ uri: product.images[0].url }}
-                  className="h-full w-full"
-                  resizeMode="cover"
-                />
-              ) : (
-                <View className="h-full w-full items-center justify-center bg-primary/10">
-                  <Ionicons name="cube" size={48} color={colors.primary} />
-                </View>
-              )}
+            {/* Image Gallery */}
+            <View className="gap-2">
+              <View className="relative h-64 w-full rounded-3xl bg-white shadow-sm overflow-hidden border border-border/40">
+                {product.images && product.images.length > 0 ? (
+                  <Image
+                    source={{ uri: product.images[selectedImageIndex]?.url ?? product.images[0].url }}
+                    className="h-full w-full"
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View className="h-full w-full items-center justify-center bg-primary/10">
+                    <Ionicons name="cube" size={48} color={colors.primary} />
+                  </View>
+                )}
 
-              {product.isOrganic ? (
-                <View className="absolute left-4 top-4 flex-row items-center gap-1 rounded-full bg-severity-low-bg px-3 py-1 shadow-sm">
-                  <Ionicons name="leaf" size={14} color="#027A48" />
-                  <AppText variant="caption" className="font-bengali-bold text-severity-low">
-                    জৈব / অর্গানিক
-                  </AppText>
+                {/* Badges */}
+                <View className="absolute left-4 top-4 flex-row flex-wrap gap-2">
+                  {product.isOrganic ? (
+                    <View className="flex-row items-center gap-1 rounded-full bg-severity-low-bg px-3 py-1 shadow-sm">
+                      <Ionicons name="leaf" size={14} color="#027A48" />
+                      <AppText variant="caption" className="font-bengali-bold text-severity-low">
+                        জৈব পণ্য
+                      </AppText>
+                    </View>
+                  ) : null}
+                  {product.grade ? (
+                    <View className="flex-row items-center gap-1 rounded-full bg-primary/10 px-3 py-1 shadow-sm">
+                      <Ionicons name="ribbon-outline" size={14} color={colors.primary} />
+                      <AppText variant="caption" className="font-bengali-bold text-primary">
+                        {formatGradeBn(product.grade)}
+                      </AppText>
+                    </View>
+                  ) : null}
                 </View>
+              </View>
+
+              {/* Thumbnail Bar if multiple images */}
+              {product.images && product.images.length > 1 ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
+                  {product.images.map((img: any, idx: number) => {
+                    const isSelected = idx === selectedImageIndex;
+                    return (
+                      <Pressable
+                        key={idx}
+                        onPress={() => setSelectedImageIndex(idx)}
+                        className={`h-16 w-16 overflow-hidden rounded-2xl border-2 ${
+                          isSelected ? "border-primary" : "border-border"
+                        }`}
+                      >
+                        <Image source={{ uri: img.url }} className="h-full w-full" resizeMode="cover" />
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
               ) : null}
             </View>
 
@@ -115,28 +167,78 @@ export default function ProductDetailScreen() {
               title={product.name}
               icon={<Ionicons name="pricetag" size={20} color={colors.primary} />}
             >
-              <View className="gap-2">
-                <View className="flex-row items-end justify-between">
+              <View className="gap-3">
+                <View className="flex-row items-end justify-between flex-wrap gap-2">
                   <View className="flex-row items-end gap-1.5">
-                    <AppText variant="hero" style={{ fontSize: 32, lineHeight: 38 }}>
-                      ৳ {product.pricePerUnit}
-                    </AppText>
-                    <AppText variant="body" className="mb-1 text-muted">
-                      /{product.unit}
+                    <AppText variant="hero" style={{ fontSize: 30, lineHeight: 36 }}>
+                      {formatPriceBn(product.pricePerUnit, product.unit)}
                     </AppText>
                   </View>
                   <View className="rounded-full bg-primary/10 px-3 py-1">
                     <AppText variant="caption" className="font-bengali-bold text-primary">
-                      মজুদ: {product.availableQuantity} {product.unit}
+                      মজুদ: {toBn(product.availableQuantity)} {formatUnitBn(product.unit)}
                     </AppText>
                   </View>
                 </View>
 
                 {minQty > 1 ? (
-                  <AppText variant="caption" className="text-muted">
-                    সর্বনিম্ন অর্ডার: {minQty} {product.unit}
-                  </AppText>
+                  <View className="flex-row items-center gap-1">
+                    <Ionicons name="alert-circle-outline" size={14} color={colors.muted} />
+                    <AppText variant="caption" className="text-muted">
+                      সর্বনিম্ন অর্ডার পরিমাণ: {toBn(minQty)} {formatUnitBn(product.unit)}
+                    </AppText>
+                  </View>
                 ) : null}
+              </View>
+            </StructuredCard>
+
+            {/* Additional Specs Card (Category, Harvest Date, Grade) */}
+            <StructuredCard
+              title="পণ্যের তথ্য"
+              icon={<Ionicons name="information-circle" size={20} color={colors.primary} />}
+            >
+              <View className="gap-2.5">
+                {product.category ? (
+                  <View className="flex-row items-center justify-between border-b border-border/40 pb-2">
+                    <AppText variant="caption" className="font-bengali-medium text-muted">
+                      শ্রেণি
+                    </AppText>
+                    <AppText variant="body" className="font-bengali-bold text-ink">
+                      {formatCategoryBn(product.category)}
+                    </AppText>
+                  </View>
+                ) : null}
+
+                {product.harvestDate ? (
+                  <View className="flex-row items-center justify-between border-b border-border/40 pb-2">
+                    <AppText variant="caption" className="font-bengali-medium text-muted">
+                      ফসল সংগ্রহের তারিখ
+                    </AppText>
+                    <AppText variant="body" className="font-bengali-bold text-ink">
+                      {formatDateBn(product.harvestDate)}
+                    </AppText>
+                  </View>
+                ) : null}
+
+                {product.grade ? (
+                  <View className="flex-row items-center justify-between border-b border-border/40 pb-2">
+                    <AppText variant="caption" className="font-bengali-medium text-muted">
+                      মান / গ্রেড
+                    </AppText>
+                    <AppText variant="body" className="font-bengali-bold text-ink">
+                      {formatGradeBn(product.grade)}
+                    </AppText>
+                  </View>
+                ) : null}
+
+                <View className="flex-row items-center justify-between">
+                  <AppText variant="caption" className="font-bengali-medium text-muted">
+                    জৈব/অর্গানিক
+                  </AppText>
+                  <AppText variant="body" className="font-bengali-bold text-ink">
+                    {product.isOrganic ? "হ্যাঁ (জৈব)" : "না"}
+                  </AppText>
+                </View>
               </View>
             </StructuredCard>
 
@@ -145,12 +247,12 @@ export default function ProductDetailScreen() {
               title="পণ্যের বিবরণ"
               icon={<Ionicons name="document-text" size={20} color={colors.primary} />}
             >
-              <AppText variant="body" className="font-bengali-medium text-ink">
+              <AppText variant="body" className="font-bengali-medium text-ink leading-relaxed">
                 {product.description}
               </AppText>
             </StructuredCard>
 
-            {/* Seller Shop Info Card */}
+            {/* Seller & Shop Info Card */}
             {product.shop ? (
               <StructuredCard
                 title="বিক্রেতার দোকান"
@@ -160,7 +262,12 @@ export default function ProductDetailScreen() {
                     <View className="flex-1">
                       <SecondaryButton
                         label="দোকানে যান"
-                        onPress={() => router.push({ pathname: "/(root)/shop/[id]", params: { id: product.shop.id } })}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/(root)/shop/[id]",
+                            params: { id: product.shop.id },
+                          })
+                        }
                         icon={<Ionicons name="open-outline" size={18} color={colors.ink} />}
                       />
                     </View>
@@ -190,9 +297,14 @@ export default function ProductDetailScreen() {
                     <AppText variant="subtitle" className="font-bengali-bold text-ink">
                       {product.shop.name}
                     </AppText>
-                    {product.shop.owner ? (
-                      <AppText variant="caption" className="text-muted mt-0.5">
+                    {product.shop.owner?.displayName ? (
+                      <AppText variant="caption" className="text-muted mt-0.5 font-bengali-medium">
                         বিক্রেতা: {product.shop.owner.displayName}
+                      </AppText>
+                    ) : null}
+                    {shopLocation ? (
+                      <AppText variant="caption" className="text-muted mt-0.5 font-bengali-medium">
+                        📍 {shopLocation}
                       </AppText>
                     ) : null}
                   </View>
@@ -202,17 +314,17 @@ export default function ProductDetailScreen() {
 
             {/* Ratings & Reviews */}
             <StructuredCard
-              title={`রিভিউ ও রেটিং (${product.reviewCount ?? 0})`}
+              title={`রিভিউ ও রেটিং (${toBn(product.reviewCount ?? 0)})`}
               icon={<Ionicons name="star" size={20} color="#F59E0B" />}
             >
               <View className="gap-3">
                 <View className="flex-row items-center gap-2">
                   <Ionicons name="star" size={24} color="#F59E0B" />
                   <AppText variant="title" className="font-bengali-bold text-ink">
-                    {product.avgRating ? product.avgRating.toFixed(1) : "০.০"}
+                    {product.avgRating ? toBn(product.avgRating.toFixed(1)) : "০.০"}
                   </AppText>
                   <AppText variant="caption" className="text-muted">
-                    / ৫ (মোট {product.reviewCount ?? 0}টি রিভিউ)
+                    / ৫ (মোট {toBn(product.reviewCount ?? 0)}টি রিভিউ)
                   </AppText>
                 </View>
 
@@ -258,19 +370,19 @@ export default function ProductDetailScreen() {
       {product ? (
         <View className="absolute bottom-0 left-0 right-0 border-t border-border bg-white px-5 py-4 shadow-lg flex-row items-center gap-3">
           {/* Quantity Controls */}
-          <View className="flex-row items-center rounded-2xl bg-neutral px-2 py-1">
+          <View className="flex-row items-center rounded-2xl bg-neutral px-2 py-1 border border-border">
             <Pressable
               onPress={() => setQuantity((q) => Math.max(minQty, q - 1))}
-              className="h-9 w-9 items-center justify-center rounded-xl bg-white"
+              className="h-9 w-9 items-center justify-center rounded-xl bg-white shadow-xs"
             >
               <Ionicons name="remove" size={18} color={colors.ink} />
             </Pressable>
             <AppText variant="body" className="mx-3 font-bengali-bold text-ink">
-              {quantity}
+              {toBn(quantity)}
             </AppText>
             <Pressable
               onPress={() => setQuantity((q) => Math.min(product.availableQuantity, q + 1))}
-              className="h-9 w-9 items-center justify-center rounded-xl bg-white"
+              className="h-9 w-9 items-center justify-center rounded-xl bg-white shadow-xs"
             >
               <Ionicons name="add" size={18} color={colors.ink} />
             </Pressable>

@@ -650,21 +650,31 @@ export const api = createApi({
       transformResponse: (r) => unwrap<ShopData>(r),
       invalidatesTags: ["Shop"],
     }),
-    getProducts: builder.query<any[], any>({
+    getProducts: builder.query<{ items: any[]; total: number; page: number; totalPages: number }, any>({
       query: (params) => {
         const p = new URLSearchParams();
         if (params?.category) p.set("category", params.category);
         if (params?.districtId) p.set("districtId", params.districtId);
+        if (params?.shopId) p.set("shopId", params.shopId);
         if (params?.search) p.set("search", params.search);
         if (params?.sort) p.set("sort", params.sort);
+        if (params?.page) p.set("page", String(params.page));
+        if (params?.limit) p.set("limit", String(params.limit));
         const q = p.toString();
         return `/marketplace/products${q ? `?${q}` : ""}`;
       },
       transformResponse: (r) => {
-        const data = unwrap<{ items: any[]; total: number } | any[]>(r);
-        // Support both paginated { items } response and plain array
-        if (data && !Array.isArray(data) && "items" in data) return data.items;
-        return data as any[];
+        const data = unwrap<{ items: any[]; total: number; page: number; totalPages: number } | any[]>(r);
+        if (data && !Array.isArray(data) && "items" in data) {
+          return {
+            items: data.items ?? [],
+            total: data.total ?? 0,
+            page: data.page ?? 1,
+            totalPages: data.totalPages ?? 1,
+          };
+        }
+        const arr = Array.isArray(data) ? data : [];
+        return { items: arr, total: arr.length, page: 1, totalPages: 1 };
       },
       providesTags: ["Product"],
     }),

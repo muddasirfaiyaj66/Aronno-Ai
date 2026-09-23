@@ -12,6 +12,7 @@ import {
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import { useGetPublicShopQuery } from "@/services/api";
+import { formatPriceBn, formatUnitBn, toBn } from "@/utils/marketFormatters";
 
 export default function PublicShopScreen() {
   const router = useRouter();
@@ -114,7 +115,7 @@ export default function PublicShopScreen() {
             {/* Shop Products Section */}
             <View className="gap-3 mt-2">
               <AppText variant="title" className="font-bengali-bold text-ink">
-                দোকানের পণ্যসামগ্রী ({new Intl.NumberFormat("bn-BD").format(shop.products?.length ?? 0)})
+                দোকানের পণ্যসামগ্রী ({toBn(shop.products?.length ?? 0)})
               </AppText>
 
               {!shop.products || shop.products.length === 0 ? (
@@ -129,11 +130,14 @@ export default function PublicShopScreen() {
                   {shop.products.map((product) => (
                     <ListingCard
                       key={product.id}
-                      sourceName={`${product.name} · ${product.availableQuantity} ${product.unit}`}
+                      sourceName={`${product.name} · মজুদ: ${toBn(product.availableQuantity)} ${formatUnitBn(product.unit)}`}
                       thumbnailUrl={product.images?.[0]?.url}
-                      price={`৳ ${product.pricePerUnit}/${product.unit}`}
+                      price={formatPriceBn(product.pricePerUnit, product.unit)}
                       onPressLink={() => {
-                        // Navigate to product detail or order view
+                        router.push({
+                          pathname: "/(root)/product/[id]",
+                          params: { id: product.id },
+                        });
                       }}
                     />
                   ))}

@@ -41,6 +41,7 @@ export async function uploadImageWithMeta(localUri: string): Promise<CloudinaryU
   } as unknown as Blob);
   form.append("upload_preset", UPLOAD_PRESET);
 
+  console.log("[Cloudinary] Uploading to cloud:", CLOUD_NAME, "preset:", UPLOAD_PRESET);
   const res = await fetch(
     `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
     { method: "POST", body: form },
@@ -50,6 +51,7 @@ export async function uploadImageWithMeta(localUri: string): Promise<CloudinaryU
     public_id?: string;
     error?: { message?: string };
   };
+  console.log("[Cloudinary] Response status:", res.status, "body:", JSON.stringify(json));
 
   if (!res.ok || typeof json.secure_url !== "string") {
     throw new Error(

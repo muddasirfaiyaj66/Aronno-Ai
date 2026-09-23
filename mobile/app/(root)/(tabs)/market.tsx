@@ -500,6 +500,12 @@ export default function MarketScreen() {
               onEditShop={() => setShopModalVisible(true)}
               onAddProduct={() => setAddProductModalVisible(true)}
               onViewMyProducts={() => router.push("/(root)/shop/my-products")}
+              onViewPublicShop={() =>
+                router.push({
+                  pathname: "/(root)/shop/[id]",
+                  params: { id: myShop.id },
+                })
+              }
             />
           ) : (
             <ShopPromptCard onCreateShop={() => setShopModalVisible(true)} />

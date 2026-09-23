@@ -6,12 +6,14 @@ import { SecondaryButton } from "@/components/ui/SecondaryButton";
 import { StructuredCard } from "@/components/ui/StructuredCard";
 import { colors } from "@/constants/theme";
 import type { ShopData } from "@/types/market";
+import { toBn } from "@/utils/marketFormatters";
 
 type ShopDashboardViewProps = {
   shop: ShopData;
   onEditShop: () => void;
   onAddProduct: () => void;
   onViewMyProducts: () => void;
+  onViewPublicShop?: () => void;
 };
 
 export function ShopDashboardView({
@@ -19,6 +21,7 @@ export function ShopDashboardView({
   onEditShop,
   onAddProduct,
   onViewMyProducts,
+  onViewPublicShop,
 }: ShopDashboardViewProps) {
   const districtName = shop.district?.nameBn ?? "";
   const locationText = [districtName, shop.upazila, shop.address]
@@ -27,15 +30,29 @@ export function ShopDashboardView({
 
   return (
     <View className="gap-4">
+      {/* 1. দোকানের তথ্য (Shop Info Card) */}
       <StructuredCard
-        title={shop.name}
+        title="দোকানের তথ্য"
         icon={<Ionicons name="storefront" size={22} color={colors.primary} />}
         footer={
-          <SecondaryButton
-            label="দোকান সম্পাদনা করুন"
-            onPress={onEditShop}
-            icon={<Ionicons name="create-outline" size={18} color={colors.ink} />}
-          />
+          <View className="flex-row gap-2">
+            <View className="flex-1">
+              <SecondaryButton
+                label="সম্পাদনা করুন"
+                onPress={onEditShop}
+                icon={<Ionicons name="create-outline" size={18} color={colors.ink} />}
+              />
+            </View>
+            {onViewPublicShop ? (
+              <View className="flex-1">
+                <SecondaryButton
+                  label="পাবলিক পেজ"
+                  onPress={onViewPublicShop}
+                  icon={<Ionicons name="eye-outline" size={18} color={colors.ink} />}
+                />
+              </View>
+            ) : null}
+          </View>
         }
       >
         <View className="gap-3">
@@ -76,18 +93,18 @@ export function ShopDashboardView({
           <View className="flex-row items-center justify-around rounded-2xl bg-neutral py-3">
             <View className="items-center">
               <AppText variant="title" className="font-bengali-bold text-primary">
-                {new Intl.NumberFormat("bn-BD").format(shop._count?.products ?? 0)}
+                {toBn(shop._count?.products ?? 0)}
               </AppText>
-              <AppText variant="caption" className="text-muted">
+              <AppText variant="caption" className="text-muted font-bengali-medium">
                 মোট পণ্য
               </AppText>
             </View>
             <View className="h-8 w-px bg-border" />
             <View className="items-center">
               <AppText variant="title" className="font-bengali-bold text-primary">
-                {new Intl.NumberFormat("bn-BD").format(shop._count?.orders ?? 0)}
+                {toBn(shop._count?.orders ?? 0)}
               </AppText>
-              <AppText variant="caption" className="text-muted">
+              <AppText variant="caption" className="text-muted font-bengali-medium">
                 মোট অর্ডার
               </AppText>
             </View>
@@ -95,7 +112,7 @@ export function ShopDashboardView({
         </View>
       </StructuredCard>
 
-      {/* Action Buttons */}
+      {/* 2. পণ্য ব্যবস্থাপনা (Product Actions) */}
       <View className="flex-row gap-3">
         <View className="flex-1">
           <PrimaryButton
@@ -112,6 +129,22 @@ export function ShopDashboardView({
           />
         </View>
       </View>
+
+      {/* 3. অর্ডারসমূহ (Orders Section Placeholder) */}
+      <StructuredCard
+        title="অর্ডারসমূহ"
+        icon={<Ionicons name="bag-handle" size={20} color={colors.primary} />}
+      >
+        <View className="items-center justify-center py-4 gap-2">
+          <Ionicons name="time-outline" size={32} color={colors.muted} />
+          <AppText variant="body" className="font-bengali-bold text-ink text-center">
+            অর্ডার ব্যবস্থাপনা শীঘ্রই আসছে
+          </AppText>
+          <AppText variant="caption" className="text-muted text-center px-4">
+            আপনার দোকান থেকে ক্রেতাদের অর্ডারের তথ্য ও ডেলিভারি আপডেট এখানে দেখতে পাবেন।
+          </AppText>
+        </View>
+      </StructuredCard>
     </View>
   );
 }

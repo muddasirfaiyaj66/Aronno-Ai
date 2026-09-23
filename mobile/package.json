@@ -10,7 +10,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "node --max-old-space-size=8192 ./node_modules/expo/bin/cli start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "dev:phone": "bash ./scripts/dev-phone.sh"
   },
   "dependencies": {
     "@expo-google-fonts/noto-sans": "^0.4.2",

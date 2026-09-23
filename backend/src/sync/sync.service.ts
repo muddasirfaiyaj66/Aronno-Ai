@@ -52,7 +52,7 @@ export class SyncService {
     const chatTurns: { clientLocalId: string; serverId: string }[] = [];
 
     for (const d of body.diagnoses) {
-      const existing = await this.prisma.diagnosis.findUnique({
+      const existing = await this.prisma.diagnosis.findFirst({
         where: { clientLocalId: d.clientLocalId },
       });
       if (existing) {
@@ -105,7 +105,7 @@ export class SyncService {
     }
 
     for (const c of body.chatTurns) {
-      const existing = await this.prisma.chatTurn.findUnique({
+      const existing = await this.prisma.chatTurn.findFirst({
         where: { clientLocalId: c.clientLocalId },
       });
       if (existing) {

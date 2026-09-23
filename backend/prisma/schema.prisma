@@ -35,6 +35,9 @@ model District {
   listings        Listing[]
   heatMapStats    HeatMapStat[]
   diagnoses       Diagnosis[]
+  shops           Shop[]
+  products        Product[]
+  orders          Order[]
 }
 
 model Crop {
@@ -48,6 +51,7 @@ model Crop {
   yieldEstimates    YieldEstimate[]
   marketPrices      MarketPrice[]
   listings          Listing[]
+  products          Product[]
 }
 
 model LoanPurpose {
@@ -98,6 +102,11 @@ model User {
   loanApplications  LoanApplication[]
   emailTokens       EmailToken[]
   chatTurns         ChatTurn[]
+  shop              Shop?
+  sellerProducts    Product[]         @relation("SellerProducts")
+  cart              Cart?
+  buyerOrders       Order[]           @relation("BuyerOrders")
+  reviews           Review[]
 
   @@index([googleSub])
 }
@@ -549,4 +558,201 @@ model LoanApplication {
   createdAt       DateTime        @default(now())
   user            User            @relation(fields: [userId], references: [id])
   purpose         LoanPurpose     @relation(fields: [purposeId], references: [id])
+}
+
+// ==========================================
+// AGRICULTURE MARKETPLACE (Sprint 7)
+// ==========================================
+
+enum ProductCategory {
+  crops
+  vegetables
+  fruits
+  seeds
+  fertilizers
+  pesticides
+  fish
+  dairy
+  eggs
+  tools
+  other
+}
+
+enum ProductUnit {
+  kg
+  mon
+  ton
+  piece
+  liter
+  bag
+}
+
+enum ProductStatus {
+  active
+  out_of_stock
+  inactive
+}
+
+enum ProductGrade {
+  premium
+  grade_a
+  grade_b
+  standard
+}
+
+enum OrderStatus {
+  pending
+  confirmed
+  processing
+  shipped
+  delivered
+  cancelled
+}
+
+enum PaymentStatus {
+  cash_on_delivery
+  pending
+  paid
+  failed
+}
+
+type CartItem {
+  productId  String @db.ObjectId
+  quantity   Float
+  priceAtAdd Int
+}
+
+type ProductImage {
+  url      String
+  publicId String?
+}
+
+type OrderItem {
+  productId    String      @db.ObjectId
+  productName  String
+  unit         ProductUnit
+  pricePerUnit Int
+  quantity     Float
+  totalPrice   Int
+  imageUrl     String?
+}
+
+model Shop {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerUserId String   @unique @db.ObjectId
+  name        String
+  description String?
+  logoUrl     String?
+  bannerUrl   String?
+  phone       String
+  districtId  String   @db.ObjectId
+  upazila     String?
+  address     String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner    User      @relation(fields: [ownerUserId], references: [id])
+  district District  @relation(fields: [districtId], references: [id])
+  products Product[]
+  orders   Order[]
+
+  @@index([districtId])
+  @@index([isActive])
+}
+
+model Product {
+  id                String          @id @default(auto()) @map("_id") @db.ObjectId
+  shopId            String          @db.ObjectId
+  sellerUserId      String          @db.ObjectId
+  name              String
+  category          ProductCategory
+  cropId            String?         @db.ObjectId
+  description       String
+  pricePerUnit      Int
+  unit              ProductUnit
+  availableQuantity Float
+  minOrderQuantity  Float           @default(1)
+  images            ProductImage[]
+  districtId        String          @db.ObjectId
+  status            ProductStatus   @default(active)
+
+  harvestDate       DateTime?
+  grade             ProductGrade?
+  isOrganic         Boolean         @default(false)
+
+  avgRating         Float           @default(0)
+  reviewCount       Int             @default(0)
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  shop     Shop       @relation(fields: [shopId], references: [id])
+  seller   User       @relation("SellerProducts", fields: [sellerUserId], references: [id])
+  district District   @relation(fields: [districtId], references: [id])
+  crop     Crop?      @relation(fields: [cropId], references: [id])
+  reviews  Review[]
+
+  @@index([shopId])
+  @@index([sellerUserId])
+  @@index([category, status])
+  @@index([districtId])
+  @@index([status, createdAt])
+}
+
+model Cart {
+  id        String     @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String     @unique @db.ObjectId
+  items     CartItem[]
+  updatedAt DateTime   @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Order {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  orderNumber     String        @unique
+  buyerUserId     String        @db.ObjectId
+  shopId          String        @db.ObjectId
+  sellerUserId    String        @db.ObjectId
+  items           OrderItem[]
+  subtotalBdt     Int
+  deliveryFeeBdt  Int           @default(0)
+  totalBdt        Int
+  status          OrderStatus   @default(pending)
+  paymentStatus   PaymentStatus @default(cash_on_delivery)
+  shippingAddress String
+  contactPhone    String
+  districtId      String        @db.ObjectId
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  buyer    User      @relation("BuyerOrders", fields: [buyerUserId], references: [id])
+  shop     Shop      @relation(fields: [shopId], references: [id])
+  district District  @relation(fields: [districtId], references: [id])
+  reviews  Review[]
+
+  @@index([buyerUserId])
+  @@index([shopId])
+  @@index([sellerUserId])
+  @@index([status, createdAt])
+}
+
+model Review {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  productId String   @db.ObjectId
+  orderId   String   @db.ObjectId
+  userId    String   @db.ObjectId
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+  order   Order   @relation(fields: [orderId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([orderId, productId])
+  @@index([productId])
+  @@index([userId])
 }

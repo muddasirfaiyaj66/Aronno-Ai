@@ -1,11 +1,9 @@
 /**
  * On-device Gemma IT (GGUF) via llama.rn — text + optional vision (mmproj).
  */
-import {
-  initLlama,
-  type LlamaContext,
-  type TokenData,
-} from "llama.rn";
+import { NativeModules, TurboModuleRegistry } from "react-native";
+type LlamaContext = import("llama.rn").LlamaContext;
+type TokenData = import("llama.rn").TokenData;
 import {
   listInstalled,
   localMmprojPath,
@@ -18,6 +16,31 @@ import {
 } from "@/lib/modelManager/catalog";
 import { getPreferredLlmId, setPreferredLlmId } from "@/lib/modelManager/preferredLlm";
 import { logMetric, markStart } from "@/lib/offline/metrics";
+
+function getInitLlama() {
+  try {
+    const hasTurbo =
+      typeof TurboModuleRegistry !== "undefined" &&
+      !!TurboModuleRegistry.get &&
+      !!(
+        TurboModuleRegistry.get("LlamaContext") ||
+        TurboModuleRegistry.get("LlamaBridge") ||
+        TurboModuleRegistry.get("RNLlama")
+      );
+    const hasNative =
+      !!NativeModules &&
+      !!(
+        NativeModules.LlamaContext ||
+        NativeModules.LlamaBridge ||
+        NativeModules.RNLlama
+      );
+    if (!hasTurbo && !hasNative) return null;
+    const mod = require("llama.rn");
+    return mod.initLlama ?? null;
+  } catch {
+    return null;
+  }
+}
 
 let ctx: LlamaContext | null = null;
 let activeModelId: string | null = null;
@@ -82,6 +105,12 @@ export async function autoLoadLlm(
   const mmproj = localMmprojPath(choice);
   const wantVision = isMultimodalCatalogEntry(choice) && !!mmproj;
 
+  const initLlama = getInitLlama();
+  if (!initLlama) {
+    end("native-module-missing");
+    return null;
+  }
+
   try {
     ctx = await initLlama(
       {
@@ -92,12 +121,12 @@ export async function autoLoadLlm(
         // Required so media token positions stay valid.
         ctx_shift: wantVision ? false : undefined,
       },
-      (progress) => {
+      (progress: number) => {
         logMetric("llm.load.progress", progress);
       },
     );
 
-    if (wantVision && mmproj) {
+    if (wantVision && mmproj && ctx) {
       const ok = await ctx.initMultimodal({
         path: mmproj,
         use_gpu: false,
@@ -105,7 +134,7 @@ export async function autoLoadLlm(
         image_max_tokens: 256,
       });
       visionEnabled = !!ok;
-      if (ok) {
+      if (ok && ctx) {
         const support = await ctx.getMultimodalSupport().catch(() => ({
           vision: false,
           audio: false,

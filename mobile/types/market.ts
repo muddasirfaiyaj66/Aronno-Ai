@@ -73,3 +73,34 @@ export type HeatmapResponse = {
   entries: HeatmapEntry[];
   areas: HeatmapArea[];
 };
+
+export type ShopData = {
+  id: string;
+  ownerUserId: string;
+  name: string;
+  description?: string | null;
+  logoUrl?: string | null;
+  bannerUrl?: string | null;
+  phone: string;
+  districtId: string;
+  upazila?: string | null;
+  address?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  district?: { id: string; slug: string; nameBn: string };
+  owner?: { id: string; displayName: string; avatarUrl?: string | null; email?: string };
+  products?: Array<{
+    id: string;
+    name: string;
+    category: string;
+    description: string;
+    pricePerUnit: number;
+    unit: string;
+    availableQuantity: number;
+    images?: Array<{ url: string; publicId?: string }>;
+    avgRating?: number;
+    reviewCount?: number;
+  }>;
+  _count?: { products: number; orders: number };
+};

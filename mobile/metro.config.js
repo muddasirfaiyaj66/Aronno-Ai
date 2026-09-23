@@ -4,10 +4,11 @@ const { withNativeWind } = require("nativewind/metro");
 
 const config = getDefaultConfig(__dirname);
 
-// Ship TFLite binaries from assets/models/vision/
+// Ship TFLite and WASM binaries
 config.resolver.assetExts = [
-  ...new Set([...(config.resolver.assetExts ?? []), "tflite"]),
+  ...new Set([...(config.resolver.assetExts ?? []), "tflite", "wasm"]),
 ];
+
 
 // Do not crawl huge on-device model downloads — saves Metro heap on Windows.
 const blockExtra = [

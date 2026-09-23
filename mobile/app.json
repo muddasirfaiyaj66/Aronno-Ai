@@ -42,18 +42,6 @@
         "android.permission.INTERNET",
         "android.permission.ACCESS_WIFI_STATE",
         "android.permission.CHANGE_WIFI_STATE",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.BLUETOOTH",
-        "android.permission.BLUETOOTH_ADMIN",
-        "android.permission.BLUETOOTH_SCAN",
-        "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.INTERNET",
-        "android.permission.ACCESS_WIFI_STATE",
-        "android.permission.CHANGE_WIFI_STATE",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
@@ -133,14 +121,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "ebe51e56-7ffe-431e-93c5-d363f0d46e01"
+        "projectId": "a5452444-c1ca-46d3-8185-e7578405a3f7"
       }
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/ebe51e56-7ffe-431e-93c5-d363f0d46e01"
-    }
+    "owner": "shahed132"
   }
 }

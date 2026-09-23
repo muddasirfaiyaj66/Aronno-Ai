@@ -3,12 +3,27 @@
  * Supports one-shot push-to-talk and silence-ended utterances for live chat.
  */
 import { Audio } from "expo-av";
-import { ASR } from "@siteed/sherpa-onnx.rn";
-import type { AsrModelConfig } from "@siteed/sherpa-onnx.rn";
+import { NativeModules, TurboModuleRegistry } from "react-native";
+type AsrModelConfig = import("@siteed/sherpa-onnx.rn").AsrModelConfig;
 import { catalogByKind } from "@/lib/modelManager/catalog";
 import { isInstalled, localDir } from "@/lib/modelManager/modelManager";
 import { enablePlaybackAudio, enableRecordingAudio, SPEECH_RECORDING } from "@/lib/speechRecording";
 import { logMetric, markStart } from "@/lib/offline/metrics";
+
+function getASR() {
+  try {
+    const hasTurbo =
+      typeof TurboModuleRegistry !== "undefined" &&
+      !!TurboModuleRegistry.get &&
+      !!TurboModuleRegistry.get("SherpaOnnx");
+    const hasNative = !!(NativeModules && NativeModules.SherpaOnnx);
+    if (!hasTurbo && !hasNative) return null;
+    const mod = require("@siteed/sherpa-onnx.rn");
+    return mod.ASR ?? null;
+  } catch {
+    return null;
+  }
+}
 
 let ready = false;
 let recording: Audio.Recording | null = null;
@@ -42,6 +57,12 @@ function nativePath(uri: string) {
 
 export async function initSTT(): Promise<boolean> {
   const end = markStart("stt.init");
+  const ASR = getASR();
+  if (!ASR) {
+    ready = false;
+    end("native-module-missing");
+    return false;
+  }
   const entry = catalogByKind("stt")[0];
   if (!entry || !(await isInstalled(entry))) {
     ready = false;
@@ -83,6 +104,8 @@ export async function isSTTReady(): Promise<boolean> {
 }
 
 async function transcribeUri(uri: string): Promise<string> {
+  const ASR = getASR();
+  if (!ASR) return "";
   const result = await ASR.recognizeFromFile(nativePath(uri));
   return (result.text ?? "").trim();
 }

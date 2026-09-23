@@ -1,10 +1,31 @@
 const CLOUD_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
 const UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
+export type CloudinaryUploadResult = {
+  url: string;
+  publicId: string;
+};
+
+/**
+ * Upload a local image URI directly to Cloudinary using an unsigned upload preset.
+ * Returns the hosted URL (used in most places in the app).
+ */
 export async function uploadImageToCloudinary(localUri: string): Promise<string> {
+  const result = await uploadImageWithMeta(localUri);
+  return result.url;
+}
+
+/**
+ * Upload a local image URI directly to Cloudinary and return both the URL and publicId.
+ * Used by ProductImagePicker so we can track publicId for later deletion.
+ */
+export async function uploadImageWithMeta(localUri: string): Promise<CloudinaryUploadResult> {
   if (localUri.startsWith("https://") || localUri.startsWith("http://")) {
-    return localUri;
+    // Already hosted — extract publicId from URL if possible
+    const match = localUri.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.\w+)?$/);
+    return { url: localUri, publicId: match?.[1] ?? "" };
   }
+
   if (!CLOUD_NAME || !UPLOAD_PRESET) {
     throw new Error(
       "ছবি আপলোড সেটআপ সম্পূর্ণ নয়। অ্যাপে ইন্টারনেট কনফিগ ঠিক করুন।",
@@ -24,9 +45,20 @@ export async function uploadImageToCloudinary(localUri: string): Promise<string>
     `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
     { method: "POST", body: form },
   );
-  const json = (await res.json()) as { secure_url?: string; error?: { message?: string } };
+  const json = (await res.json()) as {
+    secure_url?: string;
+    public_id?: string;
+    error?: { message?: string };
+  };
+
   if (!res.ok || typeof json.secure_url !== "string") {
-    throw new Error("ছবি আপলোড করা যায়নি। ইন্টারনেট দেখে আবার চেষ্টা করুন।");
+    throw new Error(
+      json.error?.message ?? "ছবি আপলোড করা যায়নি। ইন্টারনেট দেখে আবার চেষ্টা করুন।",
+    );
   }
-  return json.secure_url;
+
+  return {
+    url: json.secure_url,
+    publicId: json.public_id ?? "",
+  };
 }

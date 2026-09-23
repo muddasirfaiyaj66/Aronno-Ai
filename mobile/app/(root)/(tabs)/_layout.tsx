@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import type { ComponentProps } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Tabs } from "expo-router";
-import type { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
+import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   Easing,
@@ -16,40 +16,36 @@ import { colors, tabBar } from "@/constants/theme";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
-function tabIcon(name: IconName, focusedName: IconName) {
-  return ({ color, focused }: { color: string; focused: boolean }) => (
-    <Ionicons
-      name={focused ? focusedName : name}
-      size={tabBar.iconSize}
-      color={color}
-    />
-  );
-}
+const LEFT_TABS = ["index", "history"] as const;
+const RIGHT_TABS = ["assistant", "market", "profile"] as const;
+const SCAN_ROUTE = "scan";
 
-function tabLabel(title: string) {
-  function TabLabel({ color }: { color: string }) {
-    return (
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.7}
-        style={{
-          color,
-          fontFamily: "NotoSansBengali_700Bold",
-          fontSize: tabBar.labelSize,
-          marginBottom: 4,
-          textAlign: "center",
-        }}
-      >
-        {title}
-      </Text>
-    );
-  }
-  return TabLabel;
-}
+const TAB_META: Record<
+  string,
+  { label: string; icon: IconName; iconFocused: IconName }
+> = {
+  index: { label: "হোম", icon: "home-outline", iconFocused: "home" },
+  history: { label: "ইতিহাস", icon: "time-outline", iconFocused: "time" },
+  assistant: {
+    label: "সহকারী",
+    icon: "chatbubbles-outline",
+    iconFocused: "chatbubbles",
+  },
+  market: {
+    label: "বাজার",
+    icon: "storefront-outline",
+    iconFocused: "storefront",
+  },
+  profile: { label: "আমি", icon: "person-outline", iconFocused: "person" },
+};
 
-function ScanTabButton({ onPress, accessibilityState }: BottomTabBarButtonProps) {
-  const focused = Boolean(accessibilityState?.selected);
+function ScanFab({
+  focused,
+  onPress,
+}: {
+  focused: boolean;
+  onPress: () => void;
+}) {
   const pulse = useSharedValue(0);
 
   useEffect(() => {
@@ -71,25 +67,29 @@ function ScanTabButton({ onPress, accessibilityState }: BottomTabBarButtonProps)
       accessibilityRole="button"
       accessibilityLabel="স্ক্যান"
       accessibilityState={{ selected: focused }}
-      className="-mt-6 items-center"
+      style={{ alignItems: "center", marginTop: -22, width: 76 }}
     >
-      <View className="items-center justify-center">
+      <View style={{ alignItems: "center", justifyContent: "center" }}>
         <Animated.View
           pointerEvents="none"
           style={[
             {
               position: "absolute",
-              height: 68,
-              width: 68,
-              borderRadius: 34,
+              height: 64,
+              width: 64,
+              borderRadius: 32,
               backgroundColor: colors.primary,
             },
             ringStyle,
           ]}
         />
         <View
-          className="h-[68px] w-[68px] items-center justify-center rounded-full"
           style={{
+            height: 64,
+            width: 64,
+            borderRadius: 32,
+            alignItems: "center",
+            justifyContent: "center",
             backgroundColor: focused ? colors.primary : colors.tertiary,
             shadowColor: colors.primary,
             shadowOpacity: 0.35,
@@ -98,10 +98,9 @@ function ScanTabButton({ onPress, accessibilityState }: BottomTabBarButtonProps)
             elevation: 8,
             borderWidth: 4,
             borderColor: colors.neutral,
-            transform: [{ perspective: 700 }, { rotateX: focused ? "8deg" : "0deg" }],
           }}
         >
-          <Ionicons name="camera" size={30} color={colors.white} />
+          <Ionicons name="camera" size={28} color={colors.white} />
         </View>
       </View>
       <Text
@@ -118,76 +117,163 @@ function ScanTabButton({ onPress, accessibilityState }: BottomTabBarButtonProps)
   );
 }
 
+function SideTab({
+  routeName,
+  routeKey,
+  focused,
+  navigation,
+}: {
+  routeName: string;
+  routeKey: string;
+  focused: boolean;
+  navigation: BottomTabBarProps["navigation"];
+}) {
+  const meta = TAB_META[routeName];
+  if (!meta) return null;
+
+  const color = focused ? colors.primary : colors.muted;
+
+  const onPress = () => {
+    const event = navigation.emit({
+      type: "tabPress",
+      target: routeKey,
+      canPreventDefault: true,
+    });
+    if (!focused && !event.defaultPrevented) {
+      navigation.navigate(routeName);
+    }
+  };
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: focused }}
+      accessibilityLabel={meta.label}
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingTop: 6,
+        minWidth: 0,
+      }}
+    >
+      <Ionicons
+        name={focused ? meta.iconFocused : meta.icon}
+        size={tabBar.iconSize}
+        color={color}
+      />
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+        style={{
+          marginTop: 2,
+          marginBottom: 2,
+          color,
+          fontFamily: "NotoSansBengali_700Bold",
+          fontSize: tabBar.labelSize,
+          textAlign: "center",
+        }}
+      >
+        {meta.label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function CenteredTabBar({ state, navigation, insets }: BottomTabBarProps) {
+  const bottomInset = Math.max(insets.bottom, 8);
+  const routesByName = Object.fromEntries(
+    state.routes.map((r) => [r.name, r]),
+  );
+
+  const scanRoute = routesByName[SCAN_ROUTE];
+  const scanFocused = scanRoute
+    ? state.index === state.routes.indexOf(scanRoute)
+    : false;
+
+  const onScanPress = () => {
+    if (!scanRoute) return;
+    const event = navigation.emit({
+      type: "tabPress",
+      target: scanRoute.key,
+      canPreventDefault: true,
+    });
+    if (!scanFocused && !event.defaultPrevented) {
+      navigation.navigate(SCAN_ROUTE);
+    }
+  };
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "flex-end",
+        height: tabBar.height + bottomInset,
+        paddingBottom: bottomInset,
+        backgroundColor: colors.white,
+        borderTopColor: colors.border,
+        borderTopWidth: 1,
+      }}
+    >
+      {/* Equal-width sides keep Scan geometrically centered */}
+      <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+        {LEFT_TABS.map((name) => {
+          const route = routesByName[name];
+          if (!route) return null;
+          return (
+            <SideTab
+              key={route.key}
+              routeName={name}
+              routeKey={route.key}
+              focused={state.index === state.routes.indexOf(route)}
+              navigation={navigation}
+            />
+          );
+        })}
+      </View>
+
+      <ScanFab focused={scanFocused} onPress={onScanPress} />
+
+      <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+        {RIGHT_TABS.map((name) => {
+          const route = routesByName[name];
+          if (!route) return null;
+          return (
+            <SideTab
+              key={route.key}
+              routeName={name}
+              routeKey={route.key}
+              focused={state.index === state.routes.indexOf(route)}
+              navigation={navigation}
+            />
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 export default function TabLayout() {
   return (
     <Tabs
+      tabBar={(props) => <CenteredTabBar {...props} />}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: {
-          height: tabBar.height,
-          paddingTop: 8,
-          backgroundColor: colors.white,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
-        },
-        tabBarItemStyle: {
-          paddingVertical: 2,
-          paddingHorizontal: 2,
-        },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "হোম",
-          tabBarIcon: tabIcon("home-outline", "home"),
-          tabBarLabel: tabLabel("হোম"),
-        }}
-      />
-      <Tabs.Screen
-        name="history"
-        options={{
-          title: "ইতিহাস",
-          tabBarIcon: tabIcon("time-outline", "time"),
-          tabBarLabel: tabLabel("ইতিহাস"),
-        }}
-      />
-      <Tabs.Screen
-        name="scan"
-        options={{
-          title: "স্ক্যান",
-          tabBarLabel: () => null,
-          tabBarIcon: () => null,
-          tabBarButton: (props) => <ScanTabButton {...props} />,
-        }}
-      />
+      <Tabs.Screen name="index" options={{ title: "হোম" }} />
+      <Tabs.Screen name="history" options={{ title: "ইতিহাস" }} />
+      <Tabs.Screen name="scan" options={{ title: "স্ক্যান" }} />
       <Tabs.Screen
         name="assistant"
-        options={{
-          title: "সহকারী",
-          tabBarHideOnKeyboard: true,
-          tabBarIcon: tabIcon("chatbubbles-outline", "chatbubbles"),
-          tabBarLabel: tabLabel("সহকারী"),
-        }}
+        options={{ title: "সহকারী", tabBarHideOnKeyboard: true }}
       />
-      <Tabs.Screen
-        name="market"
-        options={{
-          title: "বাজার",
-          tabBarIcon: tabIcon("storefront-outline", "storefront"),
-          tabBarLabel: tabLabel("বাজার"),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "প্রোফাইল",
-          tabBarIcon: tabIcon("person-outline", "person"),
-          tabBarLabel: tabLabel("আমি"),
-        }}
-      />
+      <Tabs.Screen name="market" options={{ title: "বাজার" }} />
+      <Tabs.Screen name="profile" options={{ title: "প্রোফাইল" }} />
       <Tabs.Screen
         name="models"
         options={{

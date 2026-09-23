@@ -36,7 +36,7 @@ Related:
 |------------|--------|-----------------|
 | Chat / voice assistant (Bangla) | Gemma 3 Instruct GGUF via `llama.rn` | No — download in **Model Manager** |
 | Speech-to-text | sherpa-onnx Zipformer (Bangla) | No — download in Model Manager |
-| Text-to-speech | Device TTS (`expo-speech`); sherpa TTS avoided (native abort risk) | OS voices |
+| Text-to-speech | Device TTS (`expo-speech`) with a downloaded Bangla system voice | OS voices |
 | Disease / tool scan | INT8 TFLite first; **Gemma 3 4B + mmproj** vision fallback | TFLite **yes**; Gemma download |
 | Bangla receipt (offline) | Gemma 3 4B multimodal (`mmproj-F16`) | No — needs 4B vision pack |
 | Agronomist facts (RAG) | `bn_knowledge_base.json` | **Yes** — small JSON |
@@ -116,11 +116,14 @@ Implemented in `runLlmTurn()` (`chatLoop.ts`).
    - Weather / rain / temperature from cache
    - Named disease, crop+symptoms, fertilizer FAQ from `bn_knowledge_base.json`
    - Follow-ups on prior topic (treatment / prevention / “হ্যাঁ” → scan)
-2. **No reliable facts → refuse:** if RAG returns empty and intent missed →  
-   `এ বিষয়ে আমার কাছে নিশ্চিত তথ্য নেই…` (never invent doses or °C).
-3. **Otherwise LLM** (when facts exist and Gemma is loaded):
-   - Pull RAG hits, optional recent scans, last chat lines in the **active session**
-   - `buildGroundedPrompt()` — answer only from “নির্ভরযোগ্য তথ্য”
+2. **RAG-first, model-assisted:** reviewed local facts take priority. If RAG is
+   empty, the local model may still give general, non-prescriptive farming
+   guidance; it must not invent pesticide doses, market prices, or live weather
+   numbers.
+3. **LLM response:**
+   - Pull RAG hits and optional recent scans; include earlier chat only when the
+     farmer explicitly refers to it
+   - `buildGroundedPrompt()` — RAG-first answer with safe general model guidance
    - Stream Gemma (Gemma 3 Instruct template); low temperature
    - Sanitize output
 4. Persist to `chat_sessions` / `chat_turns`; live mode speaks via `speakBangla`.
@@ -147,13 +150,14 @@ Template (conceptual):
 
 ```text
 আপনি আরণ্য — বাংলাদেশের কৃষকদের জন্য নির্ভরযোগ্য কৃষি সহায়ক।
-শুধু নিচের «নির্ভরযোগ্য তথ্য» থেকে উত্তর দিন।
-তথ্য না থাকলে এক লাইনে: এই বিষয়ে নিশ্চিত তথ্য নেই।
-অনুমান করবেন না। প্রশ্ন আবার লিখবেন না। অপ্রাসঙ্গিক অভিবাদন নয়।
+নির্ভরযোগ্য তথ্য থাকলে সেটিকে অগ্রাধিকার দিন। ‘অ্যাপের বর্তমান ডেটা’ থাকলে তার সংখ্যা ও অবস্থান হুবহু ব্যবহার করুন। তথ্য না থাকলে সাধারণ কৃষি জ্ঞান দিয়ে নিরাপদ উত্তর দিন।
+প্রমাণ ছাড়া ওষুধের মাত্রা, বাজারদর বা লাইভ আবহাওয়ার সংখ্যা বলবেন না।
+প্রশ্ন আবার লিখবেন না। অপ্রাসঙ্গিক অভিবাদন নয়।
 উত্তর: ১–৩টি সংক্ষিপ্ত বাংলা বাক্য।
 কৃষকের নাম: <firstName>              # if logged in
-নির্ভরযোগ্য তথ্য:
-- <RAG / scans / recent session lines>
+সহায়ক তথ্য:
+- <RAG / scans / explicitly requested prior context>
+- <current app data such as cached weather, when relevant>
 
 কৃষকের প্রশ্ন: <user text>
 উত্তর:
@@ -163,8 +167,8 @@ Template (conceptual):
 
 | Rule | Why |
 |------|-----|
-| Answer only from injected facts | Stops hallucination / wrong pesticide advice |
-| Explicit skip when facts empty | “100% accurate or refuse” product rule |
+| RAG facts override model knowledge | Keeps reviewed local advice consistent |
+| General answer when facts are empty | Keeps the assistant useful while avoiding prescriptions |
 | Short Bangla | Small GGUFs ramble otherwise |
 | No greeting on non-greeting turns | Models copy “শুভ সকাল…” onto every answer |
 
@@ -244,8 +248,9 @@ Have an agronomist review treatment text before production release.
 | `gemma3-270m-q8` | LLM | ~300 MB | Instruct GGUF (fast) |
 | `gemma3-1b-it-q4` | LLM | ~690 MB | **Recommended** default (better Bangla) |
 | `gemma3-4b-it-q4` | LLM + vision | ~3.3 GB | GGUF `Q4_K_M` + `mmproj-F16`; disease/tool/receipt offline images via llama.rn |
+| `qwen25-vl-3b-it-q4` | LLM + vision | ~3.27 GB | Qwen2.5-VL 3B `Q4_K_M` + `mmproj-F16`; optional Bangla-capable vision model, validate on farmer photos before production use |
 | `stt-bn-zipformer` | STT | ~90 MB | Required for live mic |
-| `tts-bn-vits` | TTS | ~110 MB | Listed; runtime speech uses **expo-speech** for stability |
+| Device Bangla TTS voice | TTS | OS-managed | Install it in the phone's text-to-speech settings; runtime uses it for stable offline speech |
 
 **On device:** `FileSystem.documentDirectory + "models/<id>/..."`.
 
@@ -272,7 +277,7 @@ Source: `liveConversation.ts` + `sttEngine.ts` + `speakBangla.ts`.
 4. `runLlmTurn` → show text → `speakBangla` (sentence chunks, preferred Bangla system voice).
 5. ~700 ms gap after TTS so the assistant’s own speech is not re-captured.
 
-**Requirements:** development build (not Expo Go), STT model downloaded, mic permission. Emulators need host mic routing enabled.
+**Requirements:** development build (not Expo Go), STT model downloaded, mic permission, and a Bangla **offline** system TTS voice installed in Android/iOS settings. Emulators need host mic routing enabled. The app must not advertise a downloaded VITS TTS pack as active while the runtime is using the device voice.
 
 ---
 

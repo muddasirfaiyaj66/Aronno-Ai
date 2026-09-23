@@ -8,6 +8,8 @@
 import { listenUntilSilence, warmSttForLive } from "@/lib/offlineVoice/sttEngine";
 import { speakOffline, stopOfflineSpeech } from "@/lib/offlineVoice/ttsEngine";
 import { persistTurn, runLlmTurn } from "@/lib/offlineChat/chatLoop";
+import { getActiveSessionId } from "@/lib/offlineChat/sessionStore";
+import { getChatSession } from "@/lib/offlineDb/queries";
 import { logMetric } from "@/lib/offline/metrics";
 
 export type LivePhase = "listening" | "hearing" | "thinking" | "speaking" | "idle";
@@ -69,6 +71,7 @@ export function startLiveConversation(
       const session = listenUntilSilence({
         onSpeech: () => handlers.onPhase("hearing"),
         onLevel: handlers.onLevel,
+        discardOnCancel: true,
       });
       cancelListen = session.cancel;
       const { text, micSilent } = await session.done;
@@ -102,7 +105,8 @@ export function startLiveConversation(
       emptyTurns = 0;
 
       handlers.onUserFinal(heard);
-      await persistTurn("user", heard);
+      const sessionId = await getActiveSessionId();
+      await persistTurn("user", heard, sessionId);
 
       handlers.onPhase("thinking");
       const assistantId = handlers.onAssistantStart();
@@ -116,6 +120,7 @@ export function startLiveConversation(
           (msg) => {
             if (msg) handlers.onNotice?.(msg);
           },
+          sessionId,
         );
       } catch (err) {
         handlers.onError?.(err);
@@ -124,9 +129,9 @@ export function startLiveConversation(
       }
       if (stopped) break;
 
-      if (reply) {
+      if (reply && (await getChatSession(sessionId))) {
         handlers.onAssistantSet?.(assistantId, reply);
-        await persistTurn("assistant", reply);
+        await persistTurn("assistant", reply, sessionId);
         handlers.onPhase("speaking");
         try {
           await speakOffline(reply);

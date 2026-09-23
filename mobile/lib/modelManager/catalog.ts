@@ -1,4 +1,4 @@
-/** Catalog of downloadable offline models (LLM / STT / TTS / vision LLM). */
+/** Catalog of downloadable offline models (LLM / STT / vision LLM). */
 
 export type ModelKind = "llm" | "stt" | "tts" | "vision";
 
@@ -17,7 +17,7 @@ export type ModelCatalogEntry = {
   /** Single-archive / single-file override URL */
   downloadUrl?: string;
   /**
-   * Multi-file download (preferred for STT/TTS — no tar.bz2 extract on device).
+   * Multi-file download (preferred for STT — no tar.bz2 extract on device).
    * Each file is saved under models/<id>/<relativePath>.
    */
   files?: { relativePath: string; url: string }[];
@@ -25,14 +25,17 @@ export type ModelCatalogEntry = {
   mmprojFile?: string;
   /** True when this LLM can take images via llama.rn initMultimodal. */
   multimodal?: boolean;
+  /** Prompt tokens required by the GGUF's instruction template. */
+  chatTemplate?: "gemma" | "chatml";
 };
 
 const HF = (repo: string, file: string) =>
   `https://huggingface.co/${repo}/resolve/main/${file}`;
 
 const BN_STT = "csukuangfj2/sherpa-onnx-streaming-zipformer-bn-vosk-2026-02-09";
-const BN_TTS = "csukuangfj/vits-coqui-bn-custom_female";
+const BN_TTS_COQUI = "csukuangfj/vits-coqui-bn-custom_female";
 const GEMMA_4B = "unsloth/gemma-3-4b-it-GGUF";
+const QWEN_VL_3B = "unsloth/Qwen2.5-VL-3B-Instruct-GGUF";
 
 export const MODEL_CATALOG: ModelCatalogEntry[] = [
   {
@@ -45,6 +48,7 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     // Must be -it (instruct). Base gemma-3-270m cannot chat.
     repo: "ggml-org/gemma-3-270m-it-GGUF",
     file: "gemma-3-270m-it-Q8_0.gguf",
+    chatTemplate: "gemma",
   },
   {
     // The google/ repo is gated (HTTP 401 without a token) — use the public mirror.
@@ -57,6 +61,7 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     repo: "unsloth/gemma-3-1b-it-GGUF",
     file: "gemma-3-1b-it-Q4_0.gguf",
     recommended: true,
+    chatTemplate: "gemma",
   },
   {
     id: "gemma3-4b-it-q4",
@@ -70,6 +75,7 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     file: "gemma-3-4b-it-Q4_K_M.gguf",
     mmprojFile: "mmproj-F16.gguf",
     multimodal: true,
+    chatTemplate: "gemma",
     files: [
       {
         relativePath: "gemma-3-4b-it-Q4_K_M.gguf",
@@ -82,10 +88,34 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     ],
   },
   {
+    id: "qwen25-vl-3b-it-q4",
+    kind: "llm",
+    nameBn: "কিউয়েন ২.৫ ভিএল · ৩বি (লেখা + ছবি)",
+    nameEn: "Qwen2.5-VL 3B Instruct + Vision",
+    // ~1.93 GB Q4_K_M GGUF + ~1.34 GB F16 vision projector.
+    sizeMb: 3270,
+    minRamMb: 7000,
+    repo: QWEN_VL_3B,
+    file: "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+    mmprojFile: "mmproj-F16.gguf",
+    multimodal: true,
+    chatTemplate: "chatml",
+    files: [
+      {
+        relativePath: "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+        url: HF(QWEN_VL_3B, "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf"),
+      },
+      {
+        relativePath: "mmproj-F16.gguf",
+        url: HF(QWEN_VL_3B, "mmproj-F16.gguf"),
+      },
+    ],
+  },
+  {
     id: "stt-bn-zipformer",
     kind: "stt",
-    nameBn: "বাংলা কণ্ঠ শনাক্তকরণ",
-    nameEn: "Bangla Speech Recognition",
+    nameBn: "বাংলা কণ্ঠ → লেখা (স্ট্রিমিং)",
+    nameEn: "Bangla Speech → Text (streaming Zipformer)",
     sizeMb: 90,
     minRamMb: 1000,
     repo: BN_STT,
@@ -99,18 +129,19 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     ],
   },
   {
-    id: "tts-bn-vits",
+    id: "tts-bn-vits-coqui",
     kind: "tts",
-    nameBn: "বাংলা কণ্ঠস্বর (উচ্চারণ)",
-    nameEn: "Bangla Voice (Speech)",
+    nameBn: "বাংলা লেখা → কণ্ঠ (VITS)",
+    nameEn: "Bangla Text → Speech (VITS Coqui female)",
+    // model.onnx ≈ 109 MB on Hugging Face
     sizeMb: 110,
     minRamMb: 1000,
-    repo: BN_TTS,
-    file: "model.onnx",
+    repo: BN_TTS_COQUI,
+    file: "tokens.txt",
     recommended: true,
     files: [
-      { relativePath: "model.onnx", url: HF(BN_TTS, "model.onnx") },
-      { relativePath: "tokens.txt", url: HF(BN_TTS, "tokens.txt") },
+      { relativePath: "model.onnx", url: HF(BN_TTS_COQUI, "model.onnx") },
+      { relativePath: "tokens.txt", url: HF(BN_TTS_COQUI, "tokens.txt") },
     ],
   },
 ];

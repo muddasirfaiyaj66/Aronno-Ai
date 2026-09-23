@@ -365,7 +365,7 @@ export default function ModelsScreen() {
               tone: loaded ? "ok" : "err",
               text: loaded
                 ? `${entry.nameBn} চালু হয়েছে — সহকারী ট্যাবে ব্যবহার করুন।`
-                : "ফাইল আছে, কিন্তু মেমোরিতে লোড হয়নি। ছোট জেমা বেছে নিন।",
+                : "ফাইল আছে, কিন্তু মেমোরিতে লোড হয়নি। ছোট মডেল বেছে নিন।",
             });
           } else {
             setBanner({
@@ -378,12 +378,12 @@ export default function ModelsScreen() {
           // Engine warms on first listen in chat / voice scan.
           setBanner({
             tone: "ok",
-            text: "বাংলা কণ্ঠ মডেল ডাউনলোড হয়েছে — সহকারীতে মাইক চাপলে চালু হবে।",
+            text: "বাংলা কণ্ঠ→লেখা মডেল ডাউনলোড হয়েছে — সহকারীতে মাইক চাপলে চালু হবে।",
           });
         } else if (entry.kind === "tts") {
           setBanner({
             tone: "ok",
-            text: "কণ্ঠ উচ্চারণ ডিভাইস TTS দিয়ে চলবে।",
+            text: "বাংলা লেখা→কণ্ঠ মডেল ডাউনলোড হয়েছে — সহকারী উত্তর জোরে পড়বে। না থাকলে ফোনের TTS ব্যবহার হবে।",
           });
         }
       })();

@@ -12,6 +12,14 @@ const nextConfig: NextConfig = {
   env: {
     ARONNO_API_ORIGIN: backend,
   },
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "res.cloudinary.com" },
+      { protocol: "https", hostname: "**.cloudinary.com" },
+      { protocol: "http", hostname: "localhost" },
+      { protocol: "http", hostname: "127.0.0.1" },
+    ],
+  },
 };
 
 export default nextConfig;

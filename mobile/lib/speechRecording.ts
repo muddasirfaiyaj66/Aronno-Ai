@@ -1,6 +1,11 @@
 import { Audio } from "expo-av";
 
-/** Mono AAC — small enough for Vercel, clear enough for Bangla STT. */
+/**
+ * Mic capture for Bangla STT + cloud upload.
+ * Use 16 kHz mono AAC — expo-av is reliable with M4A on Android, and
+ * sherpa-onnx MediaExtractor decodes AAC then resamples to 16 kHz.
+ * (Raw WAV via AndroidOutputFormat.DEFAULT often fails to create/record.)
+ */
 export const SPEECH_RECORDING: Audio.RecordingOptions = {
   isMeteringEnabled: true,
   android: {
@@ -9,7 +14,7 @@ export const SPEECH_RECORDING: Audio.RecordingOptions = {
     audioEncoder: Audio.AndroidAudioEncoder.AAC,
     sampleRate: 16000,
     numberOfChannels: 1,
-    bitRate: 48000,
+    bitRate: 96000,
   },
   ios: {
     extension: ".m4a",
@@ -17,23 +22,25 @@ export const SPEECH_RECORDING: Audio.RecordingOptions = {
     audioQuality: Audio.IOSAudioQuality.HIGH,
     sampleRate: 16000,
     numberOfChannels: 1,
-    bitRate: 48000,
+    bitRate: 96000,
     linearPCMBitDepth: 16,
     linearPCMIsBigEndian: false,
     linearPCMIsFloat: false,
   },
   web: {
     mimeType: "audio/webm",
-    bitsPerSecond: 48000,
+    bitsPerSecond: 96000,
   },
 };
+
+/** Same as SPEECH_RECORDING — kept as an alias for STT call sites. */
+export const STT_SPEECH_RECORDING = SPEECH_RECORDING;
 
 export async function enablePlaybackAudio() {
   await Audio.setAudioModeAsync({
     allowsRecordingIOS: false,
     playsInSilentModeIOS: true,
     staysActiveInBackground: false,
-    // Speaker, not earpiece — clearer assistant voice.
     playThroughEarpieceAndroid: false,
     shouldDuckAndroid: false,
   });

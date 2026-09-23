@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { ZodPipe } from '../common/pipes/zod.pipe';
 import { Errors } from '../common/errors';
 import { httpUrl } from '../common/schemas';
@@ -47,6 +48,7 @@ export class MarketController {
     private readonly heatmapService: HeatmapService,
   ) {}
 
+  @Public()
   @Get('prices')
   async prices(
     @Query('cropSlug') cropSlug?: string,
@@ -117,6 +119,7 @@ export class MarketController {
     };
   }
 
+  @Public()
   @Get('listings')
   async listings(
     @Query('cropSlug') cropSlug?: string,
@@ -200,7 +203,9 @@ export class MarketController {
   /**
    * Disease heat map built purely from stored diagnoses (each carries the
    * district where it was scanned). `days` picks the window (default 60).
+   * Public — used by the website and the mobile Market tab.
    */
+  @Public()
   @Get('heatmap')
   heatmap(@Query('days') days?: string) {
     return this.heatmapService.aggregate(clampWindowDays(days));

@@ -56,9 +56,17 @@ export class DiagnosesService {
     const buf = Buffer.from(audioBase64, 'base64');
     if (buf.length < 80 || buf.length > 4_000_000)
       throw Errors.validation({ audio: 'invalid' });
-    const prompt = `Transcribe this farmer speaking. Prefer Bangla (bn-BD).
-Return JSON only: {"transcriptBn":"..."}
-If the clip is silent or unintelligible, return {"transcriptBn":""}.`;
+    const prompt = `You are a precise, verbatim speech-to-text transcriber.
+Listen to the user speaking and transcribe the exact words spoken.
+Rules:
+1. Transcribe EXACTLY what is said. Do NOT invent, assume, summarize, or hallucinate words.
+2. Do NOT assume the speaker is talking about agriculture, crops, or farming unless they specifically say those words.
+3. If spoken in Bangla, transcribe in standard Bengali script (e.g. "কয়টা বাজে", "কেমন আছেন", "ধানের পাতা হলুদ").
+4. If spoken in English or Romanized Bangla (Banglish), transcribe faithfully.
+5. If the clip is silent, background noise, or unintelligible, return an empty string.
+6. Do NOT add any preamble, explanation, or commentary.
+
+Return JSON only: {"transcriptBn": "<exact spoken words or empty string>"}`;
     try {
       const raw = await this.gemini.generateJson<unknown>(prompt, {
         audioBuffer: buf,
@@ -74,7 +82,19 @@ If the clip is silent or unintelligible, return {"transcriptBn":""}.`;
         });
         const parsed = transcriptSchema.safeParse(raw);
         if (parsed.success) return parsed.data;
-        if (typeof raw === 'string') return { transcriptBn: raw.trim() };
+        if (typeof raw === 'string') {
+          let s = raw.trim();
+          s = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+          if (s.startsWith('{') && s.endsWith('}')) {
+            try {
+              const obj = JSON.parse(s);
+              if (typeof obj.transcriptBn === 'string') return { transcriptBn: obj.transcriptBn.trim() };
+            } catch {
+              // ignore
+            }
+          }
+          return { transcriptBn: s.replace(/^["']|["']$/g, '').trim() };
+        }
       } catch {
         // keep original error
       }

@@ -2,6 +2,9 @@
  * Bangla STT: prefer on-device sherpa when the Zipformer pack is installed;
  * fall back to cloud /diagnoses/transcribe when online.
  *
+ * Audio for offline ASR is always 16 kHz mono WAV — AAC/44.1k caused
+ * character and word errors with Zipformer recognizeFromFile.
+ *
  * Crash guard: if a previous ASR.initialize() killed the process, we skip
  * sherpa on the next launch and use cloud/text instead.
  */
@@ -14,7 +17,7 @@ import { mimeFromAudioUri, readFileBase64 } from "@/lib/readFileBase64";
 import {
   enablePlaybackAudio,
   enableRecordingAudio,
-  SPEECH_RECORDING,
+  STT_SPEECH_RECORDING,
 } from "@/lib/speechRecording";
 import { logMetric, markStart } from "@/lib/offline/metrics";
 import { api } from "@/services/api";
@@ -36,14 +39,17 @@ type AsrApi = {
 };
 let asrApi: AsrApi | null = null;
 
+/** How much louder than ambient floor counts as speech. */
 const SPEECH_ABOVE_FLOOR_DB = 5;
-const MIN_SPEECH_DB = -60;
+const MIN_SPEECH_DB = -55;
 const DEAD_MIC_DB = -72;
-const CALIBRATE_MS = 450;
-const SILENCE_MS = 1800;
-const MIN_SPEECH_MS = 450;
-const NO_SPEECH_MS = 14000;
-const MAX_UTTERANCE_MS = 20000;
+const CALIBRATE_MS = 350;
+/** Wait after last loud frame before ending. */
+const SILENCE_MS = 1600;
+const MIN_SPEECH_MS = 400;
+const NO_SPEECH_MS = 10000;
+const MAX_UTTERANCE_MS = 24000;
+const METER_POLL_MS = 90;
 
 export type ListenResult = {
   text: string;
@@ -57,7 +63,6 @@ function nativePath(uri: string) {
 async function loadCrashGuard(): Promise<void> {
   try {
     const initing = await AsyncStorage.getItem(SHERPA_INITING);
-    // Only treat a mid-init death as a hard disable (flag left behind).
     if (initing === "1") {
       sherpaDisabled = true;
       await AsyncStorage.multiSet([
@@ -135,12 +140,16 @@ export async function initSTT(opts?: { force?: boolean }): Promise<boolean> {
       end("no-native");
       return false;
     }
-    // Same config that worked before for Bangla Zipformer + recognizeFromFile.
+    // Streaming Zipformer (bn-vosk) — must use streaming:true. Offline init
+    // rejects and used to abort before any retry, which broke all voice.
     const result = await ASR.initialize({
       modelDir: nativePath(localDir(entry)),
       modelType: "transducer",
       streaming: true,
       numThreads: 2,
+      sampleRate: 16000,
+      featureDim: 80,
+      decodingMethod: "greedy_search",
       modelFiles: {
         encoder: "encoder.onnx",
         decoder: "decoder.onnx",
@@ -196,17 +205,34 @@ async function transcribeWithCloud(uri: string): Promise<string> {
   return (result.transcriptBn ?? "").trim();
 }
 
+/** Light cleanup only — never rewrite words (that adds new errors). */
+export function cleanSttTranscript(raw: string): string {
+  let s = (raw ?? "").trim();
+  if (!s) return "";
+  // Strip model tags / bracket noise
+  s = s.replace(/<[^>]+>/g, "");
+  s = s.replace(/\[[^\]]*\]/g, "");
+  // Zero-width / BOM that break Bangla rendering and matching
+  s = s.replace(/[\u200B-\u200D\uFEFF]/g, "");
+  // Normalize Arabic/Bangla punctuation spacing
+  s = s.replace(/\s*([।!?.,;:])\s*/g, "$1 ");
+  s = s.replace(/\s+/g, " ").trim();
+  // Collapse runaway character stutter (aaaa → aa) without touching doubles
+  s = s.replace(/(.)\1{3,}/gu, "$1$1");
+  return s.trim();
+}
+
 async function transcribeUri(uri: string): Promise<string> {
   const end = markStart("stt.recognize");
   try {
     if (ready) {
-      const offline = await transcribeWithSherpa(uri);
-      if (offline) {
+      const offline = cleanSttTranscript(await transcribeWithSherpa(uri));
+      if (offline && offline.length >= 1) {
         end(`offline:${offline.slice(0, 40)}`);
         return offline;
       }
     }
-    const cloud = await transcribeWithCloud(uri);
+    const cloud = cleanSttTranscript(await transcribeWithCloud(uri));
     end(cloud ? `cloud:${cloud.slice(0, 40)}` : "empty");
     return cloud;
   } catch (err) {
@@ -222,7 +248,7 @@ async function ensureMicPermission(): Promise<boolean> {
 
 async function beginRecording(): Promise<Audio.Recording> {
   await enableRecordingAudio();
-  const created = await Audio.Recording.createAsync(SPEECH_RECORDING);
+  const created = await Audio.Recording.createAsync(STT_SPEECH_RECORDING);
   recording = created.recording;
   return created.recording;
 }
@@ -242,7 +268,9 @@ async function endRecordingAndTranscribe(
   }
 }
 
-async function prepareEngine(forceOffline = false): Promise<"offline" | "cloud" | "none"> {
+async function prepareEngine(
+  forceOffline = false,
+): Promise<"offline" | "cloud" | "none"> {
   if (forceOffline) {
     await resetSherpaCrashGuard();
   } else {
@@ -260,7 +288,6 @@ async function prepareEngine(forceOffline = false): Promise<"offline" | "cloud" 
 /** Call once when user confirms কণ্ঠ চালু — restores offline STT if files exist. */
 export async function warmSttForLive(): Promise<"offline" | "cloud" | "none"> {
   if (ready) return "offline";
-  // Only force-clear crash guard when we have files but aren't warm yet.
   if (await hasOfflineSttFiles()) {
     return prepareEngine(true);
   }
@@ -269,12 +296,15 @@ export async function warmSttForLive(): Promise<"offline" | "cloud" | "none"> {
 }
 
 /**
- * Record until speech + silence, then offline or cloud STT.
+ * Record until speech + trailing silence, then offline or cloud STT.
+ * If `cancel()` is called after speech started, still decode the clip
+ * (push-to-talk stop). Pass `{ discardOnCancel: true }` to drop audio.
  */
 export function listenUntilSilence(handlers?: {
   onListening?: () => void;
   onSpeech?: () => void;
   onLevel?: (level: number) => void;
+  discardOnCancel?: boolean;
 }): { cancel: () => void; done: Promise<ListenResult> } {
   let cancelled = false;
   let cancelResolve: (() => void) | null = null;
@@ -282,6 +312,7 @@ export function listenUntilSilence(handlers?: {
     cancelResolve = resolve;
   });
   const empty: ListenResult = { text: "", micSilent: false };
+  const discardOnCancel = handlers?.discardOnCancel === true;
 
   const discard = async (rec: Audio.Recording) => {
     try {
@@ -321,7 +352,7 @@ export function listenUntilSilence(handlers?: {
 
     while (!cancelled) {
       await Promise.race([
-        new Promise((r) => setTimeout(r, 100)),
+        new Promise((r) => setTimeout(r, METER_POLL_MS)),
         cancelWait,
       ]);
       if (cancelled) break;
@@ -343,7 +374,7 @@ export function listenUntilSilence(handlers?: {
       handlers?.onLevel?.(Math.min(1, Math.max(0, (db + 60) / 50)));
 
       if (!sawMetering) {
-        if (elapsed >= 5000) {
+        if (elapsed >= 6000) {
           heardSpeech = true;
           break;
         }
@@ -368,7 +399,7 @@ export function listenUntilSilence(handlers?: {
         }
         lastLoudAt = now;
       } else if (!heardSpeech) {
-        floor = floor * 0.95 + db * 0.05;
+        floor = floor * 0.92 + db * 0.08;
       }
 
       const speechLongEnough =
@@ -381,10 +412,25 @@ export function listenUntilSilence(handlers?: {
 
     handlers?.onLevel?.(0);
 
-    if (cancelled) {
+    if (cancelled && discardOnCancel) {
       await discard(rec);
       return empty;
     }
+
+    // Toggle-stop: always try to decode if we recorded long enough, even when
+    // metering never crossed the speech threshold (quiet mics / soft speech).
+    if (cancelled && !heardSpeech) {
+      const elapsed = Date.now() - startedAt;
+      if (elapsed >= 700) {
+        return {
+          text: await endRecordingAndTranscribe(rec),
+          micSilent: sawMetering && maxDb < DEAD_MIC_DB,
+        };
+      }
+      await discard(rec);
+      return empty;
+    }
+
     if (!heardSpeech) {
       await discard(rec);
       return { text: "", micSilent: sawMetering && maxDb < DEAD_MIC_DB };
@@ -402,52 +448,33 @@ export function listenUntilSilence(handlers?: {
   };
 }
 
+/**
+ * Toggle listen: records until stop() — always transcribes the clip.
+ * Also auto-ends after trailing silence for hands-free turns.
+ */
 export function startListening(
   onPartial: (text: string) => void,
   onFinal: (text: string) => void,
 ): () => void {
-  let stopped = false;
-  let rec: Audio.Recording | null = null;
+  let finished = false;
+  const finish = (text: string) => {
+    if (finished) return;
+    finished = true;
+    onFinal(text);
+  };
 
-  void (async () => {
-    const mode = await prepareEngine();
-    if (mode === "none") {
-      onFinal("");
-      return;
-    }
-    try {
-      if (!(await ensureMicPermission())) {
-        onFinal("");
-        return;
-      }
-      rec = await beginRecording();
-      onPartial("…");
-      await new Promise((r) => setTimeout(r, MAX_UTTERANCE_MS));
-      if (stopped || !rec) {
-        onFinal("");
-        return;
-      }
-      const text = await endRecordingAndTranscribe(rec);
-      rec = null;
-      onFinal(text);
-    } catch {
-      onFinal("");
-    }
-  })();
+  const session = listenUntilSilence({
+    onListening: () => onPartial("…"),
+    onSpeech: () => onPartial("শুনছি…"),
+    discardOnCancel: false,
+  });
+
+  void session.done.then((result) => {
+    finish(result.text);
+  });
 
   return () => {
-    if (stopped) return;
-    stopped = true;
-    void (async () => {
-      const active = rec ?? recording;
-      recording = null;
-      rec = null;
-      if (!active) {
-        onFinal("");
-        return;
-      }
-      onFinal(await endRecordingAndTranscribe(active));
-    })();
+    session.cancel();
   };
 }
 

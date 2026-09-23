@@ -37,9 +37,6 @@ const WEATHER_HINTS =
 const TOOL_HINTS =
   /যন্ত্রপাতি|হাতিয়ার|কৃষি\s*যন্ত্র|মেশিন|টুল|কোদাল|নিদানি|বেলচা|স্প্রেয়ার|ঠেলা|ঝাঁঝরি|বালতি|রেক|দা\s*কাটারি|চাষ/i;
 
-const FARM_HINTS =
-  /ফসল|কৃষি|সার|সেচ|ধান|আমন|বোরো|টমেটো|আলু|মরিচ|চাষ|জমি|বীজ|রোপণ/i;
-
 const SEASON_BY_MONTH: { months: number[]; tip: string }[] = [
   {
     months: [3, 4, 5],
@@ -217,8 +214,6 @@ export function retrieveContext(userTextBn: string): string[] {
           ? "ধান চাষে কোদাল/নিদানি, বেলচা, সেচের ঝাঁঝরি/বালতি, স্প্রেয়ার ও ঠেলাগাড়ি সাধারণত লাগে। "
           : "চাষাবাদে সাধারণ কৃষি হাতিয়ার: ") + catalog,
     });
-  } else if (FARM_HINTS.test(userTextBn) && scored.length < 2) {
-    scored.push({ score: 5, text: seasonTipBn() });
   }
 
   scored.sort((a, b) => b.score - a.score);

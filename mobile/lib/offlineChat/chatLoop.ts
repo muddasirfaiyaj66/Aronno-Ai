@@ -1,14 +1,14 @@
 /**
- * Offline chat: load Gemma and stream real model replies.
- * Fast intents only for greetings / time / thanks (no farming canned text).
- * RAG facts are optional grounding — model still answers when facts are thin.
+ * Offline chat pipeline: Intent + RAG + on-device LLM.
+ * Intent and RAG supply grounded facts; every user-facing reply is streamed
+ * from the offline model (never returned as canned text).
  */
 import { streamOffline } from "@/lib/offlineVoice/ttsEngine";
 import {
   buildWelcomeBn,
+  cachedWeather,
   currentUserFirstName,
   retrieveContext,
-  seasonTipBn,
 } from "@/lib/offlineNlu/retrieve";
 import {
   ensureLlmLoaded,
@@ -19,13 +19,14 @@ import {
 import { logMetric, markStart } from "@/lib/offline/metrics";
 import {
   insertChatTurn,
+  getChatSession,
   recentChatForPrompt,
   recentChatHistoryTurns,
   recentScansForPrompt,
   renameChatSession,
 } from "@/lib/offlineDb/queries";
 import { requestSyncSoon } from "@/lib/offlineDb/syncEngine";
-import { answerByIntent } from "@/lib/offlineChat/intents";
+import { gatherIntentContext } from "@/lib/offlineChat/intents";
 import {
   getActiveSessionId,
   getSessionTopic,
@@ -40,22 +41,37 @@ export { buildWelcomeBn };
 const LOAD_FAIL_REPLY =
   "জেমা মডেল এখন চালু নেই। মডেল ম্যানেজার খুলে ডাউনলোড করা জেমাতে «চালু করুন» চাপুন, তারপর এখানে আবার জিজ্ঞাসা করুন।";
 
-/** Only short social turns skip the model — farming always goes to Gemma. */
-const FAST_INTENT_ONLY =
-  /^(?:হ্যালো+|হেলো|হাই|hello|hi|hey|নমস্কার|আসসালামু\s*আলাইকুম|সালাম|শুভ\s*(?:সকাল|দুপুর|বিকেল|সন্ধ্যা)|ধন্যবাদ|থ্যাংক|thank|বিদায়|আল্লাহ\s*হাফেজ|bye|কয়টা\s*বাজে|সময়\s*কত|তারিখ|কেমন\s*আছ)/i;
+/** Only send earlier chat turns when the farmer explicitly refers to them. */
+const WANTS_SESSION_CONTEXT_RE =
+  /আগের|পূর্বের|সেই|সেটা|ওটা|এটা|তারপর|আবার|হ্যাঁ|ঠিক আছে|বললাম|ওই রোগ|ওই ফসল|আগের কথা/i;
+
+const WANTS_WEATHER_CONTEXT_RE =
+  /বৃষ্টি|আবহাওয়া|তাপমাত্রা|টেম্পারেচার|কুয়াশা|ঝড়|রোদ|রৌদ্র|\b(?:weather|rain|temp|temperature|humidity)\b|স্প্রে|সেচ/i;
+
+const WANT_SCAN_RE =
+  /রোগ|দাগ|পাতা|হলুদ|পোকা|ছত্রাক|ব্লাইট|স্ক্যান|চিকিৎসা|লক্ষণ|ফসল|টমেটো|ধান|আলু|মরিচ/i;
 
 export function buildChatPrompt(
   userTextBn: string,
   extraContext: string[] = [],
+  intentLabel?: string,
 ): string {
   const name = currentUserFirstName();
-  const facts = extraContext.filter(Boolean).slice(0, 5);
+  const facts = extraContext.filter(Boolean).slice(0, 8);
 
   return [
     "আপনি আরণ্য — বাংলাদেশের কৃষকদের অফলাইন কৃষি সহায়ক।",
     "বাংলায় ২–৪টি সংক্ষিপ্ত, ব্যবহারিক বাক্যে উত্তর দিন।",
     "প্রশ্ন আবার লিখবেন না। ইংরেজি ট্যাগ/প্রম্পট কপি করবেন না। অপ্রয়োজনীয় অভিবাদন দেবেন না।",
-    "ফসল, রোগ, সার, সেচ, হাতিয়ার, আবহাওয়া — যা জানেন সাহায্য করুন। নিশ্চিত না হলে সাধারণ সতর্ক পরামর্শ দিন এবং স্ক্যান/কৃষি অফিসের কথা বলুন।",
+    intentLabel
+      ? `সনাক্তকৃত উদ্দেশ্য: ${intentLabel} — এই উদ্দেশ্য অনুযায়ী উত্তর গঠন করুন।`
+      : "",
+    "‘সহায়ক তথ্য’ এবং ‘যাচাইকৃত’ লাইনগুলো প্রামাণিক। সেগুলোর সংখ্যা/নাম/নির্দেশের সঙ্গে বিরোধ করবেন না; নিজের ভাষায় গুছিয়ে বলুন।",
+    "কৃষির বাইরের সাধারণ প্রশ্ন (সময়, তারিখ, অভিবাদন) হলে সরাসরি উত্তর দিন — কৃষি তথ্য জোর করে ঢোকাবেন না।",
+    "'অ্যাপের বর্তমান ডেটা' থাকলে সেটিই প্রশ্নের নির্দিষ্ট সংখ্যা। ওই মান হুবহু ব্যবহার করুন; নতুন সংখ্যা বানাবেন না।",
+    "সহায়ক তথ্য না থাকলে সাধারণ নিরাপদ পরামর্শ দিতে পারেন। প্রমাণ ছাড়া ওষুধের নির্দিষ্ট নাম/মাত্রা বা লাইভ বাজারদর বলবেন না।",
+    "নিশ্চিত না হলে লক্ষণ, ছবি স্ক্যান ও কৃষি অফিসের পরামর্শ চাইবেন।",
+    "প্রশ্ন বুঝতে না পারলে 'আমি বুঝতে পারিনি, আবার বলুন' বলুন।",
     name ? `কৃষকের নাম: ${name} (নিজেকে এই নাম বলবেন না)` : "",
     facts.length ? `সহায়ক তথ্য:\n- ${facts.join("\n- ")}` : "",
     "",
@@ -77,7 +93,6 @@ export function buildGroundedPrompt(
 export type ChatTurnHandlers = {
   onPartialTranscript?: (text: string) => void;
   onFinalTranscript?: (text: string) => void;
-  /** Optional: “মডেল লোড হচ্ছে…” while ensureLlmLoaded runs */
   onStatus?: (textBn: string) => void;
   onTextChunk: (token: string) => void;
   onDone: () => void;
@@ -93,12 +108,13 @@ function emitAll(
   return text;
 }
 
-/** One chat turn: load Gemma if needed, then stream model tokens. */
+/** Intent → RAG → offline LLM stream. */
 export async function runLlmTurn(
   userTextBn: string,
   onTextChunk: (token: string) => void,
   shouldContinue: () => boolean = () => true,
   onStatus?: (textBn: string) => void,
+  sessionIdOverride?: string,
 ): Promise<string> {
   const end = markStart("chat.llm");
   const cleaned = userTextBn.trim();
@@ -112,59 +128,61 @@ export async function runLlmTurn(
   let recentLines: string[] = [];
 
   try {
-    sessionId = await getActiveSessionId();
+    sessionId = sessionIdOverride ?? (await getActiveSessionId());
     topic = await getSessionTopic(sessionId);
     recentLines = await recentChatForPrompt(4, sessionId).catch(() => []);
   } catch {
     // continue
   }
 
-  // Fast path: greetings / time only — not farming.
-  if (FAST_INTENT_ONLY.test(cleaned) && cleaned.length < 48) {
-    try {
-      const intent = await answerByIntent(cleaned, {
-        topic,
-        hasHistory: recentLines.length > 0,
-      });
-      if (intent) {
-        if (intent.topic && sessionId) {
-          await setSessionTopic(intent.topic, sessionId).catch(() => undefined);
-        }
-        emitAll(intent.text, onTextChunk, shouldContinue);
-        end("intent");
-        return intent.text;
-      }
-    } catch {
-      // fall through to model
-    }
+  // 1) Intent — grounded facts only (never the final reply)
+  const intentHit = await gatherIntentContext(cleaned, {
+    topic,
+    hasHistory: recentLines.length > 0,
+  }).catch(() => null);
+
+  if (intentHit?.topic && sessionId) {
+    await setSessionTopic(intentHit.topic, sessionId).catch(() => undefined);
   }
 
-  const wantScan =
-    /রোগ|দাগ|পাতা|হলুদ|পোকা|ছত্রাক|ব্লাইট|স্ক্যান|চিকিৎসা|লক্ষণ|ফসল|টমেটো|ধান|আলু|মরিচ/i.test(
-      cleaned,
-    );
+  const wantScan = WANT_SCAN_RE.test(cleaned);
+  const wantsSessionContext = WANTS_SESSION_CONTEXT_RE.test(cleaned);
 
   const [scans, history] = await Promise.all([
     wantScan
       ? recentScansForPrompt().catch(() => [] as string[])
       : Promise.resolve([] as string[]),
-    sessionId
+    sessionId && wantsSessionContext
       ? recentChatHistoryTurns(6, sessionId).catch(() => [] as LlmHistoryTurn[])
       : Promise.resolve([] as LlmHistoryTurn[]),
   ]);
 
-  let rag = retrieveContext(cleaned);
-  if (!rag.length) {
-    rag = [seasonTipBn()];
-  }
+  // 2) RAG + live app data
+  const rag = retrieveContext(cleaned);
+  const weather =
+    !intentHit || intentHit.intent !== "weather"
+      ? WANTS_WEATHER_CONTEXT_RE.test(cleaned)
+        ? cachedWeather()
+        : null
+      : null;
+  const appData = weather
+    ? [
+        `অ্যাপের বর্তমান ডেটা — স্থান: ${weather.locationBn || "অজানা"}; তাপমাত্রা: ${weather.tempC}°সে; অবস্থা: ${weather.conditionBn}; আর্দ্রতা: ${weather.humidity}%; বাতাস: ${weather.windKph} কিমি/ঘণ্টা; বৃষ্টিপাত: ${weather.precipitationMm} মিমি; বৃষ্টির সম্ভাবনা: ${weather.precipProb}%. এই ডেটার সংখ্যাগুলোই ব্যবহার করুন।`,
+      ]
+    : [];
 
+  // 3) Merge: intent facts first (precise), then RAG, scans, history
   const facts = [
+    ...(intentHit?.facts ?? []),
+    ...appData,
     ...rag,
     ...scans,
-    ...(recentLines.length ? [`আগের আলোচনা:\n${recentLines.slice(-2).join("\n")}`] : []),
+    ...(wantsSessionContext && recentLines.length
+      ? [`আগের আলোচনা:\n${recentLines.slice(-2).join("\n")}`]
+      : []),
   ];
 
-  // Load the real Gemma model — this is what the farmer asked for.
+  // 4) Always generate from the offline model
   if (!isLlmReady()) {
     onStatus?.("জেমা মডেল লোড হচ্ছে… একটু অপেক্ষা করুন");
     const loaded = await ensureLlmLoaded().catch(() => null);
@@ -181,13 +199,12 @@ export async function runLlmTurn(
     return "";
   }
 
-  const prompt = buildChatPrompt(cleaned, facts);
+  const prompt = buildChatPrompt(cleaned, facts, intentHit?.intent);
   let full = "";
   let prefixBuf = "";
   let prefixDone = false;
 
   const feed = (token: string) => {
-    if (!shouldContinue()) return;
     if (!prefixDone) {
       prefixBuf += token;
       if (prefixBuf.length < 12 && !/[\n।.!?]/.test(prefixBuf)) return;
@@ -196,11 +213,11 @@ export async function runLlmTurn(
       prefixBuf = "";
       if (!cleanedPrefix) return;
       full += cleanedPrefix;
-      onTextChunk(cleanedPrefix);
+      if (shouldContinue()) onTextChunk(cleanedPrefix);
       return;
     }
     full += token;
-    onTextChunk(token);
+    if (shouldContinue()) onTextChunk(token);
   };
 
   try {
@@ -229,16 +246,18 @@ export async function runLlmTurn(
     reply = LOAD_FAIL_REPLY;
     if (shouldContinue()) onTextChunk(reply);
   }
-  end("ok");
+  end(intentHit ? `ok:${intentHit.intent}` : "ok");
   return reply;
 }
 
 export async function persistTurn(
   role: "user" | "assistant",
   text: string,
+  sessionIdOverride?: string,
 ): Promise<void> {
   try {
-    const sessionId = await getActiveSessionId();
+    const sessionId = sessionIdOverride ?? (await getActiveSessionId());
+    if (sessionIdOverride && !(await getChatSession(sessionId))) return;
     await insertChatTurn(role, text, undefined, sessionId);
     if (role === "user") {
       const sessTurns = await recentChatForPrompt(2, sessionId).catch(() => []);
@@ -259,27 +278,36 @@ export async function replyToText(
   handlers: Pick<
     ChatTurnHandlers,
     "onTextChunk" | "onDone" | "onError" | "onStatus"
-  >,
+  > & {
+    shouldContinue?: () => boolean;
+  },
 ): Promise<void> {
   const cleaned = userTextBn.trim();
   if (!cleaned) {
     handlers.onDone();
     return;
   }
-  await persistTurn("user", cleaned);
+  const shouldContinue = handlers.shouldContinue ?? (() => true);
+  const sessionId = await getActiveSessionId();
+  await persistTurn("user", cleaned, sessionId);
   try {
     const reply = await runLlmTurn(
       cleaned,
       handlers.onTextChunk,
-      () => true,
+      shouldContinue,
       handlers.onStatus,
+      sessionId,
     );
-    if (reply) await persistTurn("assistant", reply);
+    if (reply && (await getChatSession(sessionId))) {
+      await persistTurn("assistant", reply, sessionId);
+    }
   } catch (err) {
-    handlers.onError?.(err);
+    if (shouldContinue()) handlers.onError?.(err);
     try {
-      handlers.onTextChunk(LOAD_FAIL_REPLY);
-      await persistTurn("assistant", LOAD_FAIL_REPLY);
+      if (shouldContinue()) handlers.onTextChunk(LOAD_FAIL_REPLY);
+      if (await getChatSession(sessionId)) {
+        await persistTurn("assistant", LOAD_FAIL_REPLY, sessionId);
+      }
     } catch {
       // ignore
     }
@@ -303,15 +331,17 @@ export async function startChatTurn(
           handlers.onDone();
           return;
         }
-        await persistTurn("user", cleaned);
+        const sessionId = await getActiveSessionId();
+        await persistTurn("user", cleaned, sessionId);
         const reply = await runLlmTurn(
           cleaned,
           handlers.onTextChunk,
           () => true,
           handlers.onStatus,
+          sessionId,
         );
-        if (reply) {
-          await persistTurn("assistant", reply);
+        if (reply && (await getChatSession(sessionId))) {
+          await persistTurn("assistant", reply, sessionId);
           void streamOffline(reply);
         }
       } catch (err) {

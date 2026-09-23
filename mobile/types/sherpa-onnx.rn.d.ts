@@ -18,6 +18,8 @@ declare module "@siteed/sherpa-onnx.rn" {
     modelFile: string;
     tokensFile: string;
     numThreads?: number;
+    lexiconFile?: string;
+    dataDir?: string;
   };
 
   export const ASR: {

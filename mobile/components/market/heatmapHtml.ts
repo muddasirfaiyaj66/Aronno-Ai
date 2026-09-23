@@ -61,10 +61,11 @@ export function heatmapHtml(areas: HeatmapArea[], bridge: "native" | "iframe") {
   var zones = ${zones};
   var map = L.map('map', { zoomControl: true, attributionControl: true });
   map.fitBounds(${JSON.stringify(BD_BOUNDS)});
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
     maxZoom: 12,
     minZoom: 6,
-    attribution: '&copy; OpenStreetMap contributors'
+    subdomains: 'abcd',
+    attribution: '&copy; OpenStreetMap &copy; CARTO'
   }).addTo(map);
   var selected = null;
   zones.forEach(function (z) {

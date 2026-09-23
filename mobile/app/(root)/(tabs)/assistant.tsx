@@ -82,7 +82,7 @@ const JUNK_RE =
 
 function cleanBubbleText(role: Bubble["role"], text: string) {
   if (role !== "assistant") return text;
-  return sanitizeAssistantReply(text);
+  return sanitizeAssistantReply(text, { allowGreeting: true });
 }
 
 const PHASE_COPY: Record<
@@ -320,6 +320,8 @@ export default function AssistantScreen() {
     null,
   );
   const liveRef = useRef<LiveConversationHandle | null>(null);
+  /** Bumped on new chat / switch / delete so in-flight replies cannot paint the wrong screen. */
+  const chatGenRef = useRef(0);
   const level = useRef(new Animated.Value(0)).current;
   const user = useAppSelector((s) => s.auth.user);
   const firstName = user?.displayName?.trim().split(/\s+/)[0];
@@ -451,24 +453,47 @@ export default function AssistantScreen() {
     );
   }
 
+  function bumpChatGen() {
+    chatGenRef.current += 1;
+    return chatGenRef.current;
+  }
+
+  function abortInFlightUi() {
+    bumpChatGen();
+    liveRef.current?.stop();
+    liveRef.current = null;
+    setLivePhase("idle");
+    setTyping(false);
+    setLoadHint("");
+  }
+
   async function sendText(text: string) {
     const cleaned = text.trim();
     if (!cleaned || busy) return;
     setDraft("");
+    const gen = chatGenRef.current;
+    const stillThisChat = () => chatGenRef.current === gen;
     append("user", cleaned);
     const assistantId = append("assistant", "");
     setTyping(true);
     // First Gemma load can take 30–90s on phones.
-    const unlock = setTimeout(() => setTyping(false), 120000);
+    const unlock = setTimeout(() => {
+      if (stillThisChat()) setTyping(false);
+    }, 120000);
     try {
       await replyToText(cleaned, {
+        shouldContinue: stillThisChat,
         onStatus: (msg) => {
+          if (!stillThisChat()) return;
           if (msg) setLoadHint(msg);
           else setLoadHint("");
         },
-        onTextChunk: (token) => appendToBubble(assistantId, token),
+        onTextChunk: (token) => {
+          if (stillThisChat()) appendToBubble(assistantId, token);
+        },
         onDone: () => {
           clearTimeout(unlock);
+          if (!stillThisChat()) return;
           setTyping(false);
           setLoadHint("");
           void refreshSessions();
@@ -476,10 +501,15 @@ export default function AssistantScreen() {
             .then((m) => setLlmReady(m.isLlmReady()))
             .catch(() => undefined);
         },
-        onError: (err) => append("notice", userFacingError(err, "chat")),
+        onError: (err) => {
+          if (stillThisChat()) {
+            append("notice", userFacingError(err, "chat"));
+          }
+        },
       });
     } catch (err) {
       clearTimeout(unlock);
+      if (!stillThisChat()) return;
       setTyping(false);
       setLoadHint("");
       append("notice", userFacingError(err, "chat"));
@@ -543,7 +573,7 @@ export default function AssistantScreen() {
   }
 
   async function newChat() {
-    if (live) stopLive();
+    abortInFlightUi();
     const id = await startNewChatSession();
     setActiveSessionIdState(id);
     setBubbles([]);
@@ -556,7 +586,7 @@ export default function AssistantScreen() {
   }
 
   async function selectSession(id: string) {
-    if (live) stopLive();
+    abortInFlightUi();
     await switchChatSession(id);
     setActiveSessionIdState(id);
     await loadSessionBubbles(id);
@@ -571,6 +601,7 @@ export default function AssistantScreen() {
         style: "destructive",
         onPress: () => {
           void (async () => {
+            abortInFlightUi();
             await deleteChatSession(id);
             if (activeSessionId === id) {
               const next = await startNewChatSession();
@@ -592,6 +623,7 @@ export default function AssistantScreen() {
         style: "destructive",
         onPress: () => {
           void (async () => {
+            abortInFlightUi();
             if (activeSessionId) {
               await clearChatTurns(activeSessionId);
             }

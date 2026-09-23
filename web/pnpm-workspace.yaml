@@ -1,0 +1,6 @@
+# Single-package project settings for pnpm v12+
+nodeLinker: hoisted
+
+# Allow eslint resolver native build (optional; keeps install non-interactive)
+allowBuilds:
+  unrs-resolver: true

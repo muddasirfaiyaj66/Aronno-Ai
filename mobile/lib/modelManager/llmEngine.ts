@@ -1,5 +1,5 @@
 /**
- * On-device Gemma IT (GGUF) via llama.rn — text + optional vision (mmproj).
+ * On-device Gemma / Qwen GGUF via llama.rn — text + optional vision (mmproj).
  * Lazy-import native module; single-flight load so chat + models UI share one ctx.
  */
 import type { LlamaContext, TokenData } from "llama.rn";
@@ -151,6 +151,7 @@ async function loadLlmEntry(
   const mmprojRaw = localMmprojPath(choice);
   const mmproj = mmprojRaw ? toModelFileUri(mmprojRaw) : null;
   const wantVision = isMultimodalCatalogEntry(choice) && !!mmproj;
+  let visionUnavailable = false;
 
   try {
     emitProgress({
@@ -200,6 +201,7 @@ async function loadLlmEntry(
         }));
         logMetric("llm.vision.ready", support.vision ? 1 : 0, choice.id);
       } else {
+        visionUnavailable = true;
         logMetric("llm.vision.init-failed", undefined, choice.id);
       }
     }
@@ -212,7 +214,9 @@ async function loadLlmEntry(
       modelId: choice.id,
       phase: "done",
       progress: 1,
-      messageBn: `${choice.nameBn} চালু`,
+      messageBn: visionUnavailable
+        ? `${choice.nameBn} লেখা চালু — ছবি ইঞ্জিনে চালু হয়নি।`
+        : `${choice.nameBn} চালু`,
     });
     return activeModelId;
   } catch (err) {
@@ -224,7 +228,7 @@ async function loadLlmEntry(
       phase: "error",
       messageBn:
         choice.sizeMb > 2000
-          ? "লোড ব্যর্থ — RAM কম হতে পারে। ছোট জেমা (১বি) চালু করুন।"
+          ? "লোড ব্যর্থ — RAM কম হতে পারে। ছোট মডেল (১বি) চালু করুন।"
           : "মডেল লোড যায়নি। আবার «চালু করুন» চাপুন।",
     });
     return null;
@@ -302,6 +306,44 @@ export async function unloadLlm(): Promise<void> {
 
 export type LlmHistoryTurn = { role: "user" | "assistant"; text: string };
 
+function activeChatTemplate(): "gemma" | "chatml" {
+  const entry = activeModelId ? catalogById(activeModelId) : undefined;
+  return entry?.chatTemplate ?? "gemma";
+}
+
+function formatChatPrompt(
+  promptBn: string,
+  history: LlmHistoryTurn[],
+): string {
+  if (activeChatTemplate() === "chatml") {
+    const past = history
+      .slice(-4)
+      .map(
+        (t) =>
+          `<|im_start|>${t.role === "user" ? "user" : "assistant"}\n${t.text.trim().slice(0, 400)}<|im_end|>\n`,
+      )
+      .join("");
+    return (
+      past +
+      `<|im_start|>user\n${promptBn.trim()}<|im_end|>\n` +
+      `<|im_start|>assistant\n`
+    );
+  }
+
+  const past = history
+    .slice(-4)
+    .map(
+      (t) =>
+        `<start_of_turn>${t.role === "user" ? "user" : "model"}\n${t.text.trim().slice(0, 400)}<end_of_turn>\n`,
+    )
+    .join("");
+  return (
+    past +
+    `<start_of_turn>user\n${promptBn.trim()}<end_of_turn>\n` +
+    `<start_of_turn>model\n`
+  );
+}
+
 async function completeOnce(
   llama: LlamaContext,
   promptBn: string,
@@ -310,17 +352,7 @@ async function completeOnce(
   onToken: (t: string) => void,
   history: LlmHistoryTurn[] = [],
 ): Promise<boolean> {
-  const past = history
-    .slice(-4)
-    .map(
-      (t) =>
-        `<start_of_turn>${t.role === "user" ? "user" : "model"}\n${t.text.trim().slice(0, 400)}<end_of_turn>\n`,
-    )
-    .join("");
-  const prompt =
-    past +
-    `<start_of_turn>user\n${promptBn.trim()}<end_of_turn>\n` +
-    `<start_of_turn>model\n`;
+  const prompt = formatChatPrompt(promptBn, history);
 
   let tagHold = "";
   let emittedAny = false;
@@ -398,7 +430,7 @@ export async function streamLlmReply(
   }
 
   onToken(
-    "উত্তর তৈরি হয়নি। মডেল ম্যানেজার থেকে জেমা «চালু করুন» চাপুন, তারপর আবার জিজ্ঞাসা করুন।",
+    "উত্তর তৈরি হয়নি। মডেল ম্যানেজার থেকে একটি মডেল «চালু করুন», তারপর আবার জিজ্ঞাসা করুন।",
   );
   end("empty-fallback");
 }

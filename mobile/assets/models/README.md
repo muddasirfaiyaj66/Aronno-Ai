@@ -17,7 +17,7 @@ These are installed to `documentDirectory/models/vision/` on first boot.
 |--------------|---------|-------------|
 | `models/gemma3-*/` | Gemma 3 Instruct GGUF (270M / 1B / **4B+mmproj vision**) | 300 MB – 3.3 GB |
 | `models/stt-bn-zipformer/` | Bangla streaming STT (ONNX) | ~90 MB |
-| `models/tts-bn-vits/` | Optional VITS (UI catalog; speech uses expo-speech) | ~110 MB |
+| Device Bangla TTS voice | Phone text-to-speech settings (speech uses expo-speech) | OS-managed |
 
 Catalog: `mobile/lib/modelManager/catalog.ts`.
 
@@ -32,6 +32,6 @@ python knowledge_base/build_kb.py
 ## EAS / git
 
 - **Include** vision `*.tflite` and KB in git and EAS uploads.
-- **Exclude** STT/TTS/ONNX/GGUF from the repo and from EAS (see `mobile/.easignore`).
+- **Exclude** STT/ONNX/GGUF from the repo and from EAS (see `mobile/.easignore`).
 
 Full architecture & prompts: [`docs/offline_ai/README.md`](../../docs/offline_ai/README.md).

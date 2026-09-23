@@ -12,10 +12,14 @@ import {
 import { useLocale } from "@/context/locale";
 import { useIsOnline } from "@/hooks/useIsOnline";
 import { mimeFromAudioUri, readFileBase64 } from "@/lib/readFileBase64";
-import { enablePlaybackAudio, SPEECH_RECORDING } from "@/lib/speechRecording";
+import { enablePlaybackAudio, SPEECH_RECORDING, STT_SPEECH_RECORDING } from "@/lib/speechRecording";
 import { userFacingError } from "@/lib/userFacingError";
 import { useTranscribeMutation } from "@/services/api";
-import { isSTTReady, startListening } from "@/lib/offlineVoice/sttEngine";
+import {
+  hasOfflineSttFiles,
+  startListening,
+  warmSttForLive,
+} from "@/lib/offlineVoice/sttEngine";
 import { logMetric } from "@/lib/offline/metrics";
 
 const FLOW_CONTENT: Record<string, { subtitle: string }> = {
@@ -50,12 +54,21 @@ export default function VoiceCaptureScreen() {
   const [transcribe] = useTranscribeMutation();
 
   useEffect(() => {
-    // Cloud STT only — on-device sherpa is disabled (native abort risk).
-    if (!online && mode === "voice") {
-      setMode("text");
-      setError("অফলাইনে কণ্ঠ কাজ করে না — লিখে জানান, অথবা ইন্টারনেট চালু করুন।");
-    }
-  }, [online, mode]);
+    // Do not initialise Sherpa here.  It is a native module and must be warmed
+    // only after the farmer deliberately starts recording.  Checking files is
+    // safe and keeps the voice tab usable without a network connection.
+    let active = true;
+    void hasOfflineSttFiles()
+      .then((available) => {
+        if (active) setOfflineStt(available);
+      })
+      .catch(() => {
+        if (active) setOfflineStt(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -67,12 +80,22 @@ export default function VoiceCaptureScreen() {
   const handleToggleRecording = async () => {
     setError(null);
 
-    // Offline streaming STT when sherpa model + native bridge are ready
+    // The downloaded Zipformer pack is the primary offline path. Warm it
+    // before opening the recorder so a missing/corrupt pack gives a clear
+    // message instead of a blank transcript.
     if (!online && offlineStt) {
       if (isRecording) {
         stopOfflineRef.current?.();
         stopOfflineRef.current = null;
         setIsRecording(false);
+        return;
+      }
+      const engine = await warmSttForLive();
+      if (engine === "none") {
+        setMode("text");
+        setError(
+          "বাংলা কণ্ঠ মডেল চালু হয়নি। মডেল ম্যানেজার থেকে আবার ডাউনলোড করুন, অথবা লিখে জানান।",
+        );
         return;
       }
       setIsRecording(true);
@@ -83,6 +106,9 @@ export default function VoiceCaptureScreen() {
           setTranscript(finalText.trim());
           setIsRecording(false);
           stopOfflineRef.current = null;
+          if (!finalText.trim()) {
+            setError("কথা বোঝা যায়নি। আরেকটু স্পষ্ট করে বলুন, অথবা লিখে জানান।");
+          }
         },
       );
       return;
@@ -133,7 +159,7 @@ export default function VoiceCaptureScreen() {
     if (!online) {
       setMode("text");
       setError(
-        "অফলাইনে ক্লাউড STT কাজ করে না। লিখে জানান অথবা STT মডেল ডাউনলোড করুন।",
+        "অফলাইনে বাংলা কণ্ঠ মডেল নেই। মডেল ম্যানেজার থেকে এটি ডাউনলোড করুন, অথবা লিখে জানান।",
       );
       return;
     }
@@ -152,7 +178,9 @@ export default function VoiceCaptureScreen() {
         playsInSilentModeIOS: true,
         staysActiveInBackground: false,
       });
-      const { recording } = await Audio.Recording.createAsync(SPEECH_RECORDING);
+      const { recording } = await Audio.Recording.createAsync(
+        offlineStt ? STT_SPEECH_RECORDING : SPEECH_RECORDING,
+      );
       recordingRef.current = recording;
       startedAtRef.current = Date.now();
       setIsRecording(true);

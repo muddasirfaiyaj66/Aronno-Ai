@@ -22,6 +22,7 @@ import { ReceiptsModule } from './receipts/receipts.module';
 import { FertilizerModule } from './fertilizer/fertilizer.module';
 import { PlanningModule } from './planning/planning.module';
 import { MarketModule } from './market/market.module';
+import { MarketplaceModule } from './marketplace/marketplace.module';
 import { StorageModule } from './storage/storage.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -66,6 +67,7 @@ import { SyncModule } from './sync/sync.module';
     FertilizerModule,
     PlanningModule,
     MarketModule,
+    MarketplaceModule,
     HealthModule,
     WeatherModule,
     SyncModule,

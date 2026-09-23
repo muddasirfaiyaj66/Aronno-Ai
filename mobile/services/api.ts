@@ -20,7 +20,7 @@ import type { ToolResult } from "@/types/tools";
 import type { ReceiptReviewItem, ReceiptSummary } from "@/types/receipt";
 import type { FertilizerAdvice } from "@/types/fertilizer";
 import type { CropPlan } from "@/types/planning";
-import type { HeatmapResponse, MarketListing, MarketPriceEntry } from "@/types/market";
+import type { HeatmapResponse, MarketListing, MarketPriceEntry, ShopData } from "@/types/market";
 import type { CurrentWeather } from "@/types/weather";
 
 export const API_URL =
@@ -159,13 +159,17 @@ export const api = createApi({
     "Report",
     "AdminUsers",
     "Weather",
+    "Shop",
+    "Product",
+    "Cart",
+    "Order",
   ],
   endpoints: (builder) => ({
     getProfessions: builder.query<{ slug: string; nameBn: string; nameEn: string }[], void>({
       query: () => "/lookups/professions",
       transformResponse: (r) => unwrap(r),
     }),
-    getDistricts: builder.query<{ slug: string; nameBn: string }[], void>({
+    getDistricts: builder.query<{ id?: string; slug: string; nameBn: string }[], void>({
       query: () => "/lookups/districts",
       transformResponse: (r) => unwrap(r),
     }),
@@ -572,6 +576,329 @@ export const api = createApi({
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["AdminUsers"],
     }),
+    uploadStorageImage: builder.mutation<
+      { url: string; publicId: string },
+      { uri: string; name?: string; type?: string }
+    >({
+      query: ({ uri, name = "photo.jpg", type = "image/jpeg" }) => {
+        const formData = new FormData();
+        formData.append("file", {
+          uri,
+          name,
+          type,
+        } as unknown as Blob);
+        return {
+          url: "/storage/upload",
+          method: "POST",
+          body: formData,
+        };
+      },
+      transformResponse: (r) => unwrap<{ url: string; publicId: string }>(r),
+    }),
+    deleteStorageImage: builder.mutation<
+      { deleted: boolean; publicId: string },
+      string
+    >({
+      query: (publicId) => ({
+        url: `/storage/image?publicId=${encodeURIComponent(publicId)}`,
+        method: "DELETE",
+      }),
+      transformResponse: (r) => unwrap(r),
+    }),
+    getMyShop: builder.query<ShopData | null, void>({
+      query: () => "/marketplace/shops/me",
+      transformResponse: (r) => unwrap<ShopData | null>(r),
+      providesTags: ["Shop"],
+    }),
+    getPublicShop: builder.query<ShopData, string>({
+      query: (id) => `/marketplace/shops/${id}`,
+      transformResponse: (r) => unwrap<ShopData>(r),
+      providesTags: (_r, _e, id) => [{ type: "Shop", id }],
+    }),
+    getShops: builder.query<{ items: ShopData[]; total: number; page: number; totalPages: number }, any>({
+      query: (params) => {
+        const p = new URLSearchParams();
+        if (params?.search) p.set("search", params.search);
+        if (params?.districtId) p.set("districtId", params.districtId);
+        if (params?.page) p.set("page", String(params.page));
+        if (params?.limit) p.set("limit", String(params.limit));
+        const q = p.toString();
+        return `/marketplace/shops${q ? `?${q}` : ""}`;
+      },
+      transformResponse: (r) => {
+        const data = unwrap<{ items: ShopData[]; total: number; page: number; totalPages: number } | ShopData[]>(r);
+        if (data && !Array.isArray(data) && "items" in data) {
+          return {
+            items: data.items ?? [],
+            total: data.total ?? 0,
+            page: data.page ?? 1,
+            totalPages: data.totalPages ?? 1,
+          };
+        }
+        const arr = Array.isArray(data) ? data : [];
+        return { items: arr, total: arr.length, page: 1, totalPages: 1 };
+      },
+      providesTags: ["Shop"],
+    }),
+    createShop: builder.mutation<
+      ShopData,
+      {
+        name: string;
+        description?: string;
+        logoUrl?: string;
+        bannerUrl?: string;
+        phone: string;
+        districtId: string;
+        upazila?: string;
+        address?: string;
+      }
+    >({
+      query: (body) => ({ url: "/marketplace/shops", method: "POST", body }),
+      transformResponse: (r) => unwrap<ShopData>(r),
+      invalidatesTags: ["Shop"],
+    }),
+    updateMyShop: builder.mutation<
+      ShopData,
+      {
+        name?: string;
+        description?: string;
+        logoUrl?: string;
+        bannerUrl?: string;
+        phone?: string;
+        districtId?: string;
+        upazila?: string;
+        address?: string;
+        isActive?: boolean;
+      }
+    >({
+      query: (body) => ({ url: "/marketplace/shops/me", method: "PATCH", body }),
+      transformResponse: (r) => unwrap<ShopData>(r),
+      invalidatesTags: ["Shop"],
+    }),
+    getProducts: builder.query<{ items: any[]; total: number; page: number; totalPages: number }, any>({
+      query: (params) => {
+        const p = new URLSearchParams();
+        if (params?.category) p.set("category", params.category);
+        if (params?.districtId) p.set("districtId", params.districtId);
+        if (params?.shopId) p.set("shopId", params.shopId);
+        if (params?.search) p.set("search", params.search);
+        if (params?.sort) p.set("sort", params.sort);
+        if (params?.page) p.set("page", String(params.page));
+        if (params?.limit) p.set("limit", String(params.limit));
+        const q = p.toString();
+        return `/marketplace/products${q ? `?${q}` : ""}`;
+      },
+      transformResponse: (r) => {
+        const data = unwrap<{ items: any[]; total: number; page: number; totalPages: number } | any[]>(r);
+        if (data && !Array.isArray(data) && "items" in data) {
+          return {
+            items: data.items ?? [],
+            total: data.total ?? 0,
+            page: data.page ?? 1,
+            totalPages: data.totalPages ?? 1,
+          };
+        }
+        const arr = Array.isArray(data) ? data : [];
+        return { items: arr, total: arr.length, page: 1, totalPages: 1 };
+      },
+      providesTags: ["Product"],
+    }),
+    getMyProducts: builder.query<any[], void>({
+      query: () => "/marketplace/products/my-products",
+      transformResponse: (r) => unwrap(r),
+      providesTags: ["Product"],
+    }),
+    getProduct: builder.query<any, string>({
+      query: (id) => `/marketplace/products/${id}`,
+      transformResponse: (r) => unwrap(r),
+      providesTags: (_r, _e, id) => [{ type: "Product", id }],
+    }),
+    createProduct: builder.mutation<any, any>({
+      query: (body) => ({ url: "/marketplace/products", method: "POST", body }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Product", "Shop"],
+    }),
+    updateProduct: builder.mutation<any, { id: string; [key: string]: any }>({
+      query: ({ id, ...body }) => ({
+        url: `/marketplace/products/${id}`,
+        method: "PATCH",
+        body,
+      }),
+      transformResponse: (r) => unwrap(r),
+      async onQueryStarted({ id, ...patch }, { dispatch, queryFulfilled }) {
+        const patchResult = dispatch(
+          api.util.updateQueryData("getMyProducts", undefined, (draft) => {
+            if (!Array.isArray(draft)) return;
+            const product = draft.find((p: any) => p.id === id);
+            if (product) {
+              Object.assign(product, patch);
+            }
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
+    }),
+    deleteProduct: builder.mutation<any, string>({
+      query: (id) => ({ url: `/marketplace/products/${id}`, method: "DELETE" }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Product", "Shop"],
+      async onQueryStarted(id, { dispatch, queryFulfilled }) {
+        const patchResult = dispatch(
+          api.util.updateQueryData("getMyProducts", undefined, (draft) => {
+            if (!Array.isArray(draft)) return;
+            const index = draft.findIndex((p: any) => p.id === id);
+            if (index !== -1) {
+              draft.splice(index, 1);
+            }
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
+    }),
+    getCart: builder.query<any, void>({
+      query: () => "/marketplace/cart",
+      transformResponse: (r) => unwrap(r),
+      providesTags: ["Cart"],
+    }),
+    addItem: builder.mutation<any, { productId: string; quantity: number; clearPreviousCart?: boolean }>({
+      query: (body) => ({ url: "/marketplace/cart/items", method: "POST", body }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Cart"],
+    }),
+    updateQuantity: builder.mutation<any, { productId: string; quantity: number }>({
+      query: ({ productId, ...body }) => ({
+        url: `/marketplace/cart/items/${productId}`,
+        method: "PATCH",
+        body,
+      }),
+      transformResponse: (r) => unwrap(r),
+      async onQueryStarted({ productId, quantity }, { dispatch, queryFulfilled }) {
+        const patchResult = dispatch(
+          api.util.updateQueryData("getCart", undefined, (draft) => {
+            if (!draft || !Array.isArray(draft.items)) return;
+            const item = draft.items.find((i: any) => i.productId === productId);
+            if (item) {
+              item.quantity = quantity;
+              item.totalPrice = item.pricePerUnit * quantity;
+              draft.totalBdt = draft.items.reduce(
+                (sum: number, i: any) => sum + (i.totalPrice ?? 0),
+                0
+              );
+            }
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
+    }),
+    removeItem: builder.mutation<any, string>({
+      query: (productId) => ({
+        url: `/marketplace/cart/items/${productId}`,
+        method: "DELETE",
+      }),
+      transformResponse: (r) => unwrap(r),
+      async onQueryStarted(productId, { dispatch, queryFulfilled }) {
+        const patchResult = dispatch(
+          api.util.updateQueryData("getCart", undefined, (draft) => {
+            if (!draft || !Array.isArray(draft.items)) return;
+            draft.items = draft.items.filter((i: any) => i.productId !== productId);
+            draft.totalBdt = draft.items.reduce(
+              (sum: number, i: any) => sum + (i.totalPrice ?? 0),
+              0
+            );
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
+    }),
+    clearCart: builder.mutation<any, void>({
+      query: () => ({ url: "/marketplace/cart", method: "DELETE" }),
+      transformResponse: (r) => unwrap(r),
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        const patchResult = dispatch(
+          api.util.updateQueryData("getCart", undefined, (draft) => {
+            if (!draft) return;
+            draft.items = [];
+            draft.totalBdt = 0;
+            draft.shopId = null;
+            draft.shopName = null;
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
+    }),
+    checkout: builder.mutation<
+      any,
+      {
+        shopId: string;
+        shippingAddress: string;
+        contactPhone: string;
+        districtId: string;
+        buyerName?: string;
+        upazila?: string;
+        paymentMethod?: string;
+        notes?: string;
+      }
+    >({
+      query: (body) => ({ url: "/marketplace/orders", method: "POST", body }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Cart", "Order", "Product"],
+    }),
+    getBuyerOrders: builder.query<any[], void>({
+      query: () => "/marketplace/orders/my-orders",
+      transformResponse: (r) => unwrap<any[]>(r),
+      providesTags: ["Order"],
+    }),
+    getShopOrders: builder.query<any[], void>({
+      query: () => "/marketplace/orders/shop-orders",
+      transformResponse: (r) => unwrap<any[]>(r),
+      providesTags: ["Order"],
+    }),
+    getOrder: builder.query<any, string>({
+      query: (id) => `/marketplace/orders/${id}`,
+      transformResponse: (r) => unwrap(r),
+      providesTags: (_r, _e, id) => [{ type: "Order", id }],
+    }),
+    updateOrderStatus: builder.mutation<any, { id: string; status: string }>({
+      query: ({ id, status }) => ({
+        url: `/marketplace/orders/${id}/status`,
+        method: "PATCH",
+        body: { status },
+      }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Order", "Product"],
+    }),
+    createReview: builder.mutation<
+      any,
+      { orderId: string; productId: string; rating: number; comment?: string }
+    >({
+      query: ({ orderId, ...body }) => ({
+        url: `/marketplace/orders/${orderId}/reviews`,
+        method: "POST",
+        body,
+      }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Order", "Product"],
+    }),
   }),
 });
 
@@ -620,4 +947,28 @@ export const {
   useGetAdminUsersQuery,
   useCreateAdminMutation,
   usePatchAdminRoleMutation,
+  useUploadStorageImageMutation,
+  useDeleteStorageImageMutation,
+  useGetMyShopQuery,
+  useGetPublicShopQuery,
+  useGetShopsQuery,
+  useCreateShopMutation,
+  useUpdateMyShopMutation,
+  useGetProductsQuery,
+  useGetMyProductsQuery,
+  useGetProductQuery,
+  useCreateProductMutation,
+  useUpdateProductMutation,
+  useDeleteProductMutation,
+  useGetCartQuery,
+  useAddItemMutation,
+  useUpdateQuantityMutation,
+  useRemoveItemMutation,
+  useClearCartMutation,
+  useCheckoutMutation,
+  useGetBuyerOrdersQuery,
+  useGetShopOrdersQuery,
+  useGetOrderQuery,
+  useUpdateOrderStatusMutation,
+  useCreateReviewMutation,
 } = api;

@@ -52,3 +52,5 @@ export { FormSection } from "./FormSection";
 export type { FormSectionProps } from "./FormSection";
 export { LandSizeInput } from "./LandSizeInput";
 export type { LandSizeInputProps } from "./LandSizeInput";
+export { ProductImagePicker } from "./ProductImagePicker";
+export type { ImageItem } from "./ProductImagePicker";

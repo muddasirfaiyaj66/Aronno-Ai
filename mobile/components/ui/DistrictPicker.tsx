@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, TextInput, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "@/components/ui/AppText";
 import { colors } from "@/constants/theme";
 
-export type DistrictOption = { slug: string; nameBn: string };
+export type DistrictOption = { id?: string; slug: string; nameBn: string };
 
 export function DistrictPicker({
   districts,
@@ -12,10 +13,19 @@ export function DistrictPicker({
 }: {
   districts: DistrictOption[];
   value: string | null;
-  onChange: (slug: string) => void;
+  onChange: (idOrSlug: string) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const [query, setQuery] = useState("");
-  const selected = districts.find((d) => d.slug === value);
+  const selected = districts.find((d) => d.slug === value || d.id === value);
+
+  useEffect(() => {
+    if (!value && districts.length > 0) {
+      const first = districts[0];
+      onChange(first.id ?? first.slug);
+    }
+  }, [districts, value, onChange]);
+
   const filtered = districts.filter((d) => {
     const q = query.trim();
     if (!q) return true;
@@ -23,59 +33,87 @@ export function DistrictPicker({
   });
 
   return (
-    <View className="gap-3">
-      <TextInput
-        value={query}
-        onChangeText={setQuery}
-        placeholder="জেলা খুঁজুন…"
-        placeholderTextColor={colors.muted}
-        accessibilityLabel="জেলা খুঁজুন"
-        className="min-h-touch rounded-2xl border border-neutral-200 bg-neutral px-4 font-bengali-medium text-body text-ink"
-      />
-      {selected && !query ? (
-        <AppText variant="caption" className="text-primary">
-          নির্বাচিত: {selected.nameBn}
-        </AppText>
-      ) : null}
-      <ScrollView
-        nestedScrollEnabled
-        keyboardShouldPersistTaps="handled"
-        style={{ maxHeight: 220 }}
-        className="rounded-2xl border border-neutral-200 bg-white"
+    <View className="gap-2">
+      <Pressable
+        onPress={() => setExpanded((prev) => !prev)}
+        accessibilityRole="button"
+        accessibilityLabel="জেলা নির্বাচন করুন"
+        className="min-h-touch flex-row items-center justify-between rounded-2xl border border-neutral-200 bg-white px-4 py-3"
       >
-        {filtered.length === 0 ? (
-          <View className="min-h-touch items-center justify-center px-4 py-6">
-            <AppText variant="caption" className="text-center">
-              {districts.length === 0 ? "জেলা আনা হচ্ছে…" : "এই নামে জেলা নেই"}
-            </AppText>
-          </View>
-        ) : (
-          filtered.map((d) => {
-            const active = d.slug === value;
-            return (
-              <Pressable
-                key={d.slug}
-                onPress={() => {
-                  onChange(d.slug);
-                  setQuery("");
-                }}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                className={`min-h-touch justify-center border-b border-neutral-100 px-4 ${
-                  active ? "bg-secondary" : "bg-white"
-                }`}
-              >
-                <AppText
-                  variant="body"
-                  className={`font-bengali-semibold ${active ? "text-primary" : "text-ink"}`}
-                >
-                  {d.nameBn}
+        <View className="flex-row items-center gap-2">
+          <Ionicons name="location-outline" size={20} color={colors.primary} />
+          <AppText variant="body" className="font-bengali-semibold text-ink">
+            {selected ? selected.nameBn : "জেলা নির্বাচন করুন"}
+          </AppText>
+        </View>
+        <Ionicons
+          name={expanded ? "chevron-up" : "chevron-down"}
+          size={20}
+          color={colors.muted}
+        />
+      </Pressable>
+
+      {expanded ? (
+        <View className="gap-2 rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="জেলা খুঁজুন…"
+            placeholderTextColor={colors.muted}
+            accessibilityLabel="জেলা খুঁজুন"
+            className="min-h-touch rounded-xl border border-neutral-200 bg-neutral px-4 font-bengali-medium text-body text-ink"
+          />
+
+          <ScrollView
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+            style={{ maxHeight: 180 }}
+            showsVerticalScrollIndicator={true}
+          >
+            {filtered.length === 0 ? (
+              <View className="min-h-touch items-center justify-center px-4 py-4">
+                <AppText variant="caption" className="text-center text-muted">
+                  {districts.length === 0 ? "জেলা আনা হচ্ছে…" : "এই নামে জেলা নেই"}
                 </AppText>
-              </Pressable>
-            );
-          })
-        )}
-      </ScrollView>
+              </View>
+            ) : (
+              filtered.map((d) => {
+                const active = d.slug === value || d.id === value;
+                return (
+                  <Pressable
+                    key={d.slug}
+                    onPress={() => {
+                      onChange(d.id ?? d.slug);
+                      setExpanded(false);
+                      setQuery("");
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    className={`min-h-touch justify-center border-b border-neutral-100 px-3 py-2.5 ${
+                      active ? "bg-secondary/40" : "bg-white"
+                    }`}
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <AppText
+                        variant="body"
+                        className={`font-bengali-semibold ${
+                          active ? "text-primary font-bengali-bold" : "text-ink"
+                        }`}
+                      >
+                        {d.nameBn}
+                      </AppText>
+                      {active ? (
+                        <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
+              })
+            )}
+          </ScrollView>
+        </View>
+      ) : null}
     </View>
   );
 }
+

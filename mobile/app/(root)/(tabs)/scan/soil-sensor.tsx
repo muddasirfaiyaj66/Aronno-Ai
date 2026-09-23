@@ -46,12 +46,15 @@ export default function SoilSensorScreen() {
   const manager = useMemo(() => getSoilSensorManager(), []);
   const [snap, setSnap] = useState(() => manager.getSnapshot());
   const [devices, setDevices] = useState<SoilSensorDevice[]>([]);
-  const [wifiUrl, setWifiUrl] = useState(WIFI_PROTOCOL.defaultBaseUrl);
+  const [wifiUrl, setWifiUrl] = useState<string>(WIFI_PROTOCOL.defaultBaseUrl);
   const [crops, setCrops] = useState<CropSuitability[]>([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    return manager.subscribe(() => setSnap(manager.getSnapshot()));
+    const unsub = manager.subscribe(() => setSnap(manager.getSnapshot()));
+    return () => {
+      unsub();
+    };
   }, [manager]);
 
   const setMode = (mode: SensorMode) => {
@@ -230,7 +233,7 @@ export default function SoilSensorScreen() {
             <FieldInput
               label="সেন্সরের ঠিকানা (URL)"
               value={wifiUrl}
-              onChangeText={setWifiUrl}
+              onChangeText={(val) => setWifiUrl(val)}
               autoCapitalize="none"
               autoCorrect={false}
               placeholder={WIFI_PROTOCOL.defaultBaseUrl}

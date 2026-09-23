@@ -15,6 +15,12 @@ import { fetchIsOnline } from "@/hooks/useIsOnline";
 import { classifyLeaf, isDiseaseModelAvailable } from "@/lib/offlineVision/diseaseModel";
 import { detectTool, isToolModelAvailable } from "@/lib/offlineVision/toolModel";
 import {
+  classifyLeafWithGemma,
+  detectToolWithGemma,
+  isGemmaVisionAvailable,
+  scanReceiptWithGemma,
+} from "@/lib/offlineVision/gemmaVision";
+import {
   matchDiseaseFromTranscript,
   matchToolFromTranscript,
 } from "@/lib/offlineNlu/offlineMatch";
@@ -193,6 +199,15 @@ export default function AnalyzingScreen() {
           return true;
         }
       }
+      // Gemma 3 multimodal fallback (slower, needs 4B+mmproj)
+      if (params.imageUri && (await isGemmaVisionAvailable())) {
+        const result = await classifyLeafWithGemma(params.imageUri);
+        if (result && !cancelled) {
+          logMetric("analyzing.offline.disease.gemma");
+          await finalizeDisease(result);
+          return true;
+        }
+      }
       if (params.transcript) {
         const matched = matchDiseaseFromTranscript(
           params.transcript,
@@ -216,6 +231,14 @@ export default function AnalyzingScreen() {
           return true;
         }
       }
+      if (params.imageUri && (await isGemmaVisionAvailable())) {
+        const result = await detectToolWithGemma(params.imageUri);
+        if (result && !cancelled) {
+          logMetric("analyzing.offline.tool.gemma");
+          await finalizeTool(result);
+          return true;
+        }
+      }
       if (params.transcript) {
         const matched = matchToolFromTranscript(params.transcript);
         if (matched && !cancelled) {
@@ -225,6 +248,25 @@ export default function AnalyzingScreen() {
         }
       }
       return false;
+    };
+
+    const runOfflineReceipt = async (): Promise<boolean> => {
+      if (!params.imageUri) return false;
+      if (!(await isGemmaVisionAvailable())) return false;
+      const summary = await scanReceiptWithGemma(params.imageUri);
+      if (!summary || cancelled) return false;
+      logMetric("analyzing.offline.receipt.gemma");
+      router.replace({
+        pathname: "/(root)/(tabs)/scan/receipt-result",
+        params: {
+          offline: "1",
+          id: summary.id,
+          totalBdt: String(summary.totalBdt),
+          summaryBn: summary.summaryBn,
+          itemsJson: JSON.stringify(summary.items),
+        },
+      });
+      return true;
     };
 
     const run = async () => {
@@ -243,6 +285,8 @@ export default function AnalyzingScreen() {
 
         if (!onlineRef.current) {
           if (flow === "receipt") {
+            const ok = await runOfflineReceipt();
+            if (ok) return;
             throw new Error("OFFLINE_RECEIPT");
           }
           if (flow === "tool") {
@@ -305,11 +349,16 @@ export default function AnalyzingScreen() {
       } catch (err) {
         if (cancelled) return;
         // Online Gemini failed → try offline vision/KB once
-        if (onlineRef.current && flow !== "receipt") {
+        if (onlineRef.current) {
           try {
-            const ok =
-              flow === "tool" ? await runOfflineTool() : await runOfflineDisease();
-            if (ok) return;
+            if (flow === "receipt") {
+              const ok = await runOfflineReceipt();
+              if (ok) return;
+            } else {
+              const ok =
+                flow === "tool" ? await runOfflineTool() : await runOfflineDisease();
+              if (ok) return;
+            }
           } catch {
             // fall through
           }
@@ -343,7 +392,7 @@ export default function AnalyzingScreen() {
       ) : (
         <>
           <AIGeneratingShimmer
-            label="AI বিশ্লেষণ করছে"
+            label="বিশ্লেষণ চলছে"
             lines={4}
             className="w-full"
           />

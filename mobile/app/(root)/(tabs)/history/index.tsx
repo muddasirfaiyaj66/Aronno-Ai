@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Image, Pressable, ScrollView, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -14,6 +14,7 @@ import { colors } from "@/constants/theme";
 import { useGetHistoryQuery } from "@/services/api";
 import {
   countPendingUploads,
+  deleteLocalDiagnosis,
   listLocalHistory,
 } from "@/lib/offlineDb/queries";
 import {
@@ -39,19 +40,38 @@ const FILTERS: { id: FilterValue; label: string }[] = [
 
 function RowShell({
   onPress,
+  onDelete,
   children,
 }: {
   onPress: () => void;
+  onDelete?: () => void;
   children: ReactNode;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      className="flex-row items-center gap-3 rounded-2xl border border-border bg-white p-3 active:bg-neutral"
-    >
-      {children}
-    </Pressable>
+    <View className="flex-row items-center gap-2 rounded-2xl border border-border bg-white p-3">
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel="বিস্তারিত দেখুন"
+        className="min-h-touch min-w-0 flex-1 flex-row items-center gap-3 active:opacity-80"
+      >
+        {children}
+      </Pressable>
+      {onDelete ? (
+        <Pressable
+          onPress={onDelete}
+          accessibilityRole="button"
+          accessibilityLabel="মুছুন"
+          hitSlop={8}
+          className="min-h-touch min-w-[52px] items-center justify-center rounded-xl bg-harvestSoft px-2"
+        >
+          <Ionicons name="trash-outline" size={20} color="#B42318" />
+          <AppText variant="caption" className="mt-0.5 text-[#B42318]">
+            মুছুন
+          </AppText>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -146,10 +166,12 @@ function TimelineItem({
   entry,
   isLast,
   onPress,
+  onDelete,
 }: {
   entry: HistoryEntry;
   isLast: boolean;
   onPress: () => void;
+  onDelete?: () => void;
 }) {
   return (
     <View className="flex-row gap-3">
@@ -158,7 +180,7 @@ function TimelineItem({
         {!isLast ? <View className="w-px flex-1 bg-neutral-200" /> : null}
       </View>
       <View className="flex-1 pb-4">
-        <RowShell onPress={onPress}>
+        <RowShell onPress={onPress} onDelete={onDelete}>
           {entry.kind === "disease" ? (
             <DiseaseRow entry={entry} />
           ) : entry.kind === "yield" ? (
@@ -237,12 +259,38 @@ export default function CropHealthHistoryScreen() {
     [merged, filter],
   );
 
+  const confirmDelete = (entry: HistoryEntry) => {
+    const title =
+      entry.kind === "disease" ? entry.diseaseNameBn : "এই রেকর্ড";
+    Alert.alert("মুছে ফেলবেন?", `"${title}" ইতিহাস থেকে মুছে যাবে।`, [
+      { text: "বাতিল", style: "cancel" },
+      {
+        text: "মুছুন",
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            if (entry.kind === "disease") {
+              await deleteLocalDiagnosis(entry.id).catch(() => undefined);
+              if (entry.sourceId && entry.sourceId !== entry.id) {
+                await deleteLocalDiagnosis(entry.sourceId).catch(
+                  () => undefined,
+                );
+              }
+            }
+            setLocalEntries((prev) => prev.filter((e) => e.id !== entry.id));
+            await reloadLocal();
+          })();
+        },
+      },
+    ]);
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       <View className="border-b border-border bg-white px-5 py-3.5">
         <AppText variant="title">ইতিহাস</AppText>
         <AppText variant="caption" className="mt-0.5">
-          স্ক্যান ও রোগ শনাক্তের রেকর্ড
+          স্ক্যান ও রোগ শনাক্তের রেকর্ড — মুছুন চাপলে মুছে যাবে
           {pending > 0
             ? ` · অপেক্ষমাণ ${pending}${syncing ? " (সিঙ্ক হচ্ছে…)" : ""}`
             : syncing
@@ -288,6 +336,11 @@ export default function CropHealthHistoryScreen() {
                   pathname: "/(root)/(tabs)/history/[id]",
                   params: { id: entry.id },
                 })
+              }
+              onDelete={
+                entry.kind === "disease"
+                  ? () => confirmDelete(entry)
+                  : undefined
               }
             />
           ))}

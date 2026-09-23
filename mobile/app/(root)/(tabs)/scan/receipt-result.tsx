@@ -12,13 +12,54 @@ import {
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import { useGetReceiptQuery } from "@/services/api";
+import type { ReceiptItem, ReceiptSummary } from "@/types/receipt";
+
+function parseOfflineSummary(params: {
+  id?: string;
+  totalBdt?: string;
+  summaryBn?: string;
+  itemsJson?: string;
+}): ReceiptSummary | null {
+  if (!params.summaryBn && !params.totalBdt) return null;
+  let items: ReceiptItem[] = [];
+  if (params.itemsJson) {
+    try {
+      const parsed = JSON.parse(params.itemsJson) as ReceiptItem[];
+      if (Array.isArray(parsed)) items = parsed;
+    } catch {
+      items = [];
+    }
+  }
+  return {
+    id: params.id ?? "offline-receipt",
+    totalBdt: Number(params.totalBdt) || 0,
+    summaryBn: params.summaryBn ?? "রসিদের সারাংশ।",
+    items,
+  };
+}
 
 export default function ReceiptResultScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: summary, isLoading } = useGetReceiptQuery(id!, { skip: !id });
+  const params = useLocalSearchParams<{
+    id?: string;
+    offline?: string;
+    totalBdt?: string;
+    summaryBn?: string;
+    itemsJson?: string;
+  }>();
 
-  if (isLoading) {
+  const offlineSummary =
+    params.offline === "1"
+      ? parseOfflineSummary(params)
+      : null;
+
+  const { data: remote, isLoading } = useGetReceiptQuery(params.id!, {
+    skip: !params.id || params.offline === "1",
+  });
+
+  const summary = offlineSummary ?? remote ?? null;
+
+  if (!offlineSummary && isLoading) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-neutral px-6" edges={["top"]}>
         <AIGeneratingShimmer label="রসিদের হিসাব আনা হচ্ছে" lines={4} className="w-full" />
@@ -48,7 +89,11 @@ export default function ReceiptResultScreen() {
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       <ScreenHeader
         title="রসিদের হিসাব"
-        subtitle="ছবি থেকে খরচ — চাইলে বাংলায় শুনুন"
+        subtitle={
+          params.offline === "1"
+            ? "অফলাইন — ছবি থেকে খরচ"
+            : "ছবি থেকে খরচ — চাইলে বাংলায় শুনুন"
+        }
       />
 
       <ScrollView
@@ -78,14 +123,14 @@ export default function ReceiptResultScreen() {
                 className="flex-row items-center justify-between rounded-2xl bg-neutral px-4 py-3"
               >
                 <View className="flex-1 pr-3">
-                  <AppText variant="body" className="font-bengali-bold text-ink">
+                  <AppText variant="body" className="font-bengali-semibold">
                     {item.nameBn}
                   </AppText>
-                  <AppText variant="caption" className="mt-0.5">
-                    {item.quantity}
+                  <AppText variant="caption" className="text-muted">
+                    পরিমাণ: {item.quantity}
                   </AppText>
                 </View>
-                <AppText variant="body" className="font-bengali-bold text-primary">
+                <AppText variant="body" className="font-bengali-semibold">
                   {item.price}
                 </AppText>
               </View>

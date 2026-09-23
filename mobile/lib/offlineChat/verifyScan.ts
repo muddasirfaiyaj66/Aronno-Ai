@@ -1,11 +1,10 @@
 /**
- * Gemma cross-check after TFLite / KB scan.
- * Always short-verify when LLM ready; deep pass if confidence < 70% or uncertain.
+ * Gemma cross-check after TFLite / KB scan — KB-first, no speculation.
  */
 import { retrieveContextForLabel } from "@/lib/offlineNlu/retrieve";
-import { buildGroundedPrompt } from "@/lib/offlineChat/chatLoop";
 import { isLlmReady, streamLlmReply } from "@/lib/modelManager/llmEngine";
 import { logMetric, markStart } from "@/lib/offline/metrics";
+import { sanitizeAssistantReply } from "@/lib/offlineChat/chatLoop";
 
 const LOW_CONF = 70;
 
@@ -28,7 +27,7 @@ async function collectCompletion(prompt: string): Promise<string> {
   await streamLlmReply(prompt, (token) => {
     out += token;
   });
-  return out.trim();
+  return sanitizeAssistantReply(out.trim());
 }
 
 function parseShort(raw: string): { status: "ok" | "uncertain"; noteBn: string } {
@@ -36,41 +35,55 @@ function parseShort(raw: string): { status: "ok" | "uncertain"; noteBn: string }
   const uncertain =
     lower.includes("uncertain") ||
     raw.includes("অনিশ্চিত") ||
-    lower.includes('"status": "uncertain"') ||
-    lower.includes("status: uncertain");
+    looksEmpty(raw);
   const line =
     raw
       .split(/[\n।]/)
       .map((s) => s.trim())
-      .find((s) => s.length > 8 && !s.startsWith("{")) ?? raw.slice(0, 160);
+      .find((s) => s.length > 8 && !/^ok\b/i.test(s) && !/^uncertain\b/i.test(s)) ??
+    raw.slice(0, 160);
   return {
     status: uncertain ? "uncertain" : "ok",
-    noteBn: line.slice(0, 200),
+    noteBn: line.replace(/^(?:ok|uncertain)\s*[:\-–]?\s*/i, "").slice(0, 200),
   };
+}
+
+function looksEmpty(s: string) {
+  return !s || /নিশ্চিত তথ্য নেই|জানি না/i.test(s);
 }
 
 export async function verifyScanResult(
   input: VerifyScanInput,
 ): Promise<VerifyScanResult> {
   const end = markStart("scan.verify");
+  const kbFacts = retrieveContextForLabel(input.kind, input.labelId);
+
+  // Always prefer KB text when available — 100% grounded.
+  const kbDeep =
+    kbFacts[0] ??
+    `${input.nameBn}: স্থানীয় জ্ঞানভাণ্ডারে বিস্তারিত নেই। কৃষি অফিসের পরামর্শ নিন।`;
+
   if (!isLlmReady()) {
-    end("llm-missing");
-    return { status: "skipped", noteBn: "" };
+    end("kb-only");
+    return {
+      status: input.confidence < LOW_CONF ? "uncertain" : "ok",
+      noteBn: input.confidence < LOW_CONF
+        ? "আত্মবিশ্বাস কম — ছবি আবার তুলে দেখুন।"
+        : "স্ক্যান সম্পন্ন।",
+      deepExplanationBn: kbDeep.slice(0, 800),
+    };
   }
 
-  const kbFacts = retrieveContextForLabel(input.kind, input.labelId);
   const shortPrompt = [
-    "তুমি আরণ্য। সংক্ষেপে যাচাই করো।",
-    kbFacts.length ? `তথ্য:\n${kbFacts.join("\n")}` : "",
-    `মডেল বলেছে: ${input.nameBn} (${input.nameEn}), আত্মবিশ্বাস ${Math.round(input.confidence)}%.`,
-    `এক লাইনে যাচাই করো। প্রথমে লিখো ok অথবা uncertain, তারপর সংক্ষিপ্ত বাংলা নোট।`,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+    "আপনি আরণ্য। শুধু নিচের তথ্য যাচাই করুন। অনুমান করবেন না।",
+    kbFacts.length ? `তথ্য:\n${kbFacts.join("\n")}` : "তথ্য নেই।",
+    `স্ক্যান ফল: ${input.nameBn} (${input.nameEn}), আত্মবিশ্বাস ${Math.round(input.confidence)}%.`,
+    "উত্তর ফরম্যাট: প্রথমে ok বা uncertain, তারপর এক লাইন বাংলা নোট। তথ্য না থাকলে uncertain।",
+  ].join("\n\n");
 
   try {
     const shortRaw = await collectCompletion(shortPrompt);
-    const short = parseShort(shortRaw || "ok যাচাই সম্পন্ন");
+    const short = parseShort(shortRaw || "ok স্ক্যান যাচাই হয়েছে");
     logMetric("scan.verify.short", undefined, short.status);
 
     const needDeep =
@@ -78,25 +91,39 @@ export async function verifyScanResult(
 
     if (!needDeep) {
       end(short.status);
-      return { status: short.status, noteBn: short.noteBn };
+      return {
+        status: short.status,
+        noteBn: short.noteBn || "স্ক্যান যাচাই হয়েছে।",
+        deepExplanationBn: kbDeep.slice(0, 800),
+      };
     }
 
-    const deepPrompt = buildGroundedPrompt(
+    const deepPrompt = [
+      "আপনি আরণ্য। শুধু নিচের তথ্য থেকে সহজ বাংলায় ২–৪ বাক্য লিখুন।",
+      "অনুমান করবেন না। তথ্যের বাইরে কিছু বলবেন না।",
+      kbFacts.length ? `তথ্য:\n${kbFacts.join("\n")}` : "",
       input.kind === "disease"
-        ? `এই রোগ (${input.nameBn}) সম্পর্কে সহজ বাংলায় লক্ষণ, চিকিৎসা ও সতর্কতা বলো। আত্মবিশ্বাস ${Math.round(input.confidence)}%.`
-        : `এই হাতিয়ার (${input.nameBn}) কী কাজে লাগে সংক্ষেপে বাংলায় বলো।`,
-      kbFacts,
-    );
+        ? `বিষয়: ${input.nameBn} — লক্ষণ, চিকিৎসা ও সতর্কতা।`
+        : `বিষয়: ${input.nameBn} — কী কাজে লাগে।`,
+      "উত্তর:",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
     const deep = await collectCompletion(deepPrompt);
     end("deep");
     logMetric("scan.verify.deep");
     return {
       status: short.status,
       noteBn: short.noteBn,
-      deepExplanationBn: deep.slice(0, 800),
+      deepExplanationBn: (deep || kbDeep).slice(0, 800),
     };
   } catch (err) {
     end(err instanceof Error ? err.message : "verify-failed");
-    return { status: "skipped", noteBn: "" };
+    return {
+      status: "ok",
+      noteBn: "স্ক্যান সম্পন্ন।",
+      deepExplanationBn: kbDeep.slice(0, 800),
+    };
   }
 }

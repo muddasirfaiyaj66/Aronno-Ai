@@ -1,6 +1,7 @@
 import type { DiseaseHistoryEntry, HistoryEntry } from "@/types/history";
 import { getOfflineDb, newLocalId, nowIso } from "@/lib/offlineDb/db";
 import type {
+  LocalChatSessionRow,
   LocalChatTurnRow,
   LocalDiagnosisRow,
   LocalToolRow,
@@ -57,6 +58,7 @@ function mapChat(r: Record<string, unknown>): LocalChatTurnRow {
   return {
     localId: String(r.local_id),
     serverId: r.server_id ? String(r.server_id) : null,
+    conversationId: String(r.conversation_id ?? ""),
     role: String(r.role) as LocalChatTurnRow["role"],
     textBn: String(r.text_bn),
     extraContextJson: r.extra_context_json
@@ -65,6 +67,85 @@ function mapChat(r: Record<string, unknown>): LocalChatTurnRow {
     syncStatus: String(r.sync_status) as SyncStatus,
     createdAt: String(r.created_at),
   };
+}
+
+function mapSession(r: Record<string, unknown>): LocalChatSessionRow {
+  return {
+    localId: String(r.local_id),
+    titleBn: String(r.title_bn),
+    createdAt: String(r.created_at),
+    updatedAt: String(r.updated_at),
+  };
+}
+
+export async function createChatSession(
+  titleBn = "নতুন আলোচনা",
+): Promise<string> {
+  const db = await getOfflineDb();
+  const localId = newLocalId("sess");
+  const ts = nowIso();
+  await db.runAsync(
+    `INSERT INTO chat_sessions (local_id, title_bn, created_at, updated_at) VALUES (?, ?, ?, ?)`,
+    [localId, titleBn, ts, ts],
+  );
+  return localId;
+}
+
+/** Prefer most recent session; otherwise create one. */
+export async function ensureActiveChatSession(): Promise<string> {
+  const db = await getOfflineDb();
+  const row = await db.getFirstAsync<Record<string, unknown>>(
+    `SELECT * FROM chat_sessions ORDER BY updated_at DESC LIMIT 1`,
+  );
+  if (row) return String(row.local_id);
+  return createChatSession();
+}
+
+export async function getChatSession(
+  id: string,
+): Promise<LocalChatSessionRow | null> {
+  const db = await getOfflineDb();
+  const row = await db.getFirstAsync<Record<string, unknown>>(
+    `SELECT * FROM chat_sessions WHERE local_id = ?`,
+    [id],
+  );
+  return row ? mapSession(row) : null;
+}
+
+export async function listChatSessions(
+  limit = 40,
+): Promise<LocalChatSessionRow[]> {
+  const db = await getOfflineDb();
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT * FROM chat_sessions ORDER BY updated_at DESC LIMIT ?`,
+    [limit],
+  );
+  return rows.map(mapSession);
+}
+
+export async function touchChatSession(id: string): Promise<void> {
+  const db = await getOfflineDb();
+  await db.runAsync(
+    `UPDATE chat_sessions SET updated_at = ? WHERE local_id = ?`,
+    [nowIso(), id],
+  );
+}
+
+export async function renameChatSession(
+  id: string,
+  titleBn: string,
+): Promise<void> {
+  const db = await getOfflineDb();
+  await db.runAsync(
+    `UPDATE chat_sessions SET title_bn = ?, updated_at = ? WHERE local_id = ?`,
+    [titleBn.trim() || "আলোচনা", nowIso(), id],
+  );
+}
+
+export async function deleteChatSession(id: string): Promise<void> {
+  const db = await getOfflineDb();
+  await db.runAsync(`DELETE FROM chat_turns WHERE conversation_id = ?`, [id]);
+  await db.runAsync(`DELETE FROM chat_sessions WHERE local_id = ?`, [id]);
 }
 
 export async function insertDiagnosis(
@@ -180,6 +261,7 @@ export async function insertChatTurn(
   role: LocalChatTurnRow["role"],
   textBn: string,
   extraContext?: string[],
+  conversationId?: string,
 ): Promise<LocalChatTurnRow> {
   const db = await getOfflineDb();
   const localId = newLocalId("chat");
@@ -188,15 +270,27 @@ export async function insertChatTurn(
     extraContext && extraContext.length
       ? JSON.stringify(extraContext)
       : null;
+  let convId = conversationId ?? "";
+  if (!convId) {
+    const latest = await db.getFirstAsync<{ local_id: string }>(
+      `SELECT local_id FROM chat_sessions ORDER BY updated_at DESC LIMIT 1`,
+    );
+    convId = latest?.local_id ?? (await createChatSession());
+  }
   await db.runAsync(
     `INSERT INTO chat_turns (
-      local_id, server_id, role, text_bn, extra_context_json, sync_status, created_at
-    ) VALUES (?, NULL, ?, ?, ?, 'pending', ?)`,
-    [localId, role, textBn, extra, ts],
+      local_id, server_id, conversation_id, role, text_bn, extra_context_json, sync_status, created_at
+    ) VALUES (?, NULL, ?, ?, ?, ?, 'pending', ?)`,
+    [localId, convId, role, textBn, extra, ts],
+  );
+  await db.runAsync(
+    `UPDATE chat_sessions SET updated_at = ? WHERE local_id = ?`,
+    [ts, convId],
   );
   return {
     localId,
     serverId: null,
+    conversationId: convId,
     role,
     textBn,
     extraContextJson: extra,
@@ -205,8 +299,18 @@ export async function insertChatTurn(
   };
 }
 
-export async function listChatTurns(limit = 80): Promise<LocalChatTurnRow[]> {
+export async function listChatTurns(
+  limit = 80,
+  conversationId?: string,
+): Promise<LocalChatTurnRow[]> {
   const db = await getOfflineDb();
+  if (conversationId) {
+    const rows = await db.getAllAsync<Record<string, unknown>>(
+      `SELECT * FROM chat_turns WHERE conversation_id = ? ORDER BY created_at ASC LIMIT ?`,
+      [conversationId, limit],
+    );
+    return rows.map(mapChat);
+  }
   const rows = await db.getAllAsync<Record<string, unknown>>(
     `SELECT * FROM chat_turns ORDER BY created_at ASC LIMIT ?`,
     [limit],
@@ -218,16 +322,24 @@ export async function listChatTurns(limit = 80): Promise<LocalChatTurnRow[]> {
  * Last few turns for follow-up grounding (e.g. user says «হ্যাঁ»).
  * Kept short so small models don't copy the whole chat.
  */
-export async function recentChatForPrompt(limit = 4): Promise<string[]> {
+export async function recentChatForPrompt(
+  limit = 4,
+  conversationId?: string,
+): Promise<string[]> {
   const db = await getOfflineDb();
-  const rows = await db.getAllAsync<Record<string, unknown>>(
-    `SELECT role, text_bn FROM chat_turns ORDER BY created_at DESC LIMIT ?`,
-    [limit],
-  );
+  const rows = conversationId
+    ? await db.getAllAsync<Record<string, unknown>>(
+        `SELECT role, text_bn FROM chat_turns WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?`,
+        [conversationId, limit],
+      )
+    : await db.getAllAsync<Record<string, unknown>>(
+        `SELECT role, text_bn FROM chat_turns ORDER BY created_at DESC LIMIT ?`,
+        [limit],
+      );
   return rows
     .reverse()
     .map((r) => {
-      const role = String(r.role) === "user" ? "ব্যবহারকারী" : "আরণ্য";
+      const role = String(r.role) === "user" ? "কৃষক" : "আরণ্য";
       const text = String(r.text_bn ?? "")
         .replace(/\s+/g, " ")
         .trim()
@@ -236,6 +348,34 @@ export async function recentChatForPrompt(limit = 4): Promise<string[]> {
       return `${role}: ${text}`;
     })
     .filter((s): s is string => !!s);
+}
+
+export async function recentChatHistoryTurns(
+  limit = 6,
+  conversationId?: string,
+): Promise<{ role: "user" | "assistant"; text: string }[]> {
+  const db = await getOfflineDb();
+  const rows = conversationId
+    ? await db.getAllAsync<Record<string, unknown>>(
+        `SELECT role, text_bn FROM chat_turns WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?`,
+        [conversationId, limit],
+      )
+    : await db.getAllAsync<Record<string, unknown>>(
+        `SELECT role, text_bn FROM chat_turns ORDER BY created_at DESC LIMIT ?`,
+        [limit],
+      );
+  return rows
+    .reverse()
+    .map((r) => ({
+      role: (String(r.role) === "user" ? "user" : "assistant") as
+        | "user"
+        | "assistant",
+      text: String(r.text_bn ?? "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 200),
+    }))
+    .filter((t) => t.text.length > 0);
 }
 
 export async function listLocalHistory(): Promise<HistoryEntry[]> {
@@ -276,6 +416,24 @@ export async function getDiagnosisByAnyId(
     [id, id],
   );
   return row ? mapDiag(row) : null;
+}
+
+export async function deleteLocalDiagnosis(id: string): Promise<void> {
+  if (!id) return;
+  const db = await getOfflineDb();
+  await db.runAsync(
+    `DELETE FROM local_diagnoses WHERE local_id = ? OR server_id = ?`,
+    [id, id],
+  );
+}
+
+export async function deleteLocalTool(id: string): Promise<void> {
+  if (!id) return;
+  const db = await getOfflineDb();
+  await db.runAsync(
+    `DELETE FROM local_tools WHERE local_id = ? OR server_id = ?`,
+    [id, id],
+  );
 }
 
 export async function countPendingUploads(): Promise<number> {
@@ -441,17 +599,36 @@ export async function upsertChatFromServer(
       [t.id],
     );
     if (byServer) continue;
+    const sess =
+      (
+        await db.getFirstAsync<{ local_id: string }>(
+          `SELECT local_id FROM chat_sessions ORDER BY updated_at DESC LIMIT 1`,
+        )
+      )?.local_id ?? (await createChatSession("সার্ভারের আলোচনা"));
     await db.runAsync(
       `INSERT INTO chat_turns (
-        local_id, server_id, role, text_bn, extra_context_json, sync_status, created_at
-      ) VALUES (?, ?, ?, ?, NULL, 'synced', ?)`,
-      [t.clientLocalId ?? newLocalId("schat"), t.id, t.role, t.textBn, t.createdAt],
+        local_id, server_id, conversation_id, role, text_bn, extra_context_json, sync_status, created_at
+      ) VALUES (?, ?, ?, ?, ?, NULL, 'synced', ?)`,
+      [
+        t.clientLocalId ?? newLocalId("schat"),
+        t.id,
+        sess,
+        t.role,
+        t.textBn,
+        t.createdAt,
+      ],
     );
   }
 }
 
-export async function clearChatTurns(): Promise<void> {
+export async function clearChatTurns(conversationId?: string): Promise<void> {
   const db = await getOfflineDb();
+  if (conversationId) {
+    await db.runAsync(`DELETE FROM chat_turns WHERE conversation_id = ?`, [
+      conversationId,
+    ]);
+    return;
+  }
   await db.runAsync(`DELETE FROM chat_turns`);
 }
 

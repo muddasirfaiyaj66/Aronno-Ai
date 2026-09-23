@@ -37,10 +37,11 @@ Related:
 | Chat / voice assistant (Bangla) | Gemma 3 Instruct GGUF via `llama.rn` | No — download in **Model Manager** |
 | Speech-to-text | sherpa-onnx Zipformer (Bangla) | No — download in Model Manager |
 | Text-to-speech | Device TTS (`expo-speech`); sherpa TTS avoided (native abort risk) | OS voices |
-| Disease / tool scan | INT8 TFLite via `react-native-fast-tflite` | **Yes** — `assets/models/vision/*.tflite` |
+| Disease / tool scan | INT8 TFLite first; **Gemma 3 4B + mmproj** vision fallback | TFLite **yes**; Gemma download |
+| Bangla receipt (offline) | Gemma 3 4B multimodal (`mmproj-F16`) | No — needs 4B vision pack |
 | Agronomist facts (RAG) | `bn_knowledge_base.json` | **Yes** — small JSON |
 
-**Product surface:** tab **সহকারী** (`assistant.tsx`) for chat + live voice; **স্ক্যান** for photo/voice diagnosis; **মডেল ম্যানেজার** for LLM/STT downloads.
+**Product surface:** tab **সহকারী** (`assistant.tsx`) for chat + live voice + **chat sessions** (নতুন / ইতিহাস / মুছুন); **ইতিহাস** tab for scan records with per-row **মুছুন**; **স্ক্যান** for photo/voice diagnosis; **মডেল ম্যানেজার** for LLM/STT downloads.
 
 **Boot policy:** `OfflineAiBootstrap` initializes SQLite and copies bundled vision models. It does **not** eagerly load Gemma or Sherpa TTS (avoids SIGABRT / crash loops). LLM and STT load on first use.
 
@@ -51,32 +52,29 @@ Related:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Model Manager (catalog.ts + modelManager.ts)               │
-│  Download Gemma GGUF · Bangla STT ONNX into documentDir     │
+│  Download Gemma GGUF (+ mmproj for 4B) · Bangla STT ONNX    │
 └────────────────────────────┬────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────┐
 │  সহকারী (assistant)                                         │
 │                                                             │
-│  Typed text ──┐                                             │
-│  Live mic ────┼──▶ tryDeterministicReply()                  │
-│               │         │ yes → welcome / time / weather    │
-│               │         ▼ no                                │
-│               │    RAG retrieveContext() + session facts    │
-│               │    + recent chat (follow-ups)               │
-│               │         ▼                                   │
-│               │    buildGroundedPrompt()                    │
-│               │         ▼                                   │
-│               │    Gemma (llama.rn) stream                  │
-│               │         ▼                                   │
-│               │    sanitizeAssistantReply()                 │
-│               │         ▼                                   │
-│               └──▶ UI bubble + speakBangla (expo-speech)    │
+│  Typed / live mic                                           │
+│       ▼                                                     │
+│  answerByIntent() ── greeting / time / weather / KB FAQ     │
+│       │ no match                                            │
+│       ▼                                                     │
+│  retrieveContext() — if empty → “নিশ্চিত তথ্য নেই” (no guess)│
+│       ▼                                                     │
+│  buildGroundedPrompt() → Gemma stream → sanitize            │
+│       ▼                                                     │
+│  SQLite chat_sessions + chat_turns (নতুন / ইতিহাস / মুছুন)   │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
 │  স্ক্যান (analyzing)                                         │
 │  Online → Gemini API                                        │
-│  Offline → TFLite disease/tool → result + KB treatment UI   │
+│  Offline disease/tool → TFLite → else Gemma vision → KB     │
+│  Offline receipt → Gemma vision (4B+mmproj) or clear error  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -86,20 +84,25 @@ Related:
 
 | Concern | Path |
 |---------|------|
-| Chat loop, prompts, deterministic replies | `mobile/lib/offlineChat/chatLoop.ts` |
+| Chat loop, grounded prompts, skip-unknown | `mobile/lib/offlineChat/chatLoop.ts` |
+| Deterministic / KB intents (greetings, FAQ, disease) | `mobile/lib/offlineChat/intents.ts` |
+| Active chat session + topic memory | `mobile/lib/offlineChat/sessionStore.ts` |
 | Continuous voice (listen → think → speak) | `mobile/lib/offlineChat/liveConversation.ts` |
-| Scan cross-check with Gemma | `mobile/lib/offlineChat/verifyScan.ts` |
+| Scan cross-check with Gemma (KB-first) | `mobile/lib/offlineChat/verifyScan.ts` |
 | RAG + welcome + weather/time helpers | `mobile/lib/offlineNlu/retrieve.ts` |
-| KB lookup / disease by name | `mobile/lib/offlineNlu/knowledgeBase.ts` |
+| KB lookup / disease by name | `mobile/lib/offlineNlu/offlineMatch.ts` |
 | Offline treatment plan from KB | `mobile/lib/offlineNlu/offlineTreatment.ts` |
-| Gemma load / completion | `mobile/lib/modelManager/llmEngine.ts` |
-| Download catalog | `mobile/lib/modelManager/catalog.ts` |
+| Gemma load / text + vision completion | `mobile/lib/modelManager/llmEngine.ts` |
+| Download catalog (incl. 4B + mmproj) | `mobile/lib/modelManager/catalog.ts` |
 | Bangla STT (silence-ended turns) | `mobile/lib/offlineVoice/sttEngine.ts` |
 | TTS wrapper | `mobile/lib/offlineVoice/ttsEngine.ts` → `speakBangla.ts` |
 | Bundled vision install paths | `mobile/lib/offlineVision/paths.ts` |
-| Disease / tool inference | `*.native.ts` under `offlineVision/` |
-| SQLite chat + history | `mobile/lib/offlineDb/` |
-| Assistant UI | `mobile/app/(root)/(tabs)/assistant.tsx` |
+| Disease / tool TFLite | `offlineVision/diseaseModel*.ts`, `toolModel*.ts` |
+| Gemma multimodal disease / tool / receipt | `mobile/lib/offlineVision/gemmaVision.ts` |
+| SQLite sessions + chat + scan history | `mobile/lib/offlineDb/` |
+| Assistant UI (history sheet) | `mobile/app/(root)/(tabs)/assistant.tsx` |
+| Scan history UI (delete) | `mobile/app/(root)/(tabs)/history/index.tsx` |
+| EAS profiles (standalone APK vs dev-client) | `mobile/eas.json` |
 | EAS upload excludes | `mobile/.easignore` |
 
 ---
@@ -108,17 +111,29 @@ Related:
 
 Implemented in `runLlmTurn()` (`chatLoop.ts`).
 
-1. **Deterministic fast path** (`tryDeterministicReply`) — no LLM:
-   - Pure greeting → `buildWelcomeBn()` (time-of-day + user first name)
-   - Time question → device clock (`timeReplyBn`)
-   - Weather question → RTK-cached weather or honest offline message
-2. **Follow-up shortcut:** short affirmations (`হ্যাঁ` / `ঠিক`) after a disease-related turn → steer user to camera scan (no model waffle).
-3. **Otherwise LLM:**
-   - Pull RAG hits, optional recent scans, last ~4 chat lines
-   - Build grounded prompt
-   - Stream Gemma completion (Gemma 3 Instruct chat template)
-   - Sanitize output (strip greeting spam, name theft, role tags)
-4. Persist turns to SQLite; live mode speaks via `speakBangla`.
+1. **Intent / KB first** (`answerByIntent` in `intents.ts`) — no LLM when possible:
+   - Greeting, how-are-you, time, date, thanks, bye, who-am-I
+   - Weather / rain / temperature from cache
+   - Named disease, crop+symptoms, fertilizer FAQ from `bn_knowledge_base.json`
+   - Follow-ups on prior topic (treatment / prevention / “হ্যাঁ” → scan)
+2. **No reliable facts → refuse:** if RAG returns empty and intent missed →  
+   `এ বিষয়ে আমার কাছে নিশ্চিত তথ্য নেই…` (never invent doses or °C).
+3. **Otherwise LLM** (when facts exist and Gemma is loaded):
+   - Pull RAG hits, optional recent scans, last chat lines in the **active session**
+   - `buildGroundedPrompt()` — answer only from “নির্ভরযোগ্য তথ্য”
+   - Stream Gemma (Gemma 3 Instruct template); low temperature
+   - Sanitize output
+4. Persist to `chat_sessions` / `chat_turns`; live mode speaks via `speakBangla`.
+
+### Chat sessions (UI)
+
+| Action | Where |
+|--------|--------|
+| নতুন আলোচনা | Assistant header **নতুন** |
+| আগের আলোচনা | Header **ইতিহাস** → sheet |
+| মুছুন (one session) | Sheet row trash |
+| বর্তমান আলোচনা মুছুন | Sheet top action |
+| স্ক্যান ইতিহাস মুছুন | **ইতিহাস** tab → row **মুছুন** |
 
 ---
 
@@ -131,36 +146,31 @@ Source: `buildGroundedPrompt()` in `mobile/lib/offlineChat/chatLoop.ts`.
 Template (conceptual):
 
 ```text
-তুমি আরণ্য, কৃষি সহকারী। সরাসরি উত্তর দাও।
-নিয়ম: ১–২ ছোট বাংলা বাক্য। প্রশ্ন আবার লিখবে না।
-অভিবাদন দিও না যদি প্রশ্ন অভিবাদন না হয়।
-নাম জানা থাকলে নাম জিজ্ঞাসা করবে না। নিজেকে ব্যবহারকারীর নাম বলো না।
-আগের কথোপকথন থাকলে সেই প্রসঙ্গে উত্তর দাও।
-টমেটো/রোগ জিজ্ঞাসা হলে স্ক্যান/ছবির পরামর্শ দিতে পারো।
-নাম: <firstName>                    # if logged in
-তথ্য:
-- <session / RAG / recent chat / scans>
+আপনি আরণ্য — বাংলাদেশের কৃষকদের জন্য নির্ভরযোগ্য কৃষি সহায়ক।
+শুধু নিচের «নির্ভরযোগ্য তথ্য» থেকে উত্তর দিন।
+তথ্য না থাকলে এক লাইনে: এই বিষয়ে নিশ্চিত তথ্য নেই।
+অনুমান করবেন না। প্রশ্ন আবার লিখবেন না। অপ্রাসঙ্গিক অভিবাদন নয়।
+উত্তর: ১–৩টি সংক্ষিপ্ত বাংলা বাক্য।
+কৃষকের নাম: <firstName>              # if logged in
+নির্ভরযোগ্য তথ্য:
+- <RAG / scans / recent session lines>
 
-প্রশ্ন: <user text>
+কৃষকের প্রশ্ন: <user text>
 উত্তর:
 ```
 
-**Design rules baked into the prompt**
+**Design rules**
 
 | Rule | Why |
 |------|-----|
-| 1–2 short Bangla sentences | Small GGUF models ramble otherwise |
+| Answer only from injected facts | Stops hallucination / wrong pesticide advice |
+| Explicit skip when facts empty | “100% accurate or refuse” product rule |
+| Short Bangla | Small GGUFs ramble otherwise |
 | No greeting on non-greeting turns | Models copy “শুভ সকাল…” onto every answer |
-| Address by name, never by profession | Stops “কৃষক / পেশা” role confusion |
-| Prefer injected facts; don’t invent °C / doses | Safety + RAG honesty |
 
 ### 5.2 Welcome string (deterministic)
 
-Source: `buildWelcomeBn()` in `retrieve.ts`.
-
-Example: `শুভ সকাল, Faiyaj! আমি আরণ্য। <district>… কী জানতে চান?`
-
-Time bands: সকাল / দুপুর / বিকেল / সন্ধ্যা (`timeOfDayGreetingBn`).
+Source: `buildWelcomeBn()` in `retrieve.ts` — time + optional name/district/weather; no marketing “AI vibe” fluff.
 
 ### 5.3 Gemma chat template
 
@@ -173,31 +183,35 @@ Source: `llmEngine.ts` → `completeOnce`.
 <start_of_turn>model
 ```
 
-Optional short history turns may be prepended as prior `user` / `model` blocks.
+Session history may be prepended as prior `user` / `model` blocks.
 
 ### 5.4 Generation parameters
 
 | Parameter | Typical value | Notes |
 |-----------|---------------|--------|
-| `n_ctx` | 2048 | Load-time context |
-| `n_predict` | 120 | Caps reply length |
-| `temperature` | ~0.55 (retry ~0.4) | Lower on echo retry |
+| `n_ctx` | 2048 (text) / **4096** (vision 4B) | Multimodal needs more room |
+| `n_predict` | ~160 text / ~220 vision | Caps reply length |
+| `temperature` | ~0.25 (retry ~0.15) | Accuracy over creativity |
+| `ctx_shift` | `false` when mmproj loaded | Required for media tokens |
 | `stop` | `<end_of_turn>`, `<start_of_turn>`, … | Gemma IT stops |
 | `n_threads` | 4 | CPU |
-| `n_gpu_layers` | 0 | CPU-safe default on many devices |
+| `n_gpu_layers` | 0 | CPU-safe default |
 
-### 5.5 Output sanitizer
+### 5.5 Multimodal (vision)
 
-`sanitizeAssistantReply()` strips:
+Source: `llmEngine.streamLlmVisionReply` + `gemmaVision.ts`.
 
-- Role prefixes (`কৃষক:`, `আরণ্য:`, …)
-- Copied welcome lines on non-greeting turns
-- “আমার নাম …” / asking for name when already known
-- Prompt-leak phrases (`তোমার পেশা নয়`, etc.)
+1. Load `gemma3-4b-it-q4` (GGUF + `mmproj-F16.gguf`).
+2. `initMultimodal({ path: mmproj, use_gpu: false, image_max_tokens: 256 })`.
+3. `completion({ messages: [{ role, content: [text, image_url] }] })`.
 
-### 5.6 Scan verify prompt
+### 5.6 Output sanitizer
 
-`verifyScan.ts` uses a short separate prompt: ask for `ok` / `uncertain` plus a one-line Bangla note, with KB facts for the label.
+`sanitizeAssistantReply()` strips role prefixes, copied welcomes, name leaks, and prompt tags.
+
+### 5.7 Scan verify prompt
+
+`verifyScan.ts` — KB-first explanation; short `ok` / `uncertain` check when LLM ready.
 
 ---
 
@@ -229,7 +243,7 @@ Have an agronomist review treatment text before production release.
 |----|------|-------------|--------|
 | `gemma3-270m-q8` | LLM | ~300 MB | Instruct GGUF (fast) |
 | `gemma3-1b-it-q4` | LLM | ~690 MB | **Recommended** default (better Bangla) |
-| `gemma3-4b-it-q4` | LLM | ~2.5 GB | Strongest Bangla; needs ~6 GB+ RAM (`Q4_K_M`) |
+| `gemma3-4b-it-q4` | LLM + vision | ~3.3 GB | GGUF `Q4_K_M` + `mmproj-F16`; disease/tool/receipt offline images via llama.rn |
 | `stt-bn-zipformer` | STT | ~90 MB | Required for live mic |
 | `tts-bn-vits` | TTS | ~110 MB | Listed; runtime speech uses **expo-speech** for stability |
 
@@ -262,12 +276,18 @@ Source: `liveConversation.ts` + `sttEngine.ts` + `speakBangla.ts`.
 
 ---
 
-## 9. Vision (disease / tools)
+## 9. Vision (disease / tools / receipt)
 
 1. Photo captured in scan flow → `analyzing.tsx`.
-2. Offline: TFLite classify/detect → structured result.
-3. Result screen shows KB **লক্ষণ / চিকিৎসা / প্রতিরোধ** and can open offline treatment plan.
-4. History detail loads local SQLite diagnosis and opens the same result UI.
+2. **Disease / tool offline order:**
+   1. Bundled TFLite (`classifyLeaf` / `detectTool`)
+   2. Else Gemma multimodal (`gemmaVision.ts`) if 4B+mmproj installed
+   3. Else transcript KB match
+3. Result screen shows KB **লক্ষণ / চিকিৎসা / প্রতিরোধ**.
+4. **Receipt offline:** `scanReceiptWithGemma` → `receipt-result` with `offline=1` params (no server id).
+5. **ইতিহাস** tab lists local diagnoses; each row has **মুছুন** (`deleteLocalDiagnosis`).
+
+Requires **জেমা ৩ · ৪বি (লেখা + ছবি)** from Model Manager for Gemma vision paths (~3.3 GB, ~7 GB RAM).
 
 ---
 
@@ -343,8 +363,9 @@ Profiles in `mobile/eas.json`:
 
 | Profile | Artifact | Use |
 |---------|----------|-----|
-| `development` | APK + dev client | Internal testing with Metro |
-| `preview` | APK | Internal distribution |
+| `development` | **Standalone APK** (JS bundled) | Install & run without Metro / Expo Go |
+| `preview` | Standalone APK | Same as development; internal QA |
+| `dev-client` | Dev-client APK | Hot reload with `npx expo start` |
 | `production` | AAB (`app-bundle`) | Play Store |
 
 ```bash
@@ -352,17 +373,20 @@ cd mobile
 npm i -g eas-cli
 eas login
 
-# Development APK (dev client)
+# Real installable APK (no Expo sandbox / no Metro required)
 eas build --platform android --profile development
 
-# Preview APK
+# Same style APK for QA
 eas build --platform android --profile preview
+
+# Only if you need Metro hot reload
+eas build --platform android --profile dev-client
 
 # Production App Bundle
 eas build --platform android --profile production
 ```
 
-Download the artifact from the EAS dashboard when the build finishes.
+Download the **.apk** from the EAS dashboard when the build finishes, then install on the phone (enable “Install unknown apps” if asked).
 
 ### D. Metro only (already installed app)
 
@@ -401,9 +425,13 @@ eas build --platform android --profile development
 | Mic / “ঠিক শুনতে পাইনি” | No STT model or dead mic | Download STT; check mic permission / emulator host audio |
 | Every reply starts with “শুভ সকাল…” | Stale bundle / old prompt | Reload; greetings are deterministic-only now |
 | History has no treatment text | Old read-only result UI | Open history item again — KB advice + treatment plan |
+| No delete on history | — | ইতিহাস tab row **মুছুন**; chat → header **ইতিহাস** sheet |
+| Chat answers unrelated / invents facts | Weak grounding | Intent+KB first; empty RAG → skip; use 1B/4B |
+| Offline receipt fails | No multimodal Gemma | Download **জেমা ৩ · ৪বি (লেখা + ছবি)** (GGUF+mmproj) |
+| APK needs Expo / Metro | Built with old `developmentClient` | Use profile `development` or `preview` (standalone); `dev-client` only for hot reload |
 | EAS upload huge | `android/build` included | Use `.easignore`; build from `mobile/` |
 | EAS `npm ci` fails (Install dependencies) | Stale `package-lock.json` vs `package.json` (e.g. BLE pin) | Use **pnpm only**: delete `package-lock.json`; keep `pnpm-lock.yaml` + `"packageManager": "pnpm@…"` |
-| EAS canceled at ~45m on `Run gradlew` | Compiling llama/reanimated/sherpa for **4 ABIs** (arm64 + armeabi + x86 + x86_64) | `eas.json` sets `ORG_GRADLE_PROJECT_reactNativeArchitectures=arm64-v8a` for development/preview |
+| EAS canceled at ~45m on `Run gradlew` | Compiling llama/reanimated/sherpa for **4 ABIs** | `ORG_GRADLE_PROJECT_reactNativeArchitectures=arm64-v8a` on development/preview |
 | Local `sdk.dir … Directory does not exist` | Bad `android/local.properties` | Set `ANDROID_HOME` / fix `sdk.dir=C:\\Users\\…\\Android\\Sdk` (Windows). Or delete `android/` and `npx expo prebuild` |
 | App crash on boot (abort) | Sherpa TTS init | TTS uses expo-speech; do not eager-init sherpa TTS |
 | Vision “নেই” | Bundled assets not copied | Ensure TFLite files under `assets/models/vision/` and rebuild |
@@ -412,12 +440,13 @@ eas build --platform android --profile development
 
 ## Quick checklist
 
-- [ ] `npm install` in `mobile/`
-- [ ] Dev client: `npx expo run:android` or EAS `development` profile
+- [ ] `pnpm install` in `mobile/`
+- [ ] Standalone APK: `eas build -p android --profile development` (or `preview`)
+- [ ] Dev hot-reload only: `eas build -p android --profile dev-client` then `npx expo start`
 - [ ] Vision TFLite + KB present under `assets/models/`
-- [ ] Download **Gemma 1B Instruct** (or 270M) + **Bangla STT**
-- [ ] Test সহকারী: greeting, time, weather, disease follow-up, live mic
-- [ ] Local APK: `cd android && gradlew assembleDebug`
-- [ ] Cloud APK: `eas build -p android --profile preview`
+- [ ] Download **Gemma 1B** (chat) and/or **Gemma 4B + mmproj** (vision/receipt) + **Bangla STT**
+- [ ] Test সহকারী: intent answers, skip-unknown, নতুন / ইতিহাস / মুছুন
+- [ ] Test ইতিহাস tab delete; offline disease → TFLite; receipt offline with 4B
+- [ ] Local debug APK (optional): `cd android && gradlew assembleDebug`
 
 For training pipelines and agronomist review of KB text, see [`ml/README.md`](../../ml/README.md) and [`docs/model_cards/`](../model_cards/).

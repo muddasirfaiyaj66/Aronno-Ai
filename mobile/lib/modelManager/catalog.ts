@@ -1,4 +1,4 @@
-/** Catalog of downloadable offline models (LLM / STT / TTS). */
+/** Catalog of downloadable offline models (LLM / STT / TTS / vision LLM). */
 
 export type ModelKind = "llm" | "stt" | "tts" | "vision";
 
@@ -21,6 +21,10 @@ export type ModelCatalogEntry = {
    * Each file is saved under models/<id>/<relativePath>.
    */
   files?: { relativePath: string; url: string }[];
+  /** Multimodal projector filename under the same model folder (vision LLM). */
+  mmprojFile?: string;
+  /** True when this LLM can take images via llama.rn initMultimodal. */
+  multimodal?: boolean;
 };
 
 const HF = (repo: string, file: string) =>
@@ -28,6 +32,7 @@ const HF = (repo: string, file: string) =>
 
 const BN_STT = "csukuangfj2/sherpa-onnx-streaming-zipformer-bn-vosk-2026-02-09";
 const BN_TTS = "csukuangfj/vits-coqui-bn-custom_female";
+const GEMMA_4B = "unsloth/gemma-3-4b-it-GGUF";
 
 export const MODEL_CATALOG: ModelCatalogEntry[] = [
   {
@@ -56,12 +61,25 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
   {
     id: "gemma3-4b-it-q4",
     kind: "llm",
-    nameBn: "জেমা ৩ · ৪বি (সবচেয়ে ভালো বাংলা)",
-    nameEn: "Gemma 3 4B Instruct",
-    sizeMb: 2490,
-    minRamMb: 6000,
-    repo: "unsloth/gemma-3-4b-it-GGUF",
+    nameBn: "জেমা ৩ · ৪বি (লেখা + ছবি)",
+    nameEn: "Gemma 3 4B Instruct + Vision",
+    // ~2.5 GB GGUF + ~0.85 GB mmproj
+    sizeMb: 3340,
+    minRamMb: 7000,
+    repo: GEMMA_4B,
     file: "gemma-3-4b-it-Q4_K_M.gguf",
+    mmprojFile: "mmproj-F16.gguf",
+    multimodal: true,
+    files: [
+      {
+        relativePath: "gemma-3-4b-it-Q4_K_M.gguf",
+        url: HF(GEMMA_4B, "gemma-3-4b-it-Q4_K_M.gguf"),
+      },
+      {
+        relativePath: "mmproj-F16.gguf",
+        url: HF(GEMMA_4B, "mmproj-F16.gguf"),
+      },
+    ],
   },
   {
     id: "stt-bn-zipformer",
@@ -108,4 +126,8 @@ export function catalogByKind(kind: ModelKind): ModelCatalogEntry[] {
 export function defaultDownloadUrl(entry: ModelCatalogEntry): string {
   if (entry.downloadUrl) return entry.downloadUrl;
   return `https://huggingface.co/${entry.repo}/resolve/main/${entry.file}`;
+}
+
+export function isMultimodalCatalogEntry(entry: ModelCatalogEntry): boolean {
+  return !!(entry.multimodal && entry.mmprojFile);
 }

@@ -296,6 +296,7 @@ export default function ModelsScreen() {
                 <AppText variant="bodyLg">{item.nameBn}</AppText>
                 <AppText variant="caption" className="mt-1">
                   {item.nameEn} · {item.sizeMb} MB · RAM {item.minRamMb}+ MB
+                  {item.multimodal ? " · ছবি + লেখা" : ""}
                   {item.recommended ? " · সুপারিশকৃত" : ""}
                 </AppText>
                 {pct !== undefined && pct < 1 ? (

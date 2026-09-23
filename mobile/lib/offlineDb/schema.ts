@@ -33,9 +33,17 @@ export type LocalToolRow = {
 
 export type ChatRole = "user" | "assistant";
 
+export type LocalChatSessionRow = {
+  localId: string;
+  titleBn: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type LocalChatTurnRow = {
   localId: string;
   serverId: string | null;
+  conversationId: string;
   role: ChatRole;
   textBn: string;
   extraContextJson: string | null;
@@ -76,9 +84,17 @@ CREATE TABLE IF NOT EXISTS local_tools (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  local_id TEXT PRIMARY KEY NOT NULL,
+  title_bn TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS chat_turns (
   local_id TEXT PRIMARY KEY NOT NULL,
   server_id TEXT,
+  conversation_id TEXT NOT NULL DEFAULT '',
   role TEXT NOT NULL,
   text_bn TEXT NOT NULL,
   extra_context_json TEXT,
@@ -95,5 +111,7 @@ CREATE INDEX IF NOT EXISTS idx_diag_sync ON local_diagnoses(sync_status);
 CREATE INDEX IF NOT EXISTS idx_tool_sync ON local_tools(sync_status);
 CREATE INDEX IF NOT EXISTS idx_chat_sync ON chat_turns(sync_status);
 CREATE INDEX IF NOT EXISTS idx_chat_created ON chat_turns(created_at);
+CREATE INDEX IF NOT EXISTS idx_chat_conversation ON chat_turns(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_diag_created ON local_diagnoses(created_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_updated ON chat_sessions(updated_at);
 `;

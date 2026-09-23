@@ -30,6 +30,11 @@ export function localDir(entry: ModelCatalogEntry): string {
   return `${MODELS_DIR}${entry.id}/`;
 }
 
+export function localMmprojPath(entry: ModelCatalogEntry): string | null {
+  if (!entry.mmprojFile) return null;
+  return `${MODELS_DIR}${entry.id}/${entry.mmprojFile}`;
+}
+
 export async function isInstalled(entry: ModelCatalogEntry): Promise<boolean> {
   if (!FileSystem.documentDirectory) return false;
   // Drop obsolete base (non-instruct) Gemma file if present
@@ -48,7 +53,10 @@ export async function isInstalled(entry: ModelCatalogEntry): Promise<boolean> {
         const info = await FileSystem.getInfoAsync(
           `${localDir(entry)}${f.relativePath}`,
         );
-        return info.exists;
+        if (!info.exists) return false;
+        // Skip tiny error pages; mmproj/GGUF are hundreds of MB
+        if ((info.size ?? 0) < 1024 * 1024) return false;
+        return true;
       }),
     );
     return flags.every(Boolean);

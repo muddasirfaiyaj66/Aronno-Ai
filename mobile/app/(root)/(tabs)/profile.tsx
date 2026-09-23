@@ -242,74 +242,106 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-border bg-white px-5 pb-3 pt-2">
-        <AppText variant="title">প্রোফাইল</AppText>
-        <AppText variant="caption" className="mt-0.5">
-          নিজের তথ্য ও অ্যাপ সেটিংস
+      <View
+        className="border-b border-border bg-white px-5 pb-3 pt-2"
+        accessibilityRole="header"
+      >
+        <AppText variant="title" className="text-ink">
+          প্রোফাইল
+        </AppText>
+        <AppText variant="caption" className="mt-0.5 text-muted">
+          ব্যক্তিগত তথ্য ও অ্যাপ সেটিংস
         </AppText>
       </View>
 
       <KeyboardAvoidingView
         className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
       >
         <ScrollView
           className="flex-1"
-          contentContainerClassName="gap-5 px-4 py-5 pb-28"
+          contentContainerClassName="gap-4 px-4 py-4 pb-28"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           refreshControl={refreshControl}
         >
-          {/* Identity */}
-          <View className="items-center rounded-2xl border border-border bg-white px-5 py-6">
-            <Pressable
-              onPress={pickAvatar}
-              accessibilityRole="button"
-              accessibilityLabel="প্রোফাইল ছবি আপলোড"
-              className="items-center"
+          {/* Identity hero */}
+          <View className="overflow-hidden rounded-3xl border border-border bg-white">
+            <View
+              className="px-5 pb-6 pt-8"
+              style={{ backgroundColor: colors.forest900 }}
             >
-              <View>
-                {me?.avatarUrl ? (
-                  <Image
-                    source={{ uri: me.avatarUrl }}
-                    style={{ height: 96, width: 96, borderRadius: 48 }}
-                  />
-                ) : (
-                  <View
-                    className="h-24 w-24 items-center justify-center rounded-full"
-                    style={{ backgroundColor: colors.primary }}
-                  >
-                    <AppText variant="display" className="text-white">
-                      {initial}
-                    </AppText>
-                  </View>
-                )}
-                <View
-                  className="absolute bottom-0 right-0 h-8 w-8 items-center justify-center rounded-full border-2 border-white"
-                  style={{ backgroundColor: colors.tertiary }}
-                >
-                  {uploadingPhoto ? (
-                    <Ionicons name="hourglass" size={14} color={colors.white} />
+              <Pressable
+                onPress={pickAvatar}
+                accessibilityRole="button"
+                accessibilityLabel="প্রোফাইল ছবি পরিবর্তন করুন"
+                className="items-center"
+              >
+                <View>
+                  {me?.avatarUrl ? (
+                    <Image
+                      source={{ uri: me.avatarUrl }}
+                      accessibilityLabel="প্রোফাইল ছবি"
+                      style={{
+                        height: 96,
+                        width: 96,
+                        borderRadius: 48,
+                        borderWidth: 3,
+                        borderColor: colors.white,
+                      }}
+                    />
                   ) : (
-                    <Ionicons name="camera" size={14} color={colors.white} />
+                    <View
+                      className="h-24 w-24 items-center justify-center rounded-full border-[3px] border-white"
+                      style={{ backgroundColor: colors.tertiary }}
+                    >
+                      <AppText variant="display" className="text-white">
+                        {initial}
+                      </AppText>
+                    </View>
                   )}
+                  <View
+                    className="absolute bottom-0 right-0 h-9 w-9 items-center justify-center rounded-full border-2 border-white"
+                    style={{ backgroundColor: colors.primary }}
+                    importantForAccessibility="no"
+                  >
+                    {uploadingPhoto ? (
+                      <Ionicons
+                        name="hourglass"
+                        size={14}
+                        color={colors.white}
+                      />
+                    ) : (
+                      <Ionicons name="camera" size={14} color={colors.white} />
+                    )}
+                  </View>
                 </View>
-              </View>
-            </Pressable>
-            <AppText
-              variant="title"
-              className="mt-4 text-center"
-              numberOfLines={1}
-            >
-              {me?.displayName || "নাম নেই"}
-            </AppText>
-            <AppText variant="caption" className="mt-1 text-center">
-              {me?.email}
-            </AppText>
+              </Pressable>
+              <AppText
+                variant="title"
+                className="mt-4 text-center text-white"
+                numberOfLines={1}
+              >
+                {me?.displayName || "নাম যোগ করুন"}
+              </AppText>
+              {me?.email ? (
+                <AppText
+                  variant="caption"
+                  className="mt-1 text-center text-white/85"
+                >
+                  {me.email}
+                </AppText>
+              ) : null}
+            </View>
+
             {(professionName || districtName) && (
-              <View className="mt-3 flex-row flex-wrap items-center justify-center gap-2">
+              <View className="flex-row flex-wrap items-center justify-center gap-2 border-t border-border px-4 py-3">
                 {professionName ? (
-                  <View className="rounded-full bg-secondary px-3 py-1">
+                  <View
+                    className="rounded-full px-3 py-1.5"
+                    style={{ backgroundColor: colors.secondary }}
+                  >
                     <AppText
                       variant="caption"
                       className="font-bengali-semibold text-primary"
@@ -319,37 +351,35 @@ export default function ProfileScreen() {
                   </View>
                 ) : null}
                 {districtName ? (
-                  <View className="rounded-full bg-neutral px-3 py-1">
-                    <AppText variant="caption" className="font-bengali-semibold">
+                  <View className="rounded-full bg-neutral px-3 py-1.5">
+                    <AppText
+                      variant="caption"
+                      className="font-bengali-semibold text-ink"
+                    >
                       {districtName}
                     </AppText>
                   </View>
                 ) : null}
               </View>
             )}
-            <Pressable
-              onPress={pickAvatar}
-              className="mt-3 min-h-touch items-center justify-center px-3"
-              accessibilityRole="button"
-            >
-              <AppText
-                variant="caption"
-                className="font-bengali-semibold text-primary"
-              >
-                {uploadingPhoto ? "ছবি আপলোড হচ্ছে…" : "ছবি বদলান"}
-              </AppText>
-            </Pressable>
             {photoError ? (
               <AppText
                 variant="caption"
-                className="mt-1 text-center text-severity-high"
+                className="px-4 pb-3 text-center text-severity-high"
+                accessibilityLiveRegion="polite"
               >
                 {photoError}
+              </AppText>
+            ) : uploadingPhoto ? (
+              <AppText
+                variant="caption"
+                className="px-4 pb-3 text-center text-muted"
+              >
+                ছবি আপলোড হচ্ছে…
               </AppText>
             ) : null}
           </View>
 
-          {/* Editable details */}
           <FormSection title="ব্যক্তিগত তথ্য">
             <FieldInput
               label="নাম"
@@ -421,7 +451,9 @@ export default function ProfileScreen() {
               }}
               disabled={locating}
               accessibilityRole="button"
-              className="min-h-[48px] flex-row items-center justify-center gap-2 rounded-xl border border-border bg-neutral px-3 active:bg-secondary"
+              accessibilityState={{ busy: locating }}
+              accessibilityLabel="বর্তমান অবস্থান ব্যবহার করুন"
+              className="min-h-touch flex-row items-center justify-center gap-2 rounded-2xl border border-border bg-white px-3 active:bg-secondary"
             >
               <Ionicons
                 name="navigate-outline"
@@ -438,18 +470,30 @@ export default function ProfileScreen() {
               </AppText>
             </Pressable>
             {locationHint ? (
-              <AppText variant="caption" className="text-primary">
+              <AppText
+                variant="caption"
+                className="text-primary"
+                accessibilityLiveRegion="polite"
+              >
                 {locationHint}
               </AppText>
             ) : null}
           </FormSection>
 
           {message && !message.includes("মোবাইল") ? (
-            <AppText variant="caption" className="px-1 text-severity-high">
+            <AppText
+              variant="caption"
+              className="px-1 text-severity-high"
+              accessibilityLiveRegion="assertive"
+            >
               {message}
             </AppText>
           ) : saved ? (
-            <AppText variant="caption" className="px-1 text-primary">
+            <AppText
+              variant="caption"
+              className="px-1 text-primary"
+              accessibilityLiveRegion="polite"
+            >
               প্রোফাইল সংরক্ষণ হয়েছে।
             </AppText>
           ) : null}
@@ -461,17 +505,19 @@ export default function ProfileScreen() {
             onPress={handleSave}
           />
 
-          {/* App tools */}
-          <SettingsGroup title="অফলাইন এআই" footer="ইন্টারনেট ছাড়া চ্যাট ও স্ক্যান।">
+          <SettingsGroup
+            title="অফলাইন সরঞ্জাম"
+            footer="ইন্টারনেট ছাড়া চ্যাট ও স্ক্যানের জন্য মডেল ডাউনলোড করুন।"
+          >
             <SettingsRow
               label="মডেল ম্যানেজার"
-              subtitle="জেমা ও কণ্ঠ মডেল ডাউনলোড"
+              subtitle="জেমা ও কণ্ঠ মডেল"
               icon="cloud-download-outline"
               onPress={() => router.push("/(root)/(tabs)/models")}
             />
             <SettingsRow
-              label="অফলাইন ডিবাগ"
-              subtitle="মডেল ও সিঙ্ক অবস্থা দেখুন"
+              label="অফলাইন অবস্থা"
+              subtitle="মডেল ও সিঙ্ক দেখুন"
               icon="pulse-outline"
               onPress={() => router.push("/(root)/offline-debug")}
               last={!isStaff}

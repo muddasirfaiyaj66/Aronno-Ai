@@ -1,5 +1,5 @@
 /**
- * On-device Gemma IT (GGUF) via llama.rn.
+ * On-device Gemma IT (GGUF) via llama.rn — text + optional vision (mmproj).
  */
 import {
   initLlama,
@@ -8,14 +8,20 @@ import {
 } from "llama.rn";
 import {
   listInstalled,
+  localMmprojPath,
   localPath,
 } from "@/lib/modelManager/modelManager";
-import { catalogById, type ModelCatalogEntry } from "@/lib/modelManager/catalog";
+import {
+  catalogById,
+  isMultimodalCatalogEntry,
+  type ModelCatalogEntry,
+} from "@/lib/modelManager/catalog";
 import { getPreferredLlmId, setPreferredLlmId } from "@/lib/modelManager/preferredLlm";
 import { logMetric, markStart } from "@/lib/offline/metrics";
 
 let ctx: LlamaContext | null = null;
 let activeModelId: string | null = null;
+let visionEnabled = false;
 
 const SPECIAL_RE =
   /<\|im_start\|>\s*(assistant|user|system|model)?\s*|<start_of_turn>\s*(assistant|user|system|model)?\s*|<end_of_turn>|<\|im_end\|>|<\/?s>|<eos>|<bos>|<pad>/gi;
@@ -24,9 +30,29 @@ function stripSpecial(s: string) {
   return s.replace(SPECIAL_RE, "");
 }
 
+function toFileUrl(uri: string): string {
+  if (!uri) return uri;
+  if (uri.startsWith("file://") || uri.startsWith("data:")) return uri;
+  if (uri.startsWith("/")) return `file://${uri}`;
+  return uri;
+}
+
+async function releaseContext() {
+  if (!ctx) return;
+  try {
+    if (visionEnabled) await ctx.releaseMultimodal();
+  } catch {
+    // ignore
+  }
+  await ctx.release();
+  ctx = null;
+  activeModelId = null;
+  visionEnabled = false;
+}
+
 /**
  * Call at app start and after an LLM download finishes.
- * Order: explicit preferredId → saved preference → recommended → first installed.
+ * Order: explicit preferredId → saved preference → multimodal → recommended → first.
  */
 export async function autoLoadLlm(
   preferredId?: string,
@@ -41,6 +67,7 @@ export async function autoLoadLlm(
   const savedId = preferredId ?? (await getPreferredLlmId()) ?? undefined;
   const choice: ModelCatalogEntry =
     installed.find((e) => e.id === savedId) ??
+    installed.find((e) => isMultimodalCatalogEntry(e)) ??
     installed.find((e) => e.recommended) ??
     installed[0];
 
@@ -49,33 +76,57 @@ export async function autoLoadLlm(
     return activeModelId;
   }
 
-  if (ctx) {
-    await ctx.release();
-    ctx = null;
-    activeModelId = null;
-  }
+  await releaseContext();
 
   const modelPath = localPath(choice);
+  const mmproj = localMmprojPath(choice);
+  const wantVision = isMultimodalCatalogEntry(choice) && !!mmproj;
+
   try {
     ctx = await initLlama(
       {
         model: modelPath,
-        n_ctx: 2048,
+        n_ctx: wantVision ? 4096 : 2048,
         n_threads: 4,
         n_gpu_layers: 0,
+        // Required so media token positions stay valid.
+        ctx_shift: wantVision ? false : undefined,
       },
       (progress) => {
         logMetric("llm.load.progress", progress);
       },
     );
+
+    if (wantVision && mmproj) {
+      const ok = await ctx.initMultimodal({
+        path: mmproj,
+        use_gpu: false,
+        // Keep image tokens modest for phone RAM.
+        image_max_tokens: 256,
+      });
+      visionEnabled = !!ok;
+      if (ok) {
+        const support = await ctx.getMultimodalSupport().catch(() => ({
+          vision: false,
+          audio: false,
+        }));
+        logMetric(
+          "llm.vision.ready",
+          support.vision ? 1 : 0,
+          choice.id,
+        );
+      } else {
+        logMetric("llm.vision.init-failed", undefined, choice.id);
+      }
+    }
+
     activeModelId = choice.id;
     await setPreferredLlmId(choice.id);
     end(choice.id);
     logMetric("llm.loaded", undefined, choice.id);
     return activeModelId;
   } catch (err) {
-    ctx = null;
-    activeModelId = null;
+    await releaseContext();
     end(err instanceof Error ? err.message : "load-failed");
     return null;
   }
@@ -91,14 +142,17 @@ export function isLlmReady(): boolean {
   return ctx !== null;
 }
 
+/** True when loaded LLM has mmproj vision enabled. */
+export function isVisionLlmReady(): boolean {
+  return ctx !== null && visionEnabled;
+}
+
 export function currentModelId(): string | null {
   return activeModelId;
 }
 
 export async function unloadLlm(): Promise<void> {
-  if (ctx) await ctx.release();
-  ctx = null;
-  activeModelId = null;
+  await releaseContext();
   logMetric("llm.unload");
 }
 
@@ -106,11 +160,6 @@ function normForEcho(s: string) {
   return s.toLowerCase().replace(/[\s।,.!?"'«»:;\-–—()]/g, "");
 }
 
-/**
- * One completion pass. Text is held back while it still looks like a copy of
- * the user's question, so echoes never reach the UI.
- * Returns true if the model produced a real (non-echo) answer.
- */
 export type LlmHistoryTurn = { role: "user" | "assistant"; text: string };
 
 async function completeOnce(
@@ -121,7 +170,6 @@ async function completeOnce(
   onToken: (t: string) => void,
   history: LlmHistoryTurn[] = [],
 ): Promise<boolean> {
-  // Official Gemma 3 Instruct turn format (llama.cpp adds <bos> itself).
   const past = history
     .map(
       (t) =>
@@ -170,12 +218,12 @@ async function completeOnce(
   await llama.completion(
     {
       prompt,
-      n_predict: 120,
+      n_predict: 160,
       temperature,
-      top_k: 64,
-      top_p: 0.95,
-      min_p: 0.05,
-      penalty_repeat: 1.1,
+      top_k: 40,
+      top_p: 0.9,
+      min_p: 0.1,
+      penalty_repeat: 1.15,
       stop: ["<end_of_turn>", "<start_of_turn>", "<|im_end|>", "<|im_start|>"],
     },
     (data: TokenData) => {
@@ -192,7 +240,7 @@ async function completeOnce(
 
 export async function streamLlmReply(
   promptBn: string,
-  onToken: (t: string) => void,
+  onToken: (token: string) => void,
   opts: { userText?: string; history?: LlmHistoryTurn[] } = {},
 ): Promise<void> {
   if (!ctx) {
@@ -202,30 +250,101 @@ export async function streamLlmReply(
   const userText = opts.userText ?? "";
   const history = opts.history ?? [];
 
-  if (await completeOnce(ctx, promptBn, userText, 0.5, onToken, history)) {
+  if (await completeOnce(ctx, promptBn, userText, 0.25, onToken, history)) {
     end("ok");
     return;
   }
 
-  // Small models often just repeat the question — retry once, no history, firmer ask.
   const firmer =
-    `${promptBn.trim()}\nশুধু উত্তর লেখো। ২টি ছোট বাক্য। প্রশ্ন আবার লিখবে না।`;
-  if (await completeOnce(ctx, firmer, userText, 0.35, onToken)) {
+    `${promptBn.trim()}\nশুধু উত্তর। তথ্য না থাকলে লিখুন: এই বিষয়ে নিশ্চিত তথ্য নেই। প্রশ্ন আবার লিখবেন না।`;
+  if (await completeOnce(ctx, firmer, userText, 0.15, onToken)) {
     end("ok-retry");
     return;
   }
 
-  onToken(
-    activeModelId === "gemma3-270m-q8"
-      ? "ছোট মডেলটি উত্তর দিতে পারছে না। মডেল ম্যানেজার থেকে «জেমা ৩ (মাঝারি)» ডাউনলোড করুন — বাংলায় অনেক ভালো কথা বলে।"
-      : "দুঃখিত, বুঝতে পারিনি। একটু অন্যভাবে আবার বলুন।",
-  );
+  onToken("এই বিষয়ে নিশ্চিত তথ্য নেই।");
   end("echo-fallback");
+}
+
+/**
+ * Vision completion — requires multimodal Gemma (mmproj loaded).
+ * Streams Bangla/text tokens; returns full cleaned string.
+ */
+export async function streamLlmVisionReply(
+  promptBn: string,
+  imageUri: string,
+  onToken: (token: string) => void = () => undefined,
+): Promise<string> {
+  if (!ctx || !visionEnabled) {
+    throw new Error("vision-llm-not-ready");
+  }
+  const end = markStart("llm.vision");
+  const url = toFileUrl(imageUri);
+  let full = "";
+  let tagHold = "";
+
+  const flushTags = (force: boolean) => {
+    if (!tagHold) return;
+    if (!force && /<[|a-z_/]*$/i.test(tagHold)) return;
+    const cleaned = stripSpecial(tagHold);
+    tagHold = "";
+    if (!cleaned) return;
+    full += cleaned;
+    onToken(cleaned);
+  };
+
+  try {
+    await ctx.completion(
+      {
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: promptBn.trim() },
+              { type: "image_url", image_url: { url } },
+            ],
+          },
+        ],
+        n_predict: 220,
+        temperature: 0.15,
+        top_k: 40,
+        top_p: 0.9,
+        min_p: 0.1,
+        penalty_repeat: 1.1,
+        stop: ["<end_of_turn>", "<start_of_turn>", "<|im_end|>", "<|im_start|>"],
+      },
+      (data: TokenData) => {
+        const piece = data.token ?? "";
+        if (!piece) return;
+        tagHold += piece;
+        flushTags(false);
+      },
+    );
+    flushTags(true);
+    end("ok");
+    return stripSpecial(full).trim();
+  } catch (err) {
+    end(err instanceof Error ? err.message : "vision-failed");
+    throw err;
+  }
+}
+
+/** Collect full vision reply without streaming UI. */
+export async function completeLlmVision(
+  promptBn: string,
+  imageUri: string,
+): Promise<string> {
+  return streamLlmVisionReply(promptBn, imageUri);
 }
 
 export async function hasInstalledLlm(): Promise<boolean> {
   const llms = (await listInstalled()).filter((e) => e.kind === "llm");
   return llms.length > 0;
+}
+
+export async function hasInstalledVisionLlm(): Promise<boolean> {
+  const installed = await listInstalled();
+  return installed.some((e) => e.kind === "llm" && isMultimodalCatalogEntry(e));
 }
 
 export async function preferredInstalledLlm(): Promise<ModelCatalogEntry | null> {
@@ -234,6 +353,7 @@ export async function preferredInstalledLlm(): Promise<ModelCatalogEntry | null>
   const savedId = await getPreferredLlmId();
   return (
     installed.find((e) => e.id === savedId) ??
+    installed.find((e) => isMultimodalCatalogEntry(e)) ??
     installed.find((e) => e.recommended) ??
     (catalogById(installed[0].id) ?? installed[0])
   );

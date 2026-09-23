@@ -163,7 +163,7 @@ async function cropAnswer(crop: CropKey, text: string): Promise<IntentAnswer> {
     return {
       text: diseaseAnswer(
         bySymptom,
-        `আপনার বর্ণনা শুনে মনে হচ্ছে ${bySymptom.diseaseNameBn.replace(/\s*\(.*?\)/g, "")} হতে পারে।`,
+        `বর্ণনা অনুযায়ী ${bySymptom.diseaseNameBn.replace(/\s*\(.*?\)/g, "")} হতে পারে।`,
       ) + " নিশ্চিত হতে পাতার ছবি তুলে স্ক্যান করুন।",
       topic: { crop, diseaseId: bySymptom.id },
     };
@@ -200,29 +200,35 @@ export async function answerByIntent(
   if (RE.greeting.test(text)) {
     return {
       text: ctx.hasHistory
-        ? "জি, বলুন — কী জানতে চান?"
-        : `${timeOfDayGreetingBn()}${name ? `, ${name}` : ""}! আমি আরণ্য। ফসল, রোগ বা আবহাওয়া — কী জানতে চান?`,
+        ? "বলুন — কী জানতে চান?"
+        : `${timeOfDayGreetingBn()}${name ? `, ${name}` : ""}। ফসল, রোগ, সার বা আবহাওয়া নিয়ে জিজ্ঞাসা করুন।`,
     };
   }
   if (RE.howAreYou.test(text) && text.length < 30) {
-    return { text: `আলহামদুলিল্লাহ, ভালো আছি${name ? `, ${name}` : ""}! আপনার ফসলের খবর কী? কোনো সমস্যা থাকলে বলুন।` };
+    return {
+      text: `ভালো আছি${name ? `, ${name}` : ""}। আপনার ফসলে কোনো সমস্যা আছে কি?`,
+    };
   }
   if (RE.time.test(text)) {
     return { text: `এখন ${formatTimeBn(new Date())}।` };
   }
   if (RE.date.test(text) && text.length < 40) {
     const d = new Date();
-    return { text: `আজ ${WEEKDAYS[d.getDay()]}, ${toBn(d.getDate())} ${MONTHS[d.getMonth()]} ${toBn(d.getFullYear())}।` };
+    return {
+      text: `আজ ${WEEKDAYS[d.getDay()]}, ${toBn(d.getDate())} ${MONTHS[d.getMonth()]} ${toBn(d.getFullYear())}।`,
+    };
   }
   if (RE.thanks.test(text) && text.length < 40) {
-    return { text: "আপনাকেও ধন্যবাদ! আর কিছু জানতে চাইলে বলবেন।" };
+    return { text: "সাহায্য করতে পেরে ভালো লাগল। আর কিছু জানতে চাইলে বলুন।" };
   }
   if (RE.bye.test(text) && text.length < 30) {
-    return { text: `ভালো থাকবেন${name ? `, ${name}` : ""}! ফসলের যত্ন নিন, দরকার হলে আবার ডাকবেন।` };
+    return {
+      text: `ভালো থাকুন${name ? `, ${name}` : ""}। প্রয়োজনে আবার কথা বলুন।`,
+    };
   }
   if (RE.who.test(text) && text.length < 40) {
     return {
-      text: "আমি আরণ্য, আপনার কৃষি সহকারী। ফসলের রোগ চেনা, চিকিৎসা, আবহাওয়া আর চাষের পরামর্শ দিতে পারি — ইন্টারনেট ছাড়াও।",
+      text: "আমি আরণ্য — ফসলের রোগ চেনা, চিকিৎসা, আবহাওয়া ও চাষের পরামর্শ দিতে সাহায্য করি। ইন্টারনেট ছাড়াও কাজ করে।",
     };
   }
   if ((RE.rain.test(text) || RE.temp.test(text) || RE.weather.test(text)) && !RE.diseaseAsk.test(text)) {
@@ -244,15 +250,21 @@ export async function answerByIntent(
   }
   if (ctx.topic?.askedForScan && RE.yes.test(text)) {
     return {
-      text: "ঠিক আছে। নিচের ক্যামেরা বোতাম চাপুন, আক্রান্ত পাতার কাছ থেকে স্পষ্ট একটা ছবি তুলুন — আমি রোগটা চিনে চিকিৎসা বলে দেব।",
+      text: "নিচের ক্যামেরা বোতাম চাপুন। আক্রান্ত পাতার কাছ থেকে স্পষ্ট একটা ছবি তুলুন — স্ক্যান শেষে চিকিৎসা দেখাবে।",
       topic: { ...ctx.topic, askedForScan: false },
     };
   }
   if (ctx.topic?.askedForScan && RE.no.test(text)) {
     return {
-      text: "কোনো সমস্যা নেই। পাতায় বা ফলে যা দেখছেন মুখে বলুন — যেমন রঙ, দাগের আকার — আমি ধারণা দিতে চেষ্টা করব।",
+      text: "পাতায় বা ফলে যা দেখছেন বলুন — রঙ, দাগের আকার বা পোকার নাম। নিশ্চিত না হলে ছবি তুলে স্ক্যান করুন।",
       topic: ctx.topic,
     };
+  }
+
+  // FAQ / fertilizer from knowledge base
+  const faqHit = matchFaq(text);
+  if (faqHit) {
+    return { text: faqHit };
   }
 
   // Knowledge-base (RAG) answers.
@@ -274,12 +286,33 @@ export async function answerByIntent(
         text:
           diseaseAnswer(
             bySymptom,
-            `লক্ষণ শুনে ${bySymptom.diseaseNameBn.replace(/\s*\(.*?\)/g, "")} হতে পারে।`,
-          ) + " কোন ফসল এবং পাতার ছবি পেলে নিশ্চিত বলতে পারব।",
+            `লক্ষণ অনুযায়ী ${bySymptom.diseaseNameBn.replace(/\s*\(.*?\)/g, "")} হতে পারে।`,
+          ) + " কোন ফসল এবং পাতার ছবি পেলে আরও নিশ্চিত বলতে পারব।",
         topic: { diseaseId: bySymptom.id },
       };
     }
   }
 
   return null;
+}
+
+function matchFaq(text: string): string | null {
+  const t = norm(text);
+  let best: { score: number; response: string } | undefined;
+  for (const f of kb.faq) {
+    let score = 0;
+    for (const p of f.patternsBn) {
+      const pn = norm(p);
+      if (!pn) continue;
+      if (t.includes(pn) || pn.includes(t)) score += 12;
+      else {
+        const words = pn.split(" ").filter((w) => w.length >= 2);
+        score += words.reduce((s, w) => (t.includes(w) ? s + 1 : s), 0);
+      }
+    }
+    if (!best || score > best.score) {
+      best = { score, response: f.responseBn };
+    }
+  }
+  return best && best.score >= 6 ? best.response : null;
 }

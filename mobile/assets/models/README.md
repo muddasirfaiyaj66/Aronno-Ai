@@ -15,7 +15,7 @@ These are installed to `documentDirectory/models/vision/` on first boot.
 
 | Runtime path | Content | Approx size |
 |--------------|---------|-------------|
-| `models/gemma3-*/` | Gemma 3 Instruct GGUF (270M / 1B / 4B) | 300 MB – 2.5 GB |
+| `models/gemma3-*/` | Gemma 3 Instruct GGUF (270M / 1B / **4B+mmproj vision**) | 300 MB – 3.3 GB |
 | `models/stt-bn-zipformer/` | Bangla streaming STT (ONNX) | ~90 MB |
 | `models/tts-bn-vits/` | Optional VITS (UI catalog; speech uses expo-speech) | ~110 MB |
 

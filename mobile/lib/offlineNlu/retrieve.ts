@@ -244,16 +244,9 @@ export function buildWelcomeBn(): string {
   const district = store.getState().auth.user?.district?.nameBn;
   const w = cachedWeather();
 
-  let msg = name
-    ? `${greet}, ${name}! আমি আরণ্য।`
-    : `${greet}! আমি আরণ্য, আপনার কৃষি সহকারী।`;
-
-  if (district) {
-    msg += ` ${district} এলাকায় সাহায্য করতে প্রস্তুত।`;
-  }
-  if (w) {
-    msg += ` এখন প্রায় ${w.tempC} ডিগ্রি, ${w.conditionBn}।`;
-  }
-  msg += " কী জানতে চান?";
+  let msg = name ? `${greet}, ${name}।` : `${greet}।`;
+  if (district) msg += ` ${district} এলাকায় সাহায্য করতে প্রস্তুত।`;
+  if (w) msg += ` এখন প্রায় ${w.tempC} ডিগ্রি, ${w.conditionBn}।`;
+  msg += " ফসল বা আবহাওয়া নিয়ে জিজ্ঞাসা করুন।";
   return msg;
 }

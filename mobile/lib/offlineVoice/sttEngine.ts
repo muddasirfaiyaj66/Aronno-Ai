@@ -1,38 +1,52 @@
 /**
- * Offline Bangla STT via @siteed/sherpa-onnx.rn.
- * Supports one-shot push-to-talk and silence-ended utterances for live chat.
+ * Bangla STT: prefer on-device sherpa when the Zipformer pack is installed;
+ * fall back to cloud /diagnoses/transcribe when online.
+ *
+ * Crash guard: if a previous ASR.initialize() killed the process, we skip
+ * sherpa on the next launch and use cloud/text instead.
  */
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio } from "expo-av";
-import { ASR } from "@siteed/sherpa-onnx.rn";
-import type { AsrModelConfig } from "@siteed/sherpa-onnx.rn";
+import { fetchIsOnline } from "@/hooks/useIsOnline";
 import { catalogByKind } from "@/lib/modelManager/catalog";
 import { isInstalled, localDir } from "@/lib/modelManager/modelManager";
-import { enablePlaybackAudio, enableRecordingAudio, SPEECH_RECORDING } from "@/lib/speechRecording";
+import { mimeFromAudioUri, readFileBase64 } from "@/lib/readFileBase64";
+import {
+  enablePlaybackAudio,
+  enableRecordingAudio,
+  SPEECH_RECORDING,
+} from "@/lib/speechRecording";
 import { logMetric, markStart } from "@/lib/offline/metrics";
+import { api } from "@/services/api";
+import { store } from "@/store";
+
+const SHERPA_INITING = "aronno.sherpa.stt.initing";
+const SHERPA_BAD = "aronno.sherpa.stt.bad";
 
 let ready = false;
+let sherpaDisabled = false;
 let recording: Audio.Recording | null = null;
 
-/** Speech must be this many dB above the measured room noise. */
-const SPEECH_ABOVE_FLOOR_DB = 7;
-/** Never treat anything quieter than this as speech. */
-const MIN_SPEECH_DB = -58;
-/** Below this for a whole turn, the mic is delivering nothing at all. */
+type AsrApi = {
+  initialize: (config: Record<string, unknown>) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+  recognizeFromFile: (path: string) => Promise<{ text?: string }>;
+};
+let asrApi: AsrApi | null = null;
+
+const SPEECH_ABOVE_FLOOR_DB = 5;
+const MIN_SPEECH_DB = -60;
 const DEAD_MIC_DB = -72;
-/** Time spent measuring room noise at the start of each turn. */
-const CALIBRATE_MS = 400;
-/** Silence after speech before ending the utterance. */
-const SILENCE_MS = 1400;
-/** Ignore tiny blips before treating as real speech. */
-const MIN_SPEECH_MS = 220;
-/** Give up waiting for the user to start talking. */
-const NO_SPEECH_MS = 12000;
-/** Hard cap so we never hang forever. */
-const MAX_UTTERANCE_MS = 18000;
+const CALIBRATE_MS = 450;
+const SILENCE_MS = 1800;
+const MIN_SPEECH_MS = 450;
+const NO_SPEECH_MS = 14000;
+const MAX_UTTERANCE_MS = 20000;
 
 export type ListenResult = {
   text: string;
-  /** True when the mic delivered no audible signal for the whole turn. */
   micSilent: boolean;
 };
 
@@ -40,16 +54,89 @@ function nativePath(uri: string) {
   return uri.replace(/^file:\/\//, "");
 }
 
-export async function initSTT(): Promise<boolean> {
+async function loadCrashGuard(): Promise<void> {
+  try {
+    const initing = await AsyncStorage.getItem(SHERPA_INITING);
+    // Only treat a mid-init death as a hard disable (flag left behind).
+    if (initing === "1") {
+      sherpaDisabled = true;
+      await AsyncStorage.multiSet([
+        [SHERPA_INITING, ""],
+        [SHERPA_BAD, "1"],
+      ]).catch(() => undefined);
+      await AsyncStorage.removeItem(SHERPA_INITING).catch(() => undefined);
+      logMetric("stt.sherpa.disabled", undefined, "prior-crash");
+    } else if ((await AsyncStorage.getItem(SHERPA_BAD)) === "1") {
+      sherpaDisabled = true;
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/** Clear bad/crash flags so offline STT can be tried again (user-initiated). */
+export async function resetSherpaCrashGuard(): Promise<void> {
+  sherpaDisabled = false;
+  ready = false;
+  asrApi = null;
+  await AsyncStorage.multiRemove([SHERPA_INITING, SHERPA_BAD]).catch(
+    () => undefined,
+  );
+}
+
+async function getASR(): Promise<AsrApi | null> {
+  if (sherpaDisabled) return null;
+  if (asrApi) return asrApi;
+  try {
+    const mod = await import("@siteed/sherpa-onnx.rn");
+    asrApi = mod.ASR as AsrApi;
+    return asrApi;
+  } catch {
+    sherpaDisabled = true;
+    return null;
+  }
+}
+
+/** Offline Zipformer files present (does not load native). */
+export async function hasOfflineSttFiles(): Promise<boolean> {
+  const entry = catalogByKind("stt")[0];
+  if (!entry) return false;
+  return isInstalled(entry);
+}
+
+/**
+ * Warm offline sherpa. Pass `{ force: true }` after user taps কণ্ঠ চালু
+ * to clear a soft disable and retry the pack that used to work.
+ */
+export async function initSTT(opts?: { force?: boolean }): Promise<boolean> {
   const end = markStart("stt.init");
+  if (opts?.force) await resetSherpaCrashGuard();
+  else await loadCrashGuard();
+
+  if (ready) {
+    end("already");
+    return true;
+  }
+  if (sherpaDisabled) {
+    end("disabled");
+    return false;
+  }
   const entry = catalogByKind("stt")[0];
   if (!entry || !(await isInstalled(entry))) {
-    ready = false;
     end("model-not-downloaded");
     return false;
   }
+
   try {
-    const config: AsrModelConfig = {
+    await AsyncStorage.setItem(SHERPA_INITING, "1");
+    const ASR = await getASR();
+    if (!ASR) {
+      await AsyncStorage.removeItem(SHERPA_INITING).catch(() => undefined);
+      end("no-native");
+      return false;
+    }
+    // Same config that worked before for Bangla Zipformer + recognizeFromFile.
+    const result = await ASR.initialize({
       modelDir: nativePath(localDir(entry)),
       modelType: "transducer",
       streaming: true,
@@ -60,10 +147,9 @@ export async function initSTT(): Promise<boolean> {
         joiner: "joiner.onnx",
         tokens: "tokens.txt",
       },
-    };
-    const result = await ASR.initialize(config);
+    });
+    await AsyncStorage.removeItem(SHERPA_INITING).catch(() => undefined);
     if (!result.success) {
-      ready = false;
       end(result.error ?? "init-failed");
       return false;
     }
@@ -71,20 +157,62 @@ export async function initSTT(): Promise<boolean> {
     end("ok");
     return true;
   } catch (err) {
-    ready = false;
+    await AsyncStorage.removeItem(SHERPA_INITING).catch(() => undefined);
     end(err instanceof Error ? err.message : "init-failed");
     return false;
   }
 }
 
+/** Ready for voice: offline model warm OR online cloud STT. */
 export async function isSTTReady(): Promise<boolean> {
   if (ready) return true;
-  return initSTT();
+  if (await hasOfflineSttFiles()) return true;
+  return fetchIsOnline();
+}
+
+export async function hasSttModel(): Promise<boolean> {
+  return hasOfflineSttFiles();
+}
+
+async function transcribeWithSherpa(uri: string): Promise<string> {
+  const ASR = await getASR();
+  if (!ASR || !ready) return "";
+  const result = await ASR.recognizeFromFile(nativePath(uri));
+  return (result.text ?? "").trim();
+}
+
+async function transcribeWithCloud(uri: string): Promise<string> {
+  if (!(await fetchIsOnline())) return "";
+  const audioBase64 = await readFileBase64(uri);
+  if (audioBase64.length < 80) return "";
+  const result = await store
+    .dispatch(
+      api.endpoints.transcribe.initiate({
+        audioBase64,
+        mimeType: mimeFromAudioUri(uri),
+      }),
+    )
+    .unwrap();
+  return (result.transcriptBn ?? "").trim();
 }
 
 async function transcribeUri(uri: string): Promise<string> {
-  const result = await ASR.recognizeFromFile(nativePath(uri));
-  return (result.text ?? "").trim();
+  const end = markStart("stt.recognize");
+  try {
+    if (ready) {
+      const offline = await transcribeWithSherpa(uri);
+      if (offline) {
+        end(`offline:${offline.slice(0, 40)}`);
+        return offline;
+      }
+    }
+    const cloud = await transcribeWithCloud(uri);
+    end(cloud ? `cloud:${cloud.slice(0, 40)}` : "empty");
+    return cloud;
+  } catch (err) {
+    end(err instanceof Error ? err.message : "fail");
+    return "";
+  }
 }
 
 async function ensureMicPermission(): Promise<boolean> {
@@ -102,33 +230,50 @@ async function beginRecording(): Promise<Audio.Recording> {
 async function endRecordingAndTranscribe(
   rec: Audio.Recording,
 ): Promise<string> {
-  const end = markStart("stt.recognize");
   try {
     await rec.stopAndUnloadAsync();
     if (recording === rec) recording = null;
     await enablePlaybackAudio();
     const uri = rec.getURI();
-    if (!uri) {
-      end("no-uri");
-      return "";
-    }
-    const text = await transcribeUri(uri);
-    end(text.slice(0, 40));
-    return text;
-  } catch (err) {
-    end(err instanceof Error ? err.message : "fail");
+    if (!uri) return "";
+    return transcribeUri(uri);
+  } catch {
     return "";
   }
 }
 
+async function prepareEngine(forceOffline = false): Promise<"offline" | "cloud" | "none"> {
+  if (forceOffline) {
+    await resetSherpaCrashGuard();
+  } else {
+    await loadCrashGuard();
+  }
+  if (ready) return "offline";
+  if (await hasOfflineSttFiles()) {
+    const ok = await initSTT(forceOffline ? { force: true } : undefined);
+    if (ok) return "offline";
+  }
+  if (await fetchIsOnline()) return "cloud";
+  return "none";
+}
+
+/** Call once when user confirms কণ্ঠ চালু — restores offline STT if files exist. */
+export async function warmSttForLive(): Promise<"offline" | "cloud" | "none"> {
+  if (ready) return "offline";
+  // Only force-clear crash guard when we have files but aren't warm yet.
+  if (await hasOfflineSttFiles()) {
+    return prepareEngine(true);
+  }
+  if (await fetchIsOnline()) return "cloud";
+  return "none";
+}
+
 /**
- * Record until the user has spoken and then stayed silent briefly
- * (Gemini-style turn end). Call `cancel()` to abort early.
+ * Record until speech + silence, then offline or cloud STT.
  */
 export function listenUntilSilence(handlers?: {
   onListening?: () => void;
   onSpeech?: () => void;
-  /** Mic loudness 0..1, ~10×/second — drive a level meter with it. */
   onLevel?: (level: number) => void;
 }): { cancel: () => void; done: Promise<ListenResult> } {
   let cancelled = false;
@@ -149,9 +294,10 @@ export function listenUntilSilence(handlers?: {
   };
 
   const done = (async (): Promise<ListenResult> => {
-    if (!ready) {
-      const ok = await initSTT();
-      if (!ok) return empty;
+    const mode = await prepareEngine();
+    if (mode === "none") {
+      logMetric("stt.live.start", undefined, "no-engine");
+      return empty;
     }
     if (!(await ensureMicPermission())) return empty;
 
@@ -159,7 +305,7 @@ export function listenUntilSilence(handlers?: {
     try {
       rec = await beginRecording();
       handlers?.onListening?.();
-      logMetric("stt.live.start");
+      logMetric("stt.live.start", undefined, mode);
     } catch {
       return empty;
     }
@@ -197,7 +343,6 @@ export function listenUntilSilence(handlers?: {
       handlers?.onLevel?.(Math.min(1, Math.max(0, (db + 60) / 50)));
 
       if (!sawMetering) {
-        // No metering on this device — fall back to a fixed-length turn.
         if (elapsed >= 5000) {
           heardSpeech = true;
           break;
@@ -223,7 +368,6 @@ export function listenUntilSilence(handlers?: {
         }
         lastLoudAt = now;
       } else if (!heardSpeech) {
-        // Let the floor follow slow room-noise changes before speech starts.
         floor = floor * 0.95 + db * 0.05;
       }
 
@@ -236,11 +380,6 @@ export function listenUntilSilence(handlers?: {
     }
 
     handlers?.onLevel?.(0);
-    logMetric(
-      "stt.live.levels",
-      undefined,
-      `max=${Math.round(maxDb)} floor=${Math.round(floor)} heard=${heardSpeech}`,
-    );
 
     if (cancelled) {
       await discard(rec);
@@ -263,38 +402,35 @@ export function listenUntilSilence(handlers?: {
   };
 }
 
-/**
- * Push-to-talk: Record → offline STT. Emits "…" while recording; final on stop().
- */
 export function startListening(
   onPartial: (text: string) => void,
   onFinal: (text: string) => void,
 ): () => void {
   let stopped = false;
+  let rec: Audio.Recording | null = null;
 
   void (async () => {
-    if (!ready) {
-      const ok = await initSTT();
-      if (!ok) {
-        logMetric("stt.start", undefined, "not-ready");
-        onFinal("");
-        return;
-      }
+    const mode = await prepareEngine();
+    if (mode === "none") {
+      onFinal("");
+      return;
     }
     try {
       if (!(await ensureMicPermission())) {
         onFinal("");
         return;
       }
-      await beginRecording();
+      rec = await beginRecording();
       onPartial("…");
-      logMetric("stt.start");
-    } catch (err) {
-      logMetric(
-        "stt.start",
-        undefined,
-        err instanceof Error ? err.message : "fail",
-      );
+      await new Promise((r) => setTimeout(r, MAX_UTTERANCE_MS));
+      if (stopped || !rec) {
+        onFinal("");
+        return;
+      }
+      const text = await endRecordingAndTranscribe(rec);
+      rec = null;
+      onFinal(text);
+    } catch {
       onFinal("");
     }
   })();
@@ -303,21 +439,19 @@ export function startListening(
     if (stopped) return;
     stopped = true;
     void (async () => {
-      const rec = recording;
+      const active = rec ?? recording;
       recording = null;
-      if (!rec) {
+      rec = null;
+      if (!active) {
         onFinal("");
         return;
       }
-      onFinal(await endRecordingAndTranscribe(rec));
+      onFinal(await endRecordingAndTranscribe(active));
     })();
   };
 }
 
 export async function transcribeOfflineFile(uri: string): Promise<string> {
-  if (!ready) {
-    const ok = await initSTT();
-    if (!ok) throw new Error("stt-not-ready");
-  }
+  await prepareEngine();
   return transcribeUri(uri);
 }

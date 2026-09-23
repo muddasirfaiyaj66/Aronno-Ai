@@ -4,7 +4,7 @@
 import { retrieveContextForLabel } from "@/lib/offlineNlu/retrieve";
 import { isLlmReady, streamLlmReply } from "@/lib/modelManager/llmEngine";
 import { logMetric, markStart } from "@/lib/offline/metrics";
-import { sanitizeAssistantReply } from "@/lib/offlineChat/chatLoop";
+import { sanitizeAssistantReply } from "@/lib/offlineChat/sanitize";
 
 const LOW_CONF = 70;
 

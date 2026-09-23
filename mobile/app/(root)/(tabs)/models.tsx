@@ -30,13 +30,14 @@ import {
 import {
   currentModelId,
   selectLlm,
+  subscribeLlmLoad,
   unloadLlm,
 } from "@/lib/modelManager/llmEngine";
 import {
   clearPreferredLlmId,
   getPreferredLlmId,
+  setPreferredLlmId,
 } from "@/lib/modelManager/preferredLlm";
-import { initSTT } from "@/lib/offlineVoice/sttEngine";
 import {
   pickAndInstallVision,
   visionInstallStatus,
@@ -257,6 +258,16 @@ function ModelCard({
 
         {installed && !inFlight ? (
           <>
+            {item.kind === "llm" && active ? (
+              <View className="min-h-touch flex-row items-center rounded-xl bg-secondary px-3 py-2">
+                <AppText
+                  variant="caption"
+                  className="font-bengali-semibold text-primary"
+                >
+                  চালু আছে
+                </AppText>
+              </View>
+            ) : null}
             {item.kind === "llm" && !active ? (
               <ActionChip
                 label={busySelect ? "লোড…" : "চালু করুন"}
@@ -264,16 +275,6 @@ function ModelCard({
                 onPress={onSelect}
                 disabled={busySelect}
               />
-            ) : null}
-            {item.kind === "llm" && active ? (
-              <View className="min-h-touch flex-row items-center rounded-xl bg-secondary px-3 py-2">
-                <AppText
-                  variant="caption"
-                  className="font-bengali-semibold text-primary"
-                >
-                  নির্বাচিত
-                </AppText>
-              </View>
             ) : null}
             <ActionChip
               label="মুছুন"
@@ -336,6 +337,8 @@ export default function ModelsScreen() {
       }
       if (Object.keys(seed).length) setDownloads(seed);
       await refresh();
+      // Do NOT auto-load Gemma on screen open — that OOMs mid-range phones and
+      // kills the whole app (chat looks “broken”). Farmer taps «চালু করুন».
     })();
   }, [refresh]);
 
@@ -351,22 +354,31 @@ export default function ModelsScreen() {
         const entry = MODEL_CATALOG.find((e) => e.id === snap.modelId);
         if (!entry) return;
         if (entry.kind === "llm") {
-          const loaded = await selectLlm(entry.id);
-          setActiveId(loaded);
+          // Large multimodal packs often OOM if loaded immediately after download.
+          // Remember preference; only eager-load smaller models.
+          await setPreferredLlmId(entry.id);
           setPreferredId(entry.id);
-          setBanner({
-            tone: loaded ? "ok" : "err",
-            text: loaded
-              ? `${entry.nameBn} চালু হয়েছে — সহকারী ট্যাবে ব্যবহার করুন।`
-              : "ফাইল আছে, কিন্তু মেমোরিতে লোড হয়নি। ছোট জেমা বেছে নিন।",
-          });
+          if (entry.sizeMb <= 900) {
+            const loaded = await selectLlm(entry.id);
+            setActiveId(loaded);
+            setBanner({
+              tone: loaded ? "ok" : "err",
+              text: loaded
+                ? `${entry.nameBn} চালু হয়েছে — সহকারী ট্যাবে ব্যবহার করুন।`
+                : "ফাইল আছে, কিন্তু মেমোরিতে লোড হয়নি। ছোট জেমা বেছে নিন।",
+            });
+          } else {
+            setBanner({
+              tone: "ok",
+              text: `${entry.nameBn} ডাউনলোড সম্পন্ন। «চালু করুন» চাপলে মেমোরিতে লোড হবে (বেশি RAM লাগতে পারে)।`,
+            });
+          }
         } else if (entry.kind === "stt") {
-          const ok = await initSTT();
+          // Do not ASR.initialize here — native init can abort the process.
+          // Engine warms on first listen in chat / voice scan.
           setBanner({
-            tone: ok ? "ok" : "err",
-            text: ok
-              ? "বাংলা STT প্রস্তুত।"
-              : "STT ফাইল আছে, কিন্তু লোড ব্যর্থ।",
+            tone: "ok",
+            text: "বাংলা কণ্ঠ মডেল ডাউনলোড হয়েছে — সহকারীতে মাইক চাপলে চালু হবে।",
           });
         } else if (entry.kind === "tts") {
           setBanner({
@@ -419,6 +431,15 @@ export default function ModelsScreen() {
   async function handleSelect(entry: ModelCatalogEntry) {
     setBanner(null);
     setBusySelectId(entry.id);
+    const unsub = subscribeLlmLoad((p) => {
+      if (p.modelId !== entry.id) return;
+      if (p.messageBn) {
+        setBanner({
+          tone: p.phase === "error" ? "err" : "ok",
+          text: p.messageBn,
+        });
+      }
+    });
     try {
       const loaded = await selectLlm(entry.id);
       setActiveId(loaded);
@@ -426,12 +447,13 @@ export default function ModelsScreen() {
       setBanner({
         tone: loaded ? "ok" : "err",
         text: loaded
-          ? `${entry.nameBn} এখন চালু — সহকারীতে ব্যবহার করুন।`
-          : "লোড ব্যর্থ। RAM কম হলে ছোট মডেল বেছে নিন।",
+          ? `${entry.nameBn} চালু — সহকারীতে মডেল উত্তর দিবে।`
+          : "লোড ব্যর্থ। RAM কম হলে ছোট মডেল (২৭০এম) বেছে নিন।",
       });
     } catch {
       setBanner({ tone: "err", text: "মডেল লোড যায়নি। আবার চেষ্টা করুন।" });
     } finally {
+      unsub();
       setBusySelectId(null);
       await refresh();
     }
@@ -480,7 +502,7 @@ export default function ModelsScreen() {
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       <ScreenHeader
         title="অফলাইন এআই মডেল"
-        subtitle="ডাউনলোড · থামান · চালিয়ে যান · বেছে নিন"
+        subtitle="ডাউনলোড · থামান · চালিয়ে যান · চালু করুন"
       />
 
       <ScrollView
@@ -520,10 +542,9 @@ export default function ModelsScreen() {
             </AppText>
             <View className="mt-3 gap-2">
               {installedLlms.map((item) => {
-                const selected =
-                  activeId === item.id ||
-                  (!activeId && preferredId === item.id);
+                const selected = preferredId === item.id || activeId === item.id;
                 const busy = busySelectId === item.id;
+                const running = activeId === item.id;
                 return (
                   <Pressable
                     key={`pick-${item.id}`}
@@ -564,7 +585,11 @@ export default function ModelsScreen() {
                       <ActivityIndicator color={colors.primary} />
                     ) : (
                       <AppText variant="caption" className="text-primary">
-                        {selected ? "নির্বাচিত" : "বেছে নিন"}
+                        {running
+                          ? "চালু আছে"
+                          : selected
+                            ? "নির্বাচিত"
+                            : "বেছে নিন"}
                       </AppText>
                     )}
                   </Pressable>

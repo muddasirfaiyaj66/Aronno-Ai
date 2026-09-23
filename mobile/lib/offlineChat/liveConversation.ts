@@ -1,11 +1,13 @@
 /**
  * Gemini-style continuous voice conversation:
- * optional welcome → listen → reply → speak → listen again.
+ * listen → reply → speak → listen again.
+ *
+ * Keep startup light: warm STT only. Do NOT load Gemma here in parallel —
+ * sherpa + llama together OOMs many phones (slow, then crash).
  */
-import { listenUntilSilence } from "@/lib/offlineVoice/sttEngine";
+import { listenUntilSilence, warmSttForLive } from "@/lib/offlineVoice/sttEngine";
 import { speakOffline, stopOfflineSpeech } from "@/lib/offlineVoice/ttsEngine";
 import { persistTurn, runLlmTurn } from "@/lib/offlineChat/chatLoop";
-import { buildWelcomeBn } from "@/lib/offlineNlu/retrieve";
 import { logMetric } from "@/lib/offline/metrics";
 
 export type LivePhase = "listening" | "hearing" | "thinking" | "speaking" | "idle";
@@ -19,6 +21,7 @@ export type LiveConversationHandlers = {
   onAssistantSet?: (id: string, text: string) => void;
   onNotice?: (textBn: string) => void;
   onError?: (err: unknown) => void;
+  /** Spoken welcome removed — it delayed listen and fought the mic. */
   greet?: boolean;
 };
 
@@ -26,10 +29,8 @@ export type LiveConversationHandle = {
   stop: () => void;
 };
 
-const DEAD_MIC_TURNS_BEFORE_STOP = 3;
-/** Quiet empty-transcript retries before showing a notice. */
-const EMPTY_BEFORE_NOTICE = 2;
-/** Gap after TTS so our own voice isn't picked up as input. */
+const DEAD_MIC_TURNS_BEFORE_NOTICE = 4;
+const EMPTY_BEFORE_NOTICE = 5;
 const POST_SPEECH_MS = 700;
 
 export function startLiveConversation(
@@ -51,24 +52,17 @@ export function startLiveConversation(
     let deadMicTurns = 0;
     let emptyTurns = 0;
 
-    if (handlers.greet !== false && !stopped) {
-      const welcome = buildWelcomeBn();
-      handlers.onPhase("speaking");
-      const id = handlers.onAssistantStart();
-      if (handlers.onAssistantSet) handlers.onAssistantSet(id, welcome);
-      else handlers.onAssistantChunk(id, welcome);
-      await persistTurn("assistant", welcome);
-      try {
-        await speakOffline(welcome);
-      } catch {
-        // keep going
-      }
-      if (stopped) {
-        handlers.onPhase("idle");
-        return;
-      }
-      await new Promise((r) => setTimeout(r, POST_SPEECH_MS));
+    const engine = await warmSttForLive();
+    if (engine === "none") {
+      handlers.onNotice?.(
+        "কণ্ঠ চালু যায়নি। বাংলা কণ্ঠ মডেল আছে কিনা দেখুন, অথবা ইন্টারনেট চালু করুন।",
+      );
+      handlers.onPhase("idle");
+      return;
     }
+
+    // Gemma loads on first answer (runLlmTurn) — not together with sherpa warm.
+    handlers.onPhase("listening");
 
     while (!stopped) {
       handlers.onPhase("listening");
@@ -83,12 +77,13 @@ export function startLiveConversation(
 
       if (micSilent) {
         deadMicTurns += 1;
-        if (deadMicTurns >= DEAD_MIC_TURNS_BEFORE_STOP) {
+        if (deadMicTurns >= DEAD_MIC_TURNS_BEFORE_NOTICE) {
           handlers.onNotice?.(
-            "মাইকে আওয়াজ আসছে না। ফোনে মাইকের অনুমতি দিন, অথবা এমুলেটরে Virtual microphone চালু করুন।",
+            "মাইকে আওয়াজ আসছে না। ফোনে মাইকের অনুমতি দিন। অথবা লিখে জিজ্ঞাসা করুন।",
           );
-          break;
+          deadMicTurns = 0;
         }
+        // Stay in live loop — do not stop on quiet mic.
         continue;
       }
       deadMicTurns = 0;
@@ -97,7 +92,9 @@ export function startLiveConversation(
       if (!heard) {
         emptyTurns += 1;
         if (emptyTurns >= EMPTY_BEFORE_NOTICE) {
-          handlers.onNotice?.("ঠিক শুনতে পাইনি — আরেকটু স্পষ্ট করে বলুন।");
+          handlers.onNotice?.(
+            "ঠিক শুনতে পাইনি — আরেকটু স্পষ্ট করে কাছে থেকে বলুন, অথবা লিখে জিজ্ঞাসা করুন।",
+          );
           emptyTurns = 0;
         }
         continue;
@@ -111,10 +108,14 @@ export function startLiveConversation(
       const assistantId = handlers.onAssistantStart();
       let reply = "";
       try {
+        // Gemma loads here on first need — not together with sherpa at start.
         reply = await runLlmTurn(
           heard,
           (token) => handlers.onAssistantChunk(assistantId, token),
           () => !stopped,
+          (msg) => {
+            if (msg) handlers.onNotice?.(msg);
+          },
         );
       } catch (err) {
         handlers.onError?.(err);

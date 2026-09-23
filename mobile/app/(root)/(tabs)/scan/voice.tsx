@@ -50,17 +50,12 @@ export default function VoiceCaptureScreen() {
   const [transcribe] = useTranscribeMutation();
 
   useEffect(() => {
-    void isSTTReady().then(setOfflineStt);
-  }, []);
-
-  useEffect(() => {
-    if (!online && !offlineStt && mode === "voice") {
+    // Cloud STT only — on-device sherpa is disabled (native abort risk).
+    if (!online && mode === "voice") {
       setMode("text");
-      setError(
-        "অফলাইনে কণ্ঠ মডেল নেই — লিখে জানান, অথবা মডেল ম্যানেজার থেকে বাংলা কণ্ঠ মডেল ডাউনলোড করুন।",
-      );
+      setError("অফলাইনে কণ্ঠ কাজ করে না — লিখে জানান, অথবা ইন্টারনেট চালু করুন।");
     }
-  }, [online, offlineStt, mode]);
+  }, [online, mode]);
 
   useEffect(() => {
     return () => {

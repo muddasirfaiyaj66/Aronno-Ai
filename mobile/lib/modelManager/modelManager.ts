@@ -651,6 +651,11 @@ export async function deleteModel(entry: ModelCatalogEntry): Promise<void> {
   snapshots.delete(entry.id);
 }
 
+export async function hasInstalledLlm(): Promise<boolean> {
+  const llms = (await listInstalled()).filter((e) => e.kind === "llm");
+  return llms.length > 0;
+}
+
 export async function storageUsedMb(): Promise<number> {
   const installed = await listInstalled();
   return installed.reduce((sum, e) => sum + e.sizeMb, 0);

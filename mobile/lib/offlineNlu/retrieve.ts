@@ -34,6 +34,12 @@ function overlapScore(query: string, haystack: string): number {
 const WEATHER_HINTS =
   /বৃষ্টি|আবহাওয়া|তাপমাত্রা|টেম্প|টেম্পারেচার|গরম|ঠান্ডা|কুয়াশা|ঝড়|রৌদ্র|রদ|humidity|rain|weather|temp/i;
 
+const TOOL_HINTS =
+  /যন্ত্রপাতি|হাতিয়ার|কৃষি\s*যন্ত্র|মেশিন|টুল|কোদাল|নিদানি|বেলচা|স্প্রেয়ার|ঠেলা|ঝাঁঝরি|বালতি|রেক|দা\s*কাটারি|চাষ/i;
+
+const FARM_HINTS =
+  /ফসল|কৃষি|সার|সেচ|ধান|আমন|বোরো|টমেটো|আলু|মরিচ|চাষ|জমি|বীজ|রোপণ/i;
+
 const SEASON_BY_MONTH: { months: number[]; tip: string }[] = [
   {
     months: [3, 4, 5],
@@ -198,6 +204,21 @@ export function retrieveContext(userTextBn: string): string[] {
         text: "লাইভ তাপমাত্রা/বৃষ্টির সংখ্যা এখন জানা নেই। অনুমান করে ডিগ্রি বলবেন না — ঋতুভিত্তিক পরামর্শ দিন এবং হোম থেকে আবহাওয়া দেখতে বলুন।",
       });
     }
+  }
+
+  if (TOOL_HINTS.test(userTextBn)) {
+    const catalog = kb.tools
+      .map((t) => `${t.toolNameBn}: ${t.usageBn}`)
+      .join(" ");
+    scored.push({
+      score: 14,
+      text:
+        ( /ধান|আমন|বোরো/.test(userTextBn)
+          ? "ধান চাষে কোদাল/নিদানি, বেলচা, সেচের ঝাঁঝরি/বালতি, স্প্রেয়ার ও ঠেলাগাড়ি সাধারণত লাগে। "
+          : "চাষাবাদে সাধারণ কৃষি হাতিয়ার: ") + catalog,
+    });
+  } else if (FARM_HINTS.test(userTextBn) && scored.length < 2) {
+    scored.push({ score: 5, text: seasonTipBn() });
   }
 
   scored.sort((a, b) => b.score - a.score);

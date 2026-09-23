@@ -62,6 +62,9 @@ const RE = {
   treatAsk: /চিকিৎসা|কী\s*করব|কি\s*করব|করণীয়|ওষুধ|কীটনাশক|স্প্রে|প্রতিকার|সমাধান/i,
   preventAsk: /প্রতিরোধ|কিভাবে\s*ঠেকা|যাতে\s*না\s*হয়/i,
   diseaseAsk: /রোগ|দাগ|হলুদ|পচ|শুকি|কুঁকড়|কোঁকড়|পোকা|সমস্যা|কী\s*হয়েছে|কি\s*হয়েছে|ধ্বসা|ব্লাইট|ছত্রাক/i,
+  toolsAsk:
+    /যন্ত্রপাতি|হাতিয়ার|কৃষি\s*যন্ত্র|মেশিন|টুল|কোদাল|নিদানি|বেলচা|স্প্রেয়ার|ঠেলাগাড়ি|ঝাঁঝরি|দা\s*কাটারি|চাষে?\s*(?:কী|কি)\s*লাগে|(?:কী|কি)\s*লাগে/i,
+  riceAsk: /ধান|আমন|বোরো|রোপা|ধান\s*চাষ/i,
 };
 
 function norm(s: string) {
@@ -155,6 +158,18 @@ function weatherAnswer(text: string): string {
   return `${place}এখন প্রায় ${temp}, ${w.conditionBn}। বৃষ্টির সম্ভাবনা ${rain}। ${advice}`;
 }
 
+function toolsAnswer(text: string): string {
+  const names = kb.tools
+    .slice(0, 6)
+    .map((t) => t.toolNameBn.replace(/\s*\/.*$/, "").trim())
+    .filter(Boolean);
+  const list = names.length ? names.join(", ") : "কোদাল, বেলচা, স্প্রেয়ার, ঠেলাগাড়ি";
+  if (RE.riceAsk.test(text)) {
+    return `ধান চাষে সাধারণত কোদাল/নিদানি দিয়ে মাটি আলগা ও আগাছা পরিষ্কার, বেলচা দিয়ে নালা-গর্ত, ঝাঁঝরি বা বালতি দিয়ে সেচ, স্প্রেয়ার দিয়ে কীটনাশক/ছত্রাকনাশক, এবং ঠেলাগাড়ি দিয়ে সার-ফসল বহন করা হয়। হাতে থাকা হাতিয়ার: ${list}। ছবি তুলে স্ক্যান করলে হাতিয়ার চিনতে পারি।`;
+  }
+  return `চাষাবাদে সাধারণত লাগে: ${list}। কোন কাজ (সেচ, আগাছা, স্প্রে, মাটি খোঁড়া) বললে নির্দিষ্ট হাতিয়ার বলতে পারি — অথবা ছবি তুলে স্ক্যান করুন।`;
+}
+
 async function cropAnswer(crop: CropKey, text: string): Promise<IntentAnswer> {
   const c = CROPS[crop];
 
@@ -233,6 +248,15 @@ export async function answerByIntent(
   }
   if ((RE.rain.test(text) || RE.temp.test(text) || RE.weather.test(text)) && !RE.diseaseAsk.test(text)) {
     return { text: weatherAnswer(text) };
+  }
+  if (RE.toolsAsk.test(text)) {
+    return { text: toolsAnswer(text) };
+  }
+  // Rice leaf yellow — not in tomato/potato vision set; give practical advice.
+  if (RE.riceAsk.test(text) && /হলুদ|রোগ|পাতা|পোকা|শুকি/i.test(text)) {
+    return {
+      text: "ধানের পাতা হলুদ হলে প্রথমে নাইট্রোজেন (ইউরিয়া) ঘাটতি বা পানি জমে থাকা নিকাশ সমস্যা দেখুন। নালা খুলে পানি নামান, প্রয়োজনে ইউরিয়া ভাগ করে দিন। পোকা/দাগ দেখলে কৃষি অফিসের পরামর্শ নিন — টমেটো-আলুর ছবি স্ক্যান দিয়ে ধানের রোগ নিশ্চিত হয় না।",
+    };
   }
 
   // Follow-ups that only make sense with the previous topic.

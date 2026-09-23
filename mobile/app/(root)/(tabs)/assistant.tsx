@@ -4,6 +4,7 @@ import {
   Animated,
   Easing,
   FlatList,
+  InteractionManager,
   Keyboard,
   Modal,
   Platform,
@@ -20,19 +21,14 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "@/components/ui";
 import { colors } from "@/constants/theme";
-import { replyToText, sanitizeAssistantReply } from "@/lib/offlineChat/chatLoop";
-import {
-  startLiveConversation,
-  type LiveConversationHandle,
-  type LivePhase,
+import { sanitizeAssistantReply } from "@/lib/offlineChat/sanitize";
+import { replyToText } from "@/lib/offlineChat/chatLoop";
+import type {
+  LiveConversationHandle,
+  LivePhase,
 } from "@/lib/offlineChat/liveConversation";
-import {
-  autoLoadLlm,
-  hasInstalledLlm,
-  isLlmReady,
-} from "@/lib/modelManager/llmEngine";
-import { isSTTReady } from "@/lib/offlineVoice/sttEngine";
-import { stopOfflineSpeech } from "@/lib/offlineVoice/ttsEngine";
+import { hasInstalledLlm, isInstalled } from "@/lib/modelManager/modelManager";
+import { catalogByKind } from "@/lib/modelManager/catalog";
 import {
   clearChatTurns,
   deleteChatSession,
@@ -77,7 +73,7 @@ type Bubble = {
 
 const SUGGESTIONS = [
   "আজকের আবহাওয়া কেমন?",
-  "ধানের পাতা হলুদ হচ্ছে কেন?",
+  "ধান চাষে যন্ত্রপাতি কী লাগে?",
   "টমেটোতে কোন সার দেব?",
 ];
 
@@ -222,10 +218,7 @@ function VoiceOrb({
     inputRange: [0, 1],
     outputRange: [1, phase === "hearing" ? 1.18 : 1.08],
   });
-  const micScale = Animated.multiply(
-    breathe,
-    level.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] }),
-  );
+  const micScale = breathe;
   const haloOpacity = pulse.interpolate({
     inputRange: [0, 1],
     outputRange: [0.18, 0.42],
@@ -319,6 +312,7 @@ export default function AssistantScreen() {
   const [llmReady, setLlmReady] = useState(false);
   const [llmLoading, setLlmLoading] = useState(true);
   const [hasModel, setHasModel] = useState(false);
+  const [loadHint, setLoadHint] = useState("");
   const [sttReady, setSttReady] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [sessions, setSessions] = useState<LocalChatSessionRow[]>([]);
@@ -364,26 +358,76 @@ export default function AssistantScreen() {
 
   const refreshModels = useCallback(async () => {
     setLlmLoading(true);
-    const installed = await hasInstalledLlm();
-    setHasModel(installed);
-    if (installed && !isLlmReady()) await autoLoadLlm();
-    setLlmReady(isLlmReady());
-    setLlmLoading(false);
-    setSttReady(await isSTTReady());
+    try {
+      const installed = await hasInstalledLlm();
+      setHasModel(installed);
+      const { isLlmReady, ensureLlmLoaded, subscribeLlmLoad } = await import(
+        "@/lib/modelManager/llmEngine"
+      );
+      setLlmReady(isLlmReady());
+      const stt = catalogByKind("stt")[0];
+      setSttReady(stt ? await isInstalled(stt) : false);
+
+      // Warm preferred Gemma so chat can answer from the model.
+      if (installed && !isLlmReady()) {
+        const unsub = subscribeLlmLoad((p) => {
+          if (p.messageBn) setLoadHint(p.messageBn);
+          if (p.phase === "done") {
+            setLlmReady(true);
+            setLoadHint("");
+          }
+          if (p.phase === "error") {
+            setLoadHint(p.messageBn ?? "মডেল লোড ব্যর্থ");
+          }
+        });
+        try {
+          setLoadHint("জেমা মডেল লোড হচ্ছে…");
+          const id = await ensureLlmLoaded();
+          setLlmReady(!!id);
+          if (!id) {
+            setLoadHint("মডেল ম্যানেজার থেকে «চালু করুন» চাপুন");
+          } else {
+            setLoadHint("");
+          }
+        } finally {
+          unsub();
+        }
+      }
+    } catch {
+      setHasModel(false);
+      setLlmReady(false);
+      setSttReady(false);
+    } finally {
+      setLlmLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    void (async () => {
-      await refreshModels();
-      const sid = await getActiveSessionId();
-      setActiveSessionIdState(sid);
-      await loadSessionBubbles(sid);
-      await refreshSessions();
-    })();
+    let cancelled = false;
+    const task = InteractionManager.runAfterInteractions(() => {
+      void (async () => {
+        try {
+          if (cancelled) return;
+          await refreshModels();
+          if (cancelled) return;
+          const sid = await getActiveSessionId();
+          if (cancelled) return;
+          setActiveSessionIdState(sid);
+          await loadSessionBubbles(sid).catch(() => {
+            if (!cancelled) setBubbles([]);
+          });
+          if (!cancelled) await refreshSessions();
+        } catch {
+          if (!cancelled) setBubbles([]);
+        }
+      })();
+    });
     return () => {
+      cancelled = true;
+      task.cancel?.();
       liveRef.current?.stop();
       liveRef.current = null;
-      void stopOfflineSpeech();
+      // Do not import TTS/STT on unmount — that reloads native modules.
     };
   }, [refreshModels, loadSessionBubbles, refreshSessions]);
 
@@ -414,53 +458,87 @@ export default function AssistantScreen() {
     append("user", cleaned);
     const assistantId = append("assistant", "");
     setTyping(true);
-    await replyToText(cleaned, {
-      onTextChunk: (token) => appendToBubble(assistantId, token),
-      onDone: () => {
-        setTyping(false);
-        void refreshSessions();
-      },
-      onError: (err) => append("notice", userFacingError(err, "chat")),
-    });
+    // First Gemma load can take 30–90s on phones.
+    const unlock = setTimeout(() => setTyping(false), 120000);
+    try {
+      await replyToText(cleaned, {
+        onStatus: (msg) => {
+          if (msg) setLoadHint(msg);
+          else setLoadHint("");
+        },
+        onTextChunk: (token) => appendToBubble(assistantId, token),
+        onDone: () => {
+          clearTimeout(unlock);
+          setTyping(false);
+          setLoadHint("");
+          void refreshSessions();
+          void import("@/lib/modelManager/llmEngine")
+            .then((m) => setLlmReady(m.isLlmReady()))
+            .catch(() => undefined);
+        },
+        onError: (err) => append("notice", userFacingError(err, "chat")),
+      });
+    } catch (err) {
+      clearTimeout(unlock);
+      setTyping(false);
+      setLoadHint("");
+      append("notice", userFacingError(err, "chat"));
+    }
   }
 
-  function startLive() {
+  async function startLive() {
     if (busy) return;
-    if (!sttReady) {
-      append(
-        "notice",
-        "কণ্ঠ শনাক্তকরণ মডেল নেই — মডেল ম্যানেজার থেকে «বাংলা কণ্ঠ শনাক্তকরণ» ডাউনলোড করুন।",
-      );
-      return;
-    }
-    if (!isLlmReady() && !hasModel) {
-      append(
-        "notice",
-        "কণ্ঠে উত্তর দিতে মডেল ম্যানেজার থেকে জেমা ডাউনলোড করুন। লিখেও জিজ্ঞাসা করা যায়।",
-      );
-    }
-    liveRef.current = startLiveConversation({
-      greet: bubbles.length === 0,
-      onPhase: setLivePhase,
-      onLevel: (v) =>
-        Animated.timing(level, {
-          toValue: v,
-          duration: 90,
-          useNativeDriver: true,
-        }).start(),
-      onUserFinal: (text) => append("user", text),
-      onAssistantStart: () => append("assistant", ""),
-      onAssistantChunk: appendToBubble,
-      onAssistantSet: setBubbleText,
-      onNotice: (text) => append("notice", text),
-      onError: (err) => append("notice", userFacingError(err, "chat")),
-    });
+
+    // Mic sits above the tab bar — confirm so a tab tap never boots sherpa.
+    Alert.alert(
+      "কণ্ঠে আলোচনা?",
+      "কণ্ঠে আলোচনা শুরু করবেন? চাইলে লিখেও জিজ্ঞাসা করতে পারেন।",
+      [
+        { text: "লিখে চালিয়ে যান", style: "cancel" },
+        {
+          text: "কণ্ঠ চালু",
+          onPress: () => {
+            void (async () => {
+              try {
+                // Lazy-load voice stack only after confirm (avoids STT on tab open).
+                const { startLiveConversation } = await import(
+                  "@/lib/offlineChat/liveConversation"
+                );
+                liveRef.current = startLiveConversation({
+                  greet: false,
+                  onPhase: setLivePhase,
+                  onLevel: (v) =>
+                    Animated.timing(level, {
+                      toValue: v,
+                      duration: 90,
+                      useNativeDriver: true,
+                    }).start(),
+                  onUserFinal: (text) => append("user", text),
+                  onAssistantStart: () => append("assistant", ""),
+                  onAssistantChunk: appendToBubble,
+                  onAssistantSet: setBubbleText,
+                  onNotice: (text) => append("notice", text),
+                  onError: (err) =>
+                    append("notice", userFacingError(err, "chat")),
+                });
+              } catch (err) {
+                append(
+                  "notice",
+                  userFacingError(err, "chat") ||
+                    "কণ্ঠ চালু যায়নি। লিখে জিজ্ঞাসা করুন।",
+                );
+                setLivePhase("idle");
+              }
+            })();
+          },
+        },
+      ],
+    );
   }
 
   function stopLive() {
     liveRef.current?.stop();
     liveRef.current = null;
-    void stopOfflineSpeech();
     setLivePhase("idle");
   }
 
@@ -526,14 +604,18 @@ export default function AssistantScreen() {
   }
 
   const status = llmLoading
-    ? { color: colors.harvest, text: "প্রস্তুত হচ্ছে…", label: "লোড হচ্ছে" }
-    : llmReady
-      ? { color: colors.leaf400, text: "অফলাইন · প্রস্তুত", label: "প্রস্তুত" }
-      : {
-          color: colors.harvest,
-          text: hasModel ? "মডেল লোড হয়নি" : "মডেল নেই — জ্ঞানভাণ্ডার চালু",
-          label: hasModel ? "লোড হয়নি" : "মূল তথ্য চালু",
-        };
+    ? { color: colors.harvest, text: "জেমা লোড হচ্ছে…", label: "লোড হচ্ছে" }
+    : loadHint
+      ? { color: colors.harvest, text: loadHint, label: "লোড" }
+      : llmReady
+        ? { color: colors.leaf400, text: "অফলাইন · জেমা চালু — মডেল উত্তর দিচ্ছে", label: "প্রস্তুত" }
+        : {
+            color: colors.harvest,
+            text: hasModel
+              ? "জেমা ফাইল আছে · মডেল ম্যানেজার থেকে «চালু করুন»"
+              : "মডেল ম্যানেজার থেকে জেমা ডাউনলোড করুন",
+            label: hasModel ? "চালু করুন" : "ডাউনলোড",
+          };
 
   const lastId = bubbles[bubbles.length - 1]?.id;
   const liveCopy = live
@@ -605,7 +687,6 @@ export default function AssistantScreen() {
         {!llmLoading && !llmReady && !hasModel ? (
           <View
             className="mx-3 mt-3 flex-row items-center gap-3 rounded-2xl border border-border bg-white px-4 py-3"
-            accessibilityRole="summary"
           >
             <Ionicons
               name="information-circle-outline"
@@ -729,31 +810,9 @@ export default function AssistantScreen() {
                       : "ফসলের রোগ, সার-সেচ বা আবহাওয়া নিয়ে জিজ্ঞাসা করুন।"}
                   </AppText>
 
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="কণ্ঠে কথা শুরু"
-                    disabled={!sttReady || typing}
-                    onPress={startLive}
-                    className="mt-7 min-h-touch w-full flex-row items-center justify-center gap-2 rounded-2xl py-4"
-                    style={{
-                      backgroundColor: sttReady
-                        ? colors.primary
-                        : colors.border,
-                      opacity: typing ? 0.6 : 1,
-                    }}
-                  >
-                    <Ionicons name="mic" size={22} color={colors.white} />
-                    <AppText
-                      variant="bodyLg"
-                      className="font-bengali-bold text-white"
-                    >
-                      কথা বলুন
-                    </AppText>
-                  </Pressable>
-
                   <View className="mt-6 w-full gap-2.5">
                     <AppText variant="caption" className="text-muted">
-                      দ্রুত প্রশ্ন
+                      দ্রুত প্রশ্ন — ট্যাপ করলে লেখায় জিজ্ঞাসা হবে
                     </AppText>
                     {SUGGESTIONS.map((s) => (
                       <Pressable
@@ -856,49 +915,36 @@ export default function AssistantScreen() {
                   accessibilityLabel="বার্তা লেখার ঘর"
                   className="max-h-28 min-h-[44px] flex-1 px-3 py-2.5 font-bengali text-body text-ink"
                 />
-                {draft.trim() ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="পাঠান"
-                    disabled={typing}
-                    onPress={() => void sendText(draft)}
-                    className="mb-0.5 h-12 w-12 items-center justify-center rounded-xl"
-                    style={{
-                      backgroundColor: colors.primary,
-                      opacity: typing ? 0.5 : 1,
-                    }}
-                  >
-                    <Ionicons
-                      name="arrow-up"
-                      size={22}
-                      color={colors.white}
-                    />
-                  </Pressable>
-                ) : (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="কণ্ঠে আলোচনা শুরু"
-                    disabled={typing}
-                    onPress={startLive}
-                    className="mb-0.5 h-12 w-12 items-center justify-center rounded-xl"
-                    style={{
-                      backgroundColor: sttReady
-                        ? colors.primary
-                        : colors.border,
-                      opacity: typing ? 0.5 : 1,
-                    }}
-                  >
-                    <Ionicons name="mic" size={22} color={colors.white} />
-                  </Pressable>
-                )}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    draft.trim() ? "পাঠান" : "কণ্ঠে আলোচনা (নিশ্চিতকরণ লাগবে)"
+                  }
+                  disabled={typing}
+                  onPress={() => {
+                    if (draft.trim()) void sendText(draft);
+                    else void startLive();
+                  }}
+                  className="mb-0.5 h-12 w-12 items-center justify-center rounded-xl"
+                  style={{
+                    backgroundColor: draft.trim()
+                      ? colors.primary
+                      : colors.secondary,
+                    opacity: typing ? 0.5 : 1,
+                  }}
+                >
+                  <Ionicons
+                    name={draft.trim() ? "arrow-up" : "mic-outline"}
+                    size={22}
+                    color={draft.trim() ? colors.white : colors.ink}
+                  />
+                </Pressable>
               </View>
               {keyboardLift <= 0 ? (
                 <AppText variant="caption" className="mt-2 text-center text-muted">
                   {typing
                     ? "উত্তর প্রস্তুত হচ্ছে…"
-                    : sttReady
-                      ? "মাইক চাপলে কণ্ঠে আলোচনা শুরু হবে"
-                      : "কণ্ঠের জন্য বাংলা কণ্ঠ মডেল লাগবে"}
+                    : "লিখে পাঠান — মাইক চাপলে আগে নিশ্চিতকরণ চাইবে"}
                 </AppText>
               ) : null}
             </View>

@@ -1,15 +1,21 @@
 /**
- * Offline chat: knowledge-first answers, then grounded Gemma.
- * Prefer deterministic / KB replies; skip when no reliable facts.
+ * Offline chat: load Gemma and stream real model replies.
+ * Fast intents only for greetings / time / thanks (no farming canned text).
+ * RAG facts are optional grounding — model still answers when facts are thin.
  */
-import { startListening } from "@/lib/offlineVoice/sttEngine";
 import { streamOffline } from "@/lib/offlineVoice/ttsEngine";
 import {
   buildWelcomeBn,
   currentUserFirstName,
   retrieveContext,
+  seasonTipBn,
 } from "@/lib/offlineNlu/retrieve";
-import { isLlmReady, streamLlmReply } from "@/lib/modelManager/llmEngine";
+import {
+  ensureLlmLoaded,
+  isLlmReady,
+  streamLlmReply,
+  type LlmHistoryTurn,
+} from "@/lib/modelManager/llmEngine";
 import { logMetric, markStart } from "@/lib/offline/metrics";
 import {
   insertChatTurn,
@@ -26,33 +32,32 @@ import {
   setSessionTopic,
   titleFromUserText,
 } from "@/lib/offlineChat/sessionStore";
+import { sanitizeAssistantReply } from "@/lib/offlineChat/sanitize";
 
-const UNKNOWN_REPLY =
-  "এ বিষয়ে আমার কাছে নিশ্চিত তথ্য নেই। ফসলের রোগ, হাতিয়ার, সার-সেচ বা আবহাওয়া নিয়ে জিজ্ঞাসা করুন — অথবা পাতার ছবি তুলে স্ক্যান করুন।";
+export { sanitizeAssistantReply } from "@/lib/offlineChat/sanitize";
+export { buildWelcomeBn };
 
-function escapeRegExp(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+const LOAD_FAIL_REPLY =
+  "জেমা মডেল এখন চালু নেই। মডেল ম্যানেজার খুলে ডাউনলোড করা জেমাতে «চালু করুন» চাপুন, তারপর এখানে আবার জিজ্ঞাসা করুন।";
 
-/**
- * Strict grounded prompt — answer only from facts; otherwise refuse.
- */
-export function buildGroundedPrompt(
+/** Only short social turns skip the model — farming always goes to Gemma. */
+const FAST_INTENT_ONLY =
+  /^(?:হ্যালো+|হেলো|হাই|hello|hi|hey|নমস্কার|আসসালামু\s*আলাইকুম|সালাম|শুভ\s*(?:সকাল|দুপুর|বিকেল|সন্ধ্যা)|ধন্যবাদ|থ্যাংক|thank|বিদায়|আল্লাহ\s*হাফেজ|bye|কয়টা\s*বাজে|সময়\s*কত|তারিখ|কেমন\s*আছ)/i;
+
+export function buildChatPrompt(
   userTextBn: string,
   extraContext: string[] = [],
 ): string {
   const name = currentUserFirstName();
-  const facts = extraContext.filter(Boolean).slice(0, 6);
+  const facts = extraContext.filter(Boolean).slice(0, 5);
 
   return [
-    "আপনি আরণ্য — বাংলাদেশের কৃষকদের জন্য নির্ভরযোগ্য কৃষি সহায়ক।",
-    "শুধু নিচের «নির্ভরযোগ্য তথ্য» থেকে উত্তর দিন। তথ্য না থাকলে এক লাইনে লিখুন: এই বিষয়ে নিশ্চিত তথ্য নেই।",
-    "অনুমান, অতিরঞ্জন বা ইংরেজি ট্যাগ/প্রম্পট কপি করবেন না। প্রশ্ন আবার লিখবেন না। অপ্রাসঙ্গিক অভিবাদন দেবেন না।",
-    "উত্তর: ১–৩টি সংক্ষিপ্ত বাংলা বাক্য। চিকিৎসা/সারে মাত্রা শুধু তথ্যে থাকলেই বলুন।",
+    "আপনি আরণ্য — বাংলাদেশের কৃষকদের অফলাইন কৃষি সহায়ক।",
+    "বাংলায় ২–৪টি সংক্ষিপ্ত, ব্যবহারিক বাক্যে উত্তর দিন।",
+    "প্রশ্ন আবার লিখবেন না। ইংরেজি ট্যাগ/প্রম্পট কপি করবেন না। অপ্রয়োজনীয় অভিবাদন দেবেন না।",
+    "ফসল, রোগ, সার, সেচ, হাতিয়ার, আবহাওয়া — যা জানেন সাহায্য করুন। নিশ্চিত না হলে সাধারণ সতর্ক পরামর্শ দিন এবং স্ক্যান/কৃষি অফিসের কথা বলুন।",
     name ? `কৃষকের নাম: ${name} (নিজেকে এই নাম বলবেন না)` : "",
-    facts.length
-      ? `নির্ভরযোগ্য তথ্য:\n- ${facts.join("\n- ")}`
-      : "নির্ভরযোগ্য তথ্য: (খালি — অজানা বলুন)",
+    facts.length ? `সহায়ক তথ্য:\n- ${facts.join("\n- ")}` : "",
     "",
     `কৃষকের প্রশ্ন: ${userTextBn.trim()}`,
     "উত্তর:",
@@ -61,70 +66,19 @@ export function buildGroundedPrompt(
     .join("\n");
 }
 
-/** Strip greeting spam and identity leaks from model output. */
-export function sanitizeAssistantReply(
-  text: string,
-  opts: { allowGreeting?: boolean } = {},
+/** @deprecated use buildChatPrompt — kept for imports */
+export function buildGroundedPrompt(
+  userTextBn: string,
+  extraContext: string[] = [],
 ): string {
-  const userName = currentUserFirstName();
-  let out = text
-    .replace(
-      /^(?:\s*(?:কৃষক|আরণ্য|সহকারী|assistant|user|model|farmer|উত্তর)\s*[:：\-–—]\s*)+/gim,
-      "",
-    )
-    .replace(
-      /\n\s*(?:কৃষক|আরণ্য|সহকারী|assistant|user|model)\s*[:：\-–—]\s*/g,
-      "\n",
-    )
-    .replace(/<\/?[^>]+>/g, "")
-    .replace(/এই বিষয়ে নিশ্চিত তথ্য নেই[।.!?]?\s*/gi, "এই বিষয়ে নিশ্চিত তথ্য নেই। ");
-
-  if (!opts.allowGreeting) {
-    out = out.replace(
-      /^(?:শুভ\s*(?:সকাল|দুপুর|বিকেল|সন্ধ্যা)|নমস্কার|হ্যালো)[^।.!?\n]{0,40}(?:আমি\s*আরণ্য[^।.!?\n]{0,40})?[।.!?]?\s*/i,
-      "",
-    );
-    out = out.replace(
-      /আমি\s*আরণ্য[।.!?]?\s*(?:কী\s*(?:জানতে\s*চান|সাহায্য\s*করব)[?؟।.!?]?\s*)?/gi,
-      "",
-    );
-  }
-
-  out = out.replace(/\s*\(?(?:এটা\s+)?তোমার\s+(?:নাম|পেশা)\s*নয়\)?/gi, "");
-  out = out.replace(/সকালটা\s*ভালোই[।.!?]?\s*/gi, "");
-  out = out.replace(/আনন্দিত হচ্ছে[।.!?]?\s*/gi, "");
-
-  if (userName) {
-    out = out.replace(
-      /(?:আপনার|তোমার)?\s*নাম\s*(?:কী|কি|জানতে\s*চাই|বলুন|বলো)[?؟।.!?]?\s*/gi,
-      "",
-    );
-    const n = escapeRegExp(userName);
-    out = out.replace(
-      new RegExp(`আমি\\s+${n}\\b[^.।!?\\n]{0,30}[।.!?]?`, "gi"),
-      "",
-    );
-  }
-
-  out = out.replace(
-    /(?:হ্যালো|নমস্কার)?[,،]?\s*আমার\s+নাম\s+[^.।!?\n]{1,40}[।.!?]?/gi,
-    "",
-  );
-
-  return out.replace(/\s{2,}/g, " ").replace(/\s+([।!?])/g, "$1").trim();
-}
-
-/** Fast path without LLM (greetings / time / weather only via intents). */
-export function tryDeterministicReply(userTextBn: string): string | null {
-  // Kept for callers; full intent runs async in runLlmTurn.
-  const t = userTextBn.trim();
-  if (!t) return null;
-  return null;
+  return buildChatPrompt(userTextBn, extraContext);
 }
 
 export type ChatTurnHandlers = {
   onPartialTranscript?: (text: string) => void;
   onFinalTranscript?: (text: string) => void;
+  /** Optional: “মডেল লোড হচ্ছে…” while ensureLlmLoaded runs */
+  onStatus?: (textBn: string) => void;
   onTextChunk: (token: string) => void;
   onDone: () => void;
   onError?: (err: unknown) => void;
@@ -139,17 +93,12 @@ function emitAll(
   return text;
 }
 
-function looksLikeUnknown(text: string): boolean {
-  return /নিশ্চিত তথ্য নেই|জানি না|জানিনা|তথ্য (?:নেই|পাইনি)|uncertain|don't know|do not know/i.test(
-    text,
-  );
-}
-
-/** Grounded reply for one user turn. */
+/** One chat turn: load Gemma if needed, then stream model tokens. */
 export async function runLlmTurn(
   userTextBn: string,
   onTextChunk: (token: string) => void,
   shouldContinue: () => boolean = () => true,
+  onStatus?: (textBn: string) => void,
 ): Promise<string> {
   const end = markStart("chat.llm");
   const cleaned = userTextBn.trim();
@@ -158,78 +107,81 @@ export async function runLlmTurn(
     return "";
   }
 
-  const sessionId = await getActiveSessionId();
-  const topic = await getSessionTopic(sessionId);
-  const recentLines = await recentChatForPrompt(4, sessionId).catch(
-    () => [] as string[],
-  );
+  let sessionId = "";
+  let topic: Awaited<ReturnType<typeof getSessionTopic>>;
+  let recentLines: string[] = [];
 
-  const intent = await answerByIntent(cleaned, {
-    topic,
-    hasHistory: recentLines.length > 0,
-  });
-  if (intent) {
-    if (intent.topic) await setSessionTopic(intent.topic, sessionId);
-    emitAll(intent.text, onTextChunk, shouldContinue);
-    end("intent");
-    return intent.text;
+  try {
+    sessionId = await getActiveSessionId();
+    topic = await getSessionTopic(sessionId);
+    recentLines = await recentChatForPrompt(4, sessionId).catch(() => []);
+  } catch {
+    // continue
+  }
+
+  // Fast path: greetings / time only — not farming.
+  if (FAST_INTENT_ONLY.test(cleaned) && cleaned.length < 48) {
+    try {
+      const intent = await answerByIntent(cleaned, {
+        topic,
+        hasHistory: recentLines.length > 0,
+      });
+      if (intent) {
+        if (intent.topic && sessionId) {
+          await setSessionTopic(intent.topic, sessionId).catch(() => undefined);
+        }
+        emitAll(intent.text, onTextChunk, shouldContinue);
+        end("intent");
+        return intent.text;
+      }
+    } catch {
+      // fall through to model
+    }
   }
 
   const wantScan =
     /রোগ|দাগ|পাতা|হলুদ|পোকা|ছত্রাক|ব্লাইট|স্ক্যান|চিকিৎসা|লক্ষণ|ফসল|টমেটো|ধান|আলু|মরিচ/i.test(
       cleaned,
-    ) || /হ্যাঁ|হা|ঠিক|দেখেছি|আছে/i.test(cleaned);
+    );
 
   const [scans, history] = await Promise.all([
     wantScan
       ? recentScansForPrompt().catch(() => [] as string[])
       : Promise.resolve([] as string[]),
-    recentChatHistoryTurns(6, sessionId).catch(
-      () => [] as { role: "user" | "assistant"; text: string }[],
-    ),
+    sessionId
+      ? recentChatHistoryTurns(6, sessionId).catch(() => [] as LlmHistoryTurn[])
+      : Promise.resolve([] as LlmHistoryTurn[]),
   ]);
 
-  if (
-    /^(হ্যাঁ|হা|জি|ঠিক|দেখেছি|আছে)[!?।.\s]*$/i.test(cleaned) &&
-    recentLines.some((l) => /রোগ|টমেটো|পাতা|স্ক্যান|ছবি/i.test(l))
-  ) {
-    const tip =
-      "নিচের ক্যামেরা আইকন দিয়ে আক্রান্ত পাতার স্পষ্ট ছবি তুলুন। স্ক্যান শেষে চিকিৎসার নির্দেশনা দেখাবে।";
-    emitAll(tip, onTextChunk, shouldContinue);
-    end("followup-scan");
-    return tip;
+  let rag = retrieveContext(cleaned);
+  if (!rag.length) {
+    rag = [seasonTipBn()];
   }
 
-  const rag = retrieveContext(cleaned);
   const facts = [
     ...rag,
     ...scans,
-    ...(recentLines.length ? [`আগের আলোচনা:\n${recentLines.join("\n")}`] : []),
+    ...(recentLines.length ? [`আগের আলোচনা:\n${recentLines.slice(-2).join("\n")}`] : []),
   ];
 
-  // No reliable facts → refuse instead of hallucinating.
-  if (!rag.length && !scans.length) {
-    emitAll(UNKNOWN_REPLY, onTextChunk, shouldContinue);
-    end("no-facts");
-    return UNKNOWN_REPLY;
-  }
-
+  // Load the real Gemma model — this is what the farmer asked for.
   if (!isLlmReady()) {
-    // Still answer from KB facts without LLM when possible.
-    if (rag.length) {
-      const kbOnly = rag[0].slice(0, 320);
-      emitAll(kbOnly, onTextChunk, shouldContinue);
-      end("kb-only");
-      return kbOnly;
+    onStatus?.("জেমা মডেল লোড হচ্ছে… একটু অপেক্ষা করুন");
+    const loaded = await ensureLlmLoaded().catch(() => null);
+    if (!loaded || !isLlmReady()) {
+      emitAll(LOAD_FAIL_REPLY, onTextChunk, shouldContinue);
+      end("llm-missing");
+      return LOAD_FAIL_REPLY;
     }
-    const tip =
-      "মডেল প্রস্তুত নয়। মডেল ম্যানেজার থেকে জেমা ডাউনলোড করে আবার চেষ্টা করুন।";
-    emitAll(tip, onTextChunk, shouldContinue);
-    end("llm-missing");
-    return tip;
+    onStatus?.("");
   }
 
-  const prompt = buildGroundedPrompt(cleaned, facts);
+  if (!shouldContinue()) {
+    end("cancelled");
+    return "";
+  }
+
+  const prompt = buildChatPrompt(cleaned, facts);
   let full = "";
   let prefixBuf = "";
   let prefixDone = false;
@@ -238,7 +190,7 @@ export async function runLlmTurn(
     if (!shouldContinue()) return;
     if (!prefixDone) {
       prefixBuf += token;
-      if (prefixBuf.length < 20 && !/[\n।.!?]/.test(prefixBuf)) return;
+      if (prefixBuf.length < 12 && !/[\n।.!?]/.test(prefixBuf)) return;
       const cleanedPrefix = sanitizeAssistantReply(prefixBuf);
       prefixDone = true;
       prefixBuf = "";
@@ -251,10 +203,18 @@ export async function runLlmTurn(
     onTextChunk(token);
   };
 
-  await streamLlmReply(prompt, feed, {
-    userText: cleaned,
-    history,
-  });
+  try {
+    await streamLlmReply(prompt, feed, {
+      userText: cleaned,
+      history,
+    });
+  } catch (err) {
+    end(err instanceof Error ? err.message : "stream-fail");
+    if (!full) {
+      emitAll(LOAD_FAIL_REPLY, onTextChunk, shouldContinue);
+      return LOAD_FAIL_REPLY;
+    }
+  }
 
   if (!prefixDone && prefixBuf) {
     const cleanedPrefix = sanitizeAssistantReply(prefixBuf);
@@ -265,17 +225,18 @@ export async function runLlmTurn(
   }
 
   let reply = sanitizeAssistantReply(full);
-  if (!reply || looksLikeUnknown(reply)) {
-    reply = UNKNOWN_REPLY;
-    if (shouldContinue() && !full.includes("নিশ্চিত তথ্য")) {
-      onTextChunk(reply);
-    }
+  if (!reply) {
+    reply = LOAD_FAIL_REPLY;
+    if (shouldContinue()) onTextChunk(reply);
   }
   end("ok");
   return reply;
 }
 
-export async function persistTurn(role: "user" | "assistant", text: string) {
+export async function persistTurn(
+  role: "user" | "assistant",
+  text: string,
+): Promise<void> {
   try {
     const sessionId = await getActiveSessionId();
     await insertChatTurn(role, text, undefined, sessionId);
@@ -295,26 +256,42 @@ export async function persistTurn(role: "user" | "assistant", text: string) {
 
 export async function replyToText(
   userTextBn: string,
-  handlers: Pick<ChatTurnHandlers, "onTextChunk" | "onDone" | "onError">,
+  handlers: Pick<
+    ChatTurnHandlers,
+    "onTextChunk" | "onDone" | "onError" | "onStatus"
+  >,
 ): Promise<void> {
   const cleaned = userTextBn.trim();
   if (!cleaned) {
     handlers.onDone();
     return;
   }
-  // Intent/KB can answer without LLM.
   await persistTurn("user", cleaned);
   try {
-    const reply = await runLlmTurn(cleaned, handlers.onTextChunk);
+    const reply = await runLlmTurn(
+      cleaned,
+      handlers.onTextChunk,
+      () => true,
+      handlers.onStatus,
+    );
     if (reply) await persistTurn("assistant", reply);
   } catch (err) {
     handlers.onError?.(err);
+    try {
+      handlers.onTextChunk(LOAD_FAIL_REPLY);
+      await persistTurn("assistant", LOAD_FAIL_REPLY);
+    } catch {
+      // ignore
+    }
   } finally {
     handlers.onDone();
   }
 }
 
-export function startChatTurn(handlers: ChatTurnHandlers): () => void {
+export async function startChatTurn(
+  handlers: ChatTurnHandlers,
+): Promise<() => void> {
+  const { startListening } = await import("@/lib/offlineVoice/sttEngine");
   return startListening(
     (partial) => handlers.onPartialTranscript?.(partial),
     async (finalTextBn) => {
@@ -327,7 +304,12 @@ export function startChatTurn(handlers: ChatTurnHandlers): () => void {
           return;
         }
         await persistTurn("user", cleaned);
-        const reply = await runLlmTurn(cleaned, handlers.onTextChunk);
+        const reply = await runLlmTurn(
+          cleaned,
+          handlers.onTextChunk,
+          () => true,
+          handlers.onStatus,
+        );
         if (reply) {
           await persistTurn("assistant", reply);
           void streamOffline(reply);
@@ -340,5 +322,3 @@ export function startChatTurn(handlers: ChatTurnHandlers): () => void {
     },
   );
 }
-
-export { buildWelcomeBn };

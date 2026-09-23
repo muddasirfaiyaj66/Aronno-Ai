@@ -1,11 +1,9 @@
 /**
  * On-device Gemma IT (GGUF) via llama.rn — text + optional vision (mmproj).
+ * Lazy-import native module; single-flight load so chat + models UI share one ctx.
  */
-import {
-  initLlama,
-  type LlamaContext,
-  type TokenData,
-} from "llama.rn";
+import type { LlamaContext, TokenData } from "llama.rn";
+import * as FileSystem from "expo-file-system/legacy";
 import {
   listInstalled,
   localMmprojPath,
@@ -22,6 +20,38 @@ import { logMetric, markStart } from "@/lib/offline/metrics";
 let ctx: LlamaContext | null = null;
 let activeModelId: string | null = null;
 let visionEnabled = false;
+/** Single-flight so parallel ensureLlmLoaded / selectLlm don't fight. */
+let loadInFlight: Promise<string | null> | null = null;
+
+export type LlmLoadProgress = {
+  modelId: string;
+  phase: "starting" | "native" | "loading" | "done" | "error";
+  progress?: number;
+  messageBn?: string;
+};
+
+type ProgressListener = (p: LlmLoadProgress) => void;
+const progressListeners = new Set<ProgressListener>();
+
+export function subscribeLlmLoad(listener: ProgressListener): () => void {
+  progressListeners.add(listener);
+  return () => progressListeners.delete(listener);
+}
+
+function emitProgress(p: LlmLoadProgress) {
+  for (const l of progressListeners) {
+    try {
+      l(p);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+async function getInitLlama() {
+  const mod = await import("llama.rn");
+  return mod.initLlama;
+}
 
 const SPECIAL_RE =
   /<\|im_start\|>\s*(assistant|user|system|model)?\s*|<start_of_turn>\s*(assistant|user|system|model)?\s*|<end_of_turn>|<\|im_end\|>|<\/?s>|<eos>|<bos>|<pad>/gi;
@@ -30,11 +60,16 @@ function stripSpecial(s: string) {
   return s.replace(SPECIAL_RE, "");
 }
 
+/** llama.rn expects a file:// URI on Android/iOS. */
+export function toModelFileUri(path: string): string {
+  if (!path) return path;
+  if (path.startsWith("file://") || path.startsWith("content://")) return path;
+  if (path.startsWith("/")) return `file://${path}`;
+  return path;
+}
+
 function toFileUrl(uri: string): string {
-  if (!uri) return uri;
-  if (uri.startsWith("file://") || uri.startsWith("data:")) return uri;
-  if (uri.startsWith("/")) return `file://${uri}`;
-  return uri;
+  return toModelFileUri(uri);
 }
 
 async function releaseContext() {
@@ -44,56 +79,110 @@ async function releaseContext() {
   } catch {
     // ignore
   }
-  await ctx.release();
+  try {
+    await ctx.release();
+  } catch {
+    // ignore
+  }
   ctx = null;
   activeModelId = null;
   visionEnabled = false;
 }
 
-/**
- * Call at app start and after an LLM download finishes.
- * Order: explicit preferredId → saved preference → multimodal → recommended → first.
- */
-export async function autoLoadLlm(
+async function resolveLoadChoice(
   preferredId?: string,
-): Promise<string | null> {
-  const end = markStart("llm.autoload");
+): Promise<ModelCatalogEntry | null> {
   const installed = (await listInstalled()).filter((e) => e.kind === "llm");
-  if (!installed.length) {
-    end("none-installed");
-    return null;
-  }
+  if (!installed.length) return null;
 
   const savedId = preferredId ?? (await getPreferredLlmId()) ?? undefined;
-  const choice: ModelCatalogEntry =
-    installed.find((e) => e.id === savedId) ??
-    installed.find((e) => isMultimodalCatalogEntry(e)) ??
-    installed.find((e) => e.recommended) ??
-    installed[0];
+  const byId = (id?: string) =>
+    id ? installed.find((e) => e.id === id) : undefined;
 
+  // Explicit pick first; else saved; else lightest (stable on phones).
+  return (
+    byId(preferredId) ??
+    byId(savedId) ??
+    [...installed].sort((a, b) => a.sizeMb - b.sizeMb)[0] ??
+    null
+  );
+}
+
+async function loadLlmEntry(
+  choice: ModelCatalogEntry,
+  end: (detail?: string) => void = () => undefined,
+): Promise<string | null> {
   if (ctx && activeModelId === choice.id) {
     end("already-loaded");
+    emitProgress({ modelId: choice.id, phase: "done", progress: 1 });
     return activeModelId;
   }
 
+  emitProgress({
+    modelId: choice.id,
+    phase: "starting",
+    messageBn: `${choice.nameBn} লোড শুরু…`,
+  });
+
   await releaseContext();
 
-  const modelPath = localPath(choice);
-  const mmproj = localMmprojPath(choice);
+  const rawPath = localPath(choice);
+  const modelPath = toModelFileUri(rawPath);
+  let info = await FileSystem.getInfoAsync(modelPath).catch(() => ({
+    exists: false,
+    size: 0,
+  }));
+  if (!info.exists) {
+    info = await FileSystem.getInfoAsync(rawPath).catch(() => ({
+      exists: false,
+      size: 0,
+    }));
+  }
+  if (!info.exists || (info.size ?? 0) < 16 * 1024 * 1024) {
+    end("file-missing");
+    emitProgress({
+      modelId: choice.id,
+      phase: "error",
+      messageBn: "মডেল ফাইল পাওয়া যায়নি। আবার ডাউনলোড করুন।",
+    });
+    return null;
+  }
+
+  const mmprojRaw = localMmprojPath(choice);
+  const mmproj = mmprojRaw ? toModelFileUri(mmprojRaw) : null;
   const wantVision = isMultimodalCatalogEntry(choice) && !!mmproj;
 
   try {
+    emitProgress({
+      modelId: choice.id,
+      phase: "native",
+      messageBn: "জেমা ইঞ্জিন চালু হচ্ছে…",
+    });
+    const initLlama = await getInitLlama();
+    emitProgress({
+      modelId: choice.id,
+      phase: "loading",
+      progress: 0,
+      messageBn: "মেমোরিতে লোড হচ্ছে — একটু অপেক্ষা করুন…",
+    });
+
     ctx = await initLlama(
       {
         model: modelPath,
-        n_ctx: wantVision ? 4096 : 2048,
-        n_threads: 4,
+        n_ctx: wantVision ? 2048 : 1024,
+        n_threads: 2,
         n_gpu_layers: 0,
-        // Required so media token positions stay valid.
+        use_mlock: false,
         ctx_shift: wantVision ? false : undefined,
       },
       (progress) => {
         logMetric("llm.load.progress", progress);
+        emitProgress({
+          modelId: choice.id,
+          phase: "loading",
+          progress,
+          messageBn: `লোড ${Math.round((progress ?? 0) * 100)}%…`,
+        });
       },
     );
 
@@ -101,7 +190,6 @@ export async function autoLoadLlm(
       const ok = await ctx.initMultimodal({
         path: mmproj,
         use_gpu: false,
-        // Keep image tokens modest for phone RAM.
         image_max_tokens: 256,
       });
       visionEnabled = !!ok;
@@ -110,11 +198,7 @@ export async function autoLoadLlm(
           vision: false,
           audio: false,
         }));
-        logMetric(
-          "llm.vision.ready",
-          support.vision ? 1 : 0,
-          choice.id,
-        );
+        logMetric("llm.vision.ready", support.vision ? 1 : 0, choice.id);
       } else {
         logMetric("llm.vision.init-failed", undefined, choice.id);
       }
@@ -124,17 +208,77 @@ export async function autoLoadLlm(
     await setPreferredLlmId(choice.id);
     end(choice.id);
     logMetric("llm.loaded", undefined, choice.id);
+    emitProgress({
+      modelId: choice.id,
+      phase: "done",
+      progress: 1,
+      messageBn: `${choice.nameBn} চালু`,
+    });
     return activeModelId;
   } catch (err) {
     await releaseContext();
-    end(err instanceof Error ? err.message : "load-failed");
+    const msg = err instanceof Error ? err.message : "load-failed";
+    end(msg);
+    emitProgress({
+      modelId: choice.id,
+      phase: "error",
+      messageBn:
+        choice.sizeMb > 2000
+          ? "লোড ব্যর্থ — RAM কম হতে পারে। ছোট জেমা (১বি) চালু করুন।"
+          : "মডেল লোড যায়নি। আবার «চালু করুন» চাপুন।",
+    });
     return null;
   }
+}
+
+/**
+ * Load preferred / lightest installed Gemma into memory.
+ */
+export async function autoLoadLlm(
+  preferredId?: string,
+): Promise<string | null> {
+  if (loadInFlight) return loadInFlight;
+
+  loadInFlight = (async () => {
+    const end = markStart("llm.autoload");
+    try {
+      const choice = await resolveLoadChoice(preferredId);
+      if (!choice) {
+        end("none-installed");
+        return null;
+      }
+      return await loadLlmEntry(choice, end);
+    } finally {
+      loadInFlight = null;
+    }
+  })();
+
+  return loadInFlight;
+}
+
+export async function ensureLlmLoaded(): Promise<string | null> {
+  if (ctx && activeModelId) return activeModelId;
+
+  const first = await autoLoadLlm();
+  if (first) return first;
+
+  const installed = (await listInstalled())
+    .filter((e) => e.kind === "llm")
+    .sort((a, b) => a.sizeMb - b.sizeMb);
+
+  for (const entry of installed) {
+    const loaded = await autoLoadLlm(entry.id);
+    if (loaded) return loaded;
+  }
+  return null;
 }
 
 /** Switch to a specific installed Gemma and remember the choice. */
 export async function selectLlm(id: string): Promise<string | null> {
   await setPreferredLlmId(id);
+  if (ctx && activeModelId === id) return id;
+  // Force reload even if another model is warm.
+  if (loadInFlight) await loadInFlight.catch(() => null);
   return autoLoadLlm(id);
 }
 
@@ -142,7 +286,6 @@ export function isLlmReady(): boolean {
   return ctx !== null;
 }
 
-/** True when loaded LLM has mmproj vision enabled. */
 export function isVisionLlmReady(): boolean {
   return ctx !== null && visionEnabled;
 }
@@ -152,12 +295,9 @@ export function currentModelId(): string | null {
 }
 
 export async function unloadLlm(): Promise<void> {
+  if (loadInFlight) await loadInFlight.catch(() => null);
   await releaseContext();
   logMetric("llm.unload");
-}
-
-function normForEcho(s: string) {
-  return s.toLowerCase().replace(/[\s।,.!?"'«»:;\-–—()]/g, "");
 }
 
 export type LlmHistoryTurn = { role: "user" | "assistant"; text: string };
@@ -165,15 +305,16 @@ export type LlmHistoryTurn = { role: "user" | "assistant"; text: string };
 async function completeOnce(
   llama: LlamaContext,
   promptBn: string,
-  userText: string,
+  _userText: string,
   temperature: number,
   onToken: (t: string) => void,
   history: LlmHistoryTurn[] = [],
 ): Promise<boolean> {
   const past = history
+    .slice(-4)
     .map(
       (t) =>
-        `<start_of_turn>${t.role === "user" ? "user" : "model"}\n${t.text.trim()}<end_of_turn>\n`,
+        `<start_of_turn>${t.role === "user" ? "user" : "model"}\n${t.text.trim().slice(0, 400)}<end_of_turn>\n`,
     )
     .join("");
   const prompt =
@@ -181,38 +322,18 @@ async function completeOnce(
     `<start_of_turn>user\n${promptBn.trim()}<end_of_turn>\n` +
     `<start_of_turn>model\n`;
 
-  const question = normForEcho(userText);
   let tagHold = "";
-  let echoHold = "";
-  let gated = question.length > 0;
   let emittedAny = false;
-
-  const emit = (text: string) => {
-    if (!text) return;
-    if (!gated) {
-      emittedAny = true;
-      onToken(text);
-      return;
-    }
-    echoHold += text;
-    const held = normForEcho(echoHold);
-    const stillEcho =
-      question.startsWith(held) ||
-      (held.startsWith(question) && held.length <= question.length + 6);
-    if (!stillEcho) {
-      gated = false;
-      emittedAny = true;
-      onToken(echoHold);
-      echoHold = "";
-    }
-  };
+  let raw = "";
 
   const flushTags = (force: boolean) => {
     if (!tagHold) return;
     if (!force && /<[|a-z_/]*$/i.test(tagHold)) return;
     const cleaned = stripSpecial(tagHold);
     tagHold = "";
-    emit(cleaned);
+    if (!cleaned) return;
+    emittedAny = true;
+    onToken(cleaned);
   };
 
   await llama.completion(
@@ -222,20 +343,30 @@ async function completeOnce(
       temperature,
       top_k: 40,
       top_p: 0.9,
-      min_p: 0.1,
-      penalty_repeat: 1.15,
+      min_p: 0.05,
+      penalty_repeat: 1.12,
       stop: ["<end_of_turn>", "<start_of_turn>", "<|im_end|>", "<|im_start|>"],
     },
     (data: TokenData) => {
       const piece = data.token ?? "";
       if (!piece) return;
+      raw += piece;
       tagHold += piece;
       flushTags(false);
     },
   );
   flushTags(true);
 
-  return emittedAny && !gated;
+  // If tag stripping ate everything, still emit raw cleaned text once.
+  if (!emittedAny && raw.trim()) {
+    const cleaned = stripSpecial(raw).trim();
+    if (cleaned) {
+      onToken(cleaned);
+      emittedAny = true;
+    }
+  }
+
+  return emittedAny;
 }
 
 export async function streamLlmReply(
@@ -250,26 +381,28 @@ export async function streamLlmReply(
   const userText = opts.userText ?? "";
   const history = opts.history ?? [];
 
-  if (await completeOnce(ctx, promptBn, userText, 0.25, onToken, history)) {
+  if (await completeOnce(ctx, promptBn, userText, 0.35, onToken, history)) {
     end("ok");
     return;
   }
 
-  const firmer =
-    `${promptBn.trim()}\nশুধু উত্তর। তথ্য না থাকলে লিখুন: এই বিষয়ে নিশ্চিত তথ্য নেই। প্রশ্ন আবার লিখবেন না।`;
-  if (await completeOnce(ctx, firmer, userText, 0.15, onToken)) {
+  // Retry with a shorter, firmer prompt if first pass was empty.
+  const short = [
+    "বাংলায় সংক্ষিপ্ত কৃষি উত্তর দিন। প্রশ্ন কপি করবেন না।",
+    `প্রশ্ন: ${userText || promptBn.slice(-200)}`,
+    "উত্তর:",
+  ].join("\n");
+  if (await completeOnce(ctx, short, userText, 0.2, onToken)) {
     end("ok-retry");
     return;
   }
 
-  onToken("এই বিষয়ে নিশ্চিত তথ্য নেই।");
-  end("echo-fallback");
+  onToken(
+    "উত্তর তৈরি হয়নি। মডেল ম্যানেজার থেকে জেমা «চালু করুন» চাপুন, তারপর আবার জিজ্ঞাসা করুন।",
+  );
+  end("empty-fallback");
 }
 
-/**
- * Vision completion — requires multimodal Gemma (mmproj loaded).
- * Streams Bangla/text tokens; returns full cleaned string.
- */
 export async function streamLlmVisionReply(
   promptBn: string,
   imageUri: string,
@@ -329,7 +462,6 @@ export async function streamLlmVisionReply(
   }
 }
 
-/** Collect full vision reply without streaming UI. */
 export async function completeLlmVision(
   promptBn: string,
   imageUri: string,
@@ -338,8 +470,10 @@ export async function completeLlmVision(
 }
 
 export async function hasInstalledLlm(): Promise<boolean> {
-  const llms = (await listInstalled()).filter((e) => e.kind === "llm");
-  return llms.length > 0;
+  const { hasInstalledLlm: check } = await import(
+    "@/lib/modelManager/modelManager"
+  );
+  return check();
 }
 
 export async function hasInstalledVisionLlm(): Promise<boolean> {
@@ -353,8 +487,8 @@ export async function preferredInstalledLlm(): Promise<ModelCatalogEntry | null>
   const savedId = await getPreferredLlmId();
   return (
     installed.find((e) => e.id === savedId) ??
-    installed.find((e) => isMultimodalCatalogEntry(e)) ??
     installed.find((e) => e.recommended) ??
+    [...installed].sort((a, b) => a.sizeMb - b.sizeMb)[0] ??
     (catalogById(installed[0].id) ?? installed[0])
   );
 }

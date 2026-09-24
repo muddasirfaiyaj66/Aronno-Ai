@@ -144,8 +144,8 @@ export function currentUserFirstName(): string | null {
 
 type Scored = { score: number; text: string };
 
-/** Returns up to 4 short Bangla fact strings relevant to the user's message. */
-export function retrieveContext(userTextBn: string): string[] {
+/** Returns short Bangla fact strings from the local knowledge base. */
+export function retrieveContext(userTextBn: string, limit = 4): string[] {
   const text = normalize(userTextBn);
   const scored: Scored[] = [];
 
@@ -242,7 +242,7 @@ export function retrieveContext(userTextBn: string): string[] {
   const unique: string[] = [];
   for (const s of scored) {
     if (!unique.includes(s.text)) unique.push(s.text);
-    if (unique.length >= 4) break;
+    if (unique.length >= limit) break;
   }
   return unique;
 }

@@ -5,6 +5,7 @@
  */
 import { streamOffline } from "@/lib/offlineVoice/ttsEngine";
 import {
+  buildSessionFacts,
   buildWelcomeBn,
   cachedWeather,
   currentUserFirstName,
@@ -146,8 +147,10 @@ export async function runLlmTurn(
       : Promise.resolve([] as LlmHistoryTurn[]),
   ]);
 
-  // 2) RAG + live app data
-  const rag = retrieveContext(cleaned);
+  const online = await fetchIsOnline();
+
+  // 2) RAG + live app data. Cloud Gemma can use a wider slice of the knowledge base.
+  const rag = retrieveContext(cleaned, online ? 8 : 4);
   const weather =
     !intentHit || intentHit.intent !== "weather"
       ? WANTS_WEATHER_CONTEXT_RE.test(cleaned)
@@ -171,9 +174,14 @@ export async function runLlmTurn(
       : []),
   ];
 
-  if (await fetchIsOnline()) {
+  if (online) {
     onStatus?.("ক্লাউড জেমা উত্তর দিচ্ছে…");
-    const cloud = await cloudReply(cleaned, history).catch(() => "");
+    const market = await marketFacts(cleaned).catch(() => [] as string[]);
+    const cloud = await cloudReply(cleaned, history, [
+      ...buildSessionFacts(),
+      ...facts,
+      ...market,
+    ]).catch(() => "");
     const cloudText = sanitizeAssistantReply(cloud);
     if (cloudText && !isUnusableModelText(cloudText, cleaned)) {
       emitAll(cloudText, onTextChunk, shouldContinue);
@@ -228,9 +236,51 @@ export async function runLlmTurn(
 async function cloudReply(
   text: string,
   history: LlmHistoryTurn[],
+  facts: string[],
 ): Promise<string> {
   const { replyWithCloudGemma } = await import("@/lib/offlineChat/cloudGemma");
-  return replyWithCloudGemma(text, history);
+  return replyWithCloudGemma(text, history, facts);
+}
+
+const PRICE_RE = /দাম|মূল্য|বাজার|কত\s*টাকা|price|mon\b|মণ/i;
+
+function cropSlugFromText(text: string): string | undefined {
+  if (/ধান|চাল|আমন|বোরো|rice/i.test(text)) return "rice";
+  if (/আলু|potato/i.test(text)) return "potato";
+  if (/টমেটো|tomato/i.test(text)) return "tomato";
+  if (/পেঁয়াজ|onion/i.test(text)) return "onion";
+  if (/ভুট্টা|corn|maize/i.test(text)) return "corn";
+  if (/মসুর|ডাল|lentil/i.test(text)) return "lentil";
+  return undefined;
+}
+
+/** Live market rows from the Aronno API, when the farmer asks about price. */
+async function marketFacts(text: string): Promise<string[]> {
+  if (!PRICE_RE.test(text)) return [];
+  const { api } = await import("@/services/api");
+  const { store } = await import("@/store");
+  const district = store.getState().auth.user?.district?.slug;
+  const result = await store
+    .dispatch(
+      api.endpoints.getMarketPrices.initiate({
+        cropSlug: cropSlugFromText(text),
+        districtSlug: district,
+      }),
+    )
+    .unwrap()
+    .catch(() => null);
+  const rows = result?.markets?.slice(0, 4) ?? [];
+  if (!rows.length) return [];
+  return [
+    "অ্যাপের বাজার ডেটা (টাকা/মণ): " +
+      rows
+        .map(
+          (m) =>
+            `${m.marketNameBn} (${m.district}) ${m.cropType} ${m.pricePerMon}`,
+        )
+        .join("; ") +
+      "। এই দামগুলোই বলো।",
+  ];
 }
 
 function socialFallback(text: string): string | null {

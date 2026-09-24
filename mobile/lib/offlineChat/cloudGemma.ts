@@ -21,19 +21,29 @@ function modelName(): string {
 export async function replyWithCloudGemma(
   userText: string,
   history: LlmHistoryTurn[] = [],
+  facts: string[] = [],
 ): Promise<string> {
   const key = process.env.EXPO_PUBLIC_OLLAMA_API_KEY?.trim();
   if (!key) return "";
+
+  const grounding = Array.from(
+    new Set(facts.map((f) => f.trim()).filter(Boolean)),
+  ).slice(0, 12);
 
   const messages = [
     {
       role: "system",
       content: [
         "তুমি আরণ্য — বাংলাদেশের কৃষকদের সহকারী।",
-        "বাংলা হরফে ১–৩টি সহজ বাক্যে উত্তর দাও। প্রশ্ন আবার লিখবে না।",
+        "বাংলা হরফে ২–৪টি সহজ বাক্যে উত্তর দাও। প্রশ্ন আবার লিখবে না।",
         "বাংলিশ বোঝো: Hi/Hai = হ্যালো, Ki obosta = কেমন আছ, Kire/কিরে = ডাক, Oi = হেই। এগুলো নাম বা খাবার নয়।",
-        "কৃষি প্রশ্নে ব্যবহারিক পরামর্শ দাও। ওষুধের মাত্রা নিশ্চিত না হলে বলবে না।",
-      ].join(" "),
+        grounding.length
+          ? "নিচের তথ্য আরণ্যের জ্ঞানভাণ্ডার, সাম্প্রতিক স্ক্যান ও অ্যাপ ডেটা থেকে নেওয়া। রোগ, চিকিৎসা, সার, যন্ত্র, আবহাওয়া বা বাজার দামের উত্তরে এই তথ্যই ব্যবহার করো। সংখ্যা ও নাম হুবহু বলো। তথ্যে না থাকলে ওষুধের মাত্রা বা দাম বানাবে না। «উদ্দেশ্য» ও «নির্দেশ» লাইন কৃষককে দেখাবে না।"
+          : "কৃষি প্রশ্নে ব্যবহারিক পরামর্শ দাও। ওষুধের মাত্রা নিশ্চিত না হলে বলবে না।",
+        grounding.length ? `জ্ঞানভাণ্ডার:\n- ${grounding.join("\n- ")}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
     },
     ...history.slice(-6).map((t) => ({
       role: t.role === "assistant" ? "assistant" : "user",

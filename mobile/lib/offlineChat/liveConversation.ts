@@ -35,8 +35,6 @@ export type LiveConversationHandle = {
   stop: () => void;
 };
 
-const DEAD_MIC_TURNS_BEFORE_NOTICE = 4;
-const EMPTY_BEFORE_NOTICE = 5;
 const POST_SPEECH_MS = 700;
 
 export function startLiveConversation(
@@ -55,8 +53,6 @@ export function startLiveConversation(
 
   void (async () => {
     logMetric("chat.live.start");
-    let deadMicTurns = 0;
-    let emptyTurns = 0;
 
     const engine = await warmSttForLive();
     if (engine === "none") {
@@ -82,31 +78,10 @@ export function startLiveConversation(
       cancelListen = null;
       if (stopped) break;
 
-      if (micSilent) {
-        deadMicTurns += 1;
-        if (deadMicTurns >= DEAD_MIC_TURNS_BEFORE_NOTICE) {
-          handlers.onNotice?.(
-            "মাইকে আওয়াজ আসছে না। ফোনে মাইকের অনুমতি দিন। অথবা লিখে জিজ্ঞাসা করুন।",
-          );
-          deadMicTurns = 0;
-        }
-        // Stay in live loop — do not stop on quiet mic.
-        continue;
-      }
-      deadMicTurns = 0;
+      if (micSilent) continue;
 
       const heard = cleanSttTranscript(text).trim();
-      if (!heard || heard.length < 2) {
-        emptyTurns += 1;
-        if (emptyTurns >= EMPTY_BEFORE_NOTICE) {
-          handlers.onNotice?.(
-            "ঠিক শুনতে পাইনি — আরেকটু স্পষ্ট করে কাছে থেকে বলুন, অথবা লিখে জিজ্ঞাসা করুন।",
-          );
-          emptyTurns = 0;
-        }
-        continue;
-      }
-      emptyTurns = 0;
+      if (!heard || heard.length < 2) continue;
 
       handlers.onUserFinal(heard);
       const sessionId = await getActiveSessionId();

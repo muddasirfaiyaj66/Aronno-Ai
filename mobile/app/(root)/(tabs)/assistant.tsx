@@ -17,7 +17,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "@/components/ui";
 import { colors } from "@/constants/theme";
@@ -320,6 +320,7 @@ export default function AssistantScreen() {
     null,
   );
   const liveRef = useRef<LiveConversationHandle | null>(null);
+  const voiceCancelRef = useRef<(() => void) | null>(null);
   /** Bumped on new chat / switch / delete so in-flight replies cannot paint the wrong screen. */
   const chatGenRef = useRef(0);
   const level = useRef(new Animated.Value(0)).current;
@@ -329,7 +330,7 @@ export default function AssistantScreen() {
   const keyboardLift = useKeyboardLift();
 
   const live = livePhase !== "idle";
-  const busy = typing || live;
+  const busy = typing;
   const greet = timeOfDayGreetingBn();
 
   useEffect(() => {
@@ -363,35 +364,12 @@ export default function AssistantScreen() {
     try {
       const installed = await hasInstalledLlm();
       setHasModel(installed);
-      const { isLlmReady, ensureLlmLoaded, subscribeLlmLoad } = await import(
-        "@/lib/modelManager/llmEngine"
-      );
+      const { isLlmReady } = await import("@/lib/modelManager/llmEngine");
       setLlmReady(isLlmReady());
       const stt = catalogByKind("stt")[0];
       setSttReady(stt ? await isInstalled(stt) : false);
-
-      // Warm Gemma in the background so the chat screen is usable immediately.
-      if (installed && !isLlmReady()) {
-        setLoadHint("জেমা মডেল লোড হচ্ছে…");
-        const unsub = subscribeLlmLoad((p) => {
-          if (p.messageBn) setLoadHint(p.messageBn);
-          if (p.phase === "done") {
-            setLlmReady(true);
-            setLoadHint("");
-          }
-          if (p.phase === "error") {
-            setLoadHint(p.messageBn ?? "মডেল লোড ব্যর্থ");
-          }
-        });
-        void ensureLlmLoaded()
-          .then((id) => {
-            setLlmReady(!!id);
-            if (!id) setLoadHint("মডেল ম্যানেজার থেকে «চালু করুন» চাপুন");
-            else setLoadHint("");
-          })
-          .catch(() => setLoadHint("মডেল লোড যায়নি"))
-          .finally(() => unsub());
-      }
+      // Do not load Gemma here. Tabs stay mounted, so a background load
+      // keeps the chatbot running after the farmer leaves this screen.
     } catch {
       setHasModel(false);
       setLlmReady(false);
@@ -430,6 +408,24 @@ export default function AssistantScreen() {
     };
   }, [refreshModels, loadSessionBubbles, refreshSessions]);
 
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        chatGenRef.current += 1;
+        voiceCancelRef.current?.();
+        voiceCancelRef.current = null;
+        liveRef.current?.stop();
+        liveRef.current = null;
+        setLivePhase("idle");
+        setTyping(false);
+        setLoadHint("");
+        void import("@/lib/offlineVoice/ttsEngine")
+          .then((m) => m.stopOfflineSpeech())
+          .catch(() => undefined);
+      };
+    }, []),
+  );
+
   function append(role: Bubble["role"], text: string) {
     const id = newId(role);
     setBubbles((prev) => [...prev, { id, role, text }]);
@@ -459,6 +455,8 @@ export default function AssistantScreen() {
     bumpChatGen();
     liveRef.current?.stop();
     liveRef.current = null;
+    voiceCancelRef.current?.();
+    voiceCancelRef.current = null;
     setLivePhase("idle");
     setTyping(false);
     setLoadHint("");
@@ -513,60 +511,44 @@ export default function AssistantScreen() {
     }
   }
 
-  async function startLive() {
-    if (busy) return;
-
-    // Mic sits above the tab bar — confirm so a tab tap never boots sherpa.
-    Alert.alert(
-      "কণ্ঠে আলোচনা?",
-      "কণ্ঠে আলোচনা শুরু করবেন? চাইলে লিখেও জিজ্ঞাসা করতে পারেন।",
-      [
-        { text: "লিখে চালিয়ে যান", style: "cancel" },
-        {
-          text: "কণ্ঠ চালু",
-          onPress: () => {
-            void (async () => {
-              try {
-                // Lazy-load voice stack only after confirm (avoids STT on tab open).
-                const { startLiveConversation } = await import(
-                  "@/lib/offlineChat/liveConversation"
-                );
-                liveRef.current = startLiveConversation({
-                  greet: false,
-                  onPhase: setLivePhase,
-                  onLevel: (v) =>
-                    Animated.timing(level, {
-                      toValue: v,
-                      duration: 90,
-                      useNativeDriver: true,
-                    }).start(),
-                  onUserFinal: (text) => append("user", text),
-                  onAssistantStart: () => append("assistant", ""),
-                  onAssistantChunk: appendToBubble,
-                  onAssistantSet: setBubbleText,
-                  onNotice: (text) => append("notice", text),
-                  onError: (err) =>
-                    append("notice", userFacingError(err, "chat")),
-                });
-              } catch (err) {
-                append(
-                  "notice",
-                  userFacingError(err, "chat") ||
-                    "কণ্ঠ চালু যায়নি। লিখে জিজ্ঞাসা করুন।",
-                );
-                setLivePhase("idle");
-              }
-            })();
-          },
-        },
-      ],
-    );
-  }
-
   function stopLive() {
+    voiceCancelRef.current?.();
+    voiceCancelRef.current = null;
     liveRef.current?.stop();
     liveRef.current = null;
     setLivePhase("idle");
+  }
+
+  async function toggleVoiceInput() {
+    if (live) {
+      stopLive();
+      return;
+    }
+    if (typing) return;
+    Keyboard.dismiss();
+    try {
+      const { startLiveConversation } = await import(
+        "@/lib/offlineChat/liveConversation"
+      );
+      liveRef.current = startLiveConversation({
+        greet: false,
+        onPhase: setLivePhase,
+        onLevel: (v) =>
+          Animated.timing(level, {
+            toValue: v,
+            duration: 90,
+            useNativeDriver: true,
+          }).start(),
+        onUserFinal: (text) => append("user", text),
+        onAssistantStart: () => append("assistant", ""),
+        onAssistantChunk: appendToBubble,
+        onAssistantSet: setBubbleText,
+        onError: (err) => append("notice", userFacingError(err, "chat")),
+      });
+    } catch (err) {
+      stopLive();
+      append("notice", userFacingError(err, "chat") || "কণ্ঠ চালু যায়নি।");
+    }
   }
 
   async function newChat() {
@@ -632,24 +614,11 @@ export default function AssistantScreen() {
     ]);
   }
 
-  const status = llmLoading
-    ? { color: colors.harvest, text: "জেমা লোড হচ্ছে…", label: "লোড হচ্ছে" }
-    : loadHint
-      ? { color: colors.harvest, text: loadHint, label: "লোড" }
-      : llmReady
-        ? { color: colors.leaf400, text: "অফলাইন · জেমা চালু — মডেল উত্তর দিচ্ছে", label: "প্রস্তুত" }
-        : {
-            color: colors.harvest,
-            text: hasModel
-              ? "জেমা ফাইল আছে · মডেল ম্যানেজার থেকে «চালু করুন»"
-              : "মডেল ম্যানেজার থেকে জেমা ডাউনলোড করুন",
-            label: hasModel ? "চালু করুন" : "ডাউনলোড",
-          };
-
   const lastId = bubbles[bubbles.length - 1]?.id;
   const liveCopy = live
     ? PHASE_COPY[livePhase as Exclude<LivePhase, "idle">]
     : null;
+  const lastUser = [...bubbles].reverse().find((b) => b.role === "user" && b.text.trim());
   const lastAssistant = [...bubbles]
     .reverse()
     .find((b) => b.role === "assistant" && b.text.trim());
@@ -659,57 +628,34 @@ export default function AssistantScreen() {
       <SafeAreaView className="flex-1" edges={["top"]}>
         {/* Header — high contrast, clear actions */}
         <View
-          className="flex-row items-center gap-2 border-b border-border bg-white px-3 py-2.5"
+          className="flex-row items-center gap-1 px-2 py-1.5"
           accessibilityRole="header"
         >
-          <View
-            className="h-11 w-11 items-center justify-center rounded-xl"
-            style={{ backgroundColor: colors.secondary }}
-            accessible={false}
-          >
-            <Ionicons name="chatbubbles" size={22} color={colors.primary} />
-          </View>
-          <View className="min-w-0 flex-1">
-            <AppText
-              variant="bodyLg"
-              className="font-bengali-bold text-ink"
-              accessibilityRole="header"
-            >
-              কৃষি পরামর্শ
-            </AppText>
-            <AppText
-              variant="caption"
-              className="text-muted"
-              accessibilityLabel={`অবস্থা: ${status.label}`}
-            >
-              {status.text}
-            </AppText>
-          </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="আগের আলোচনা"
             onPress={() => void openHistory()}
-            hitSlop={8}
-            className="min-h-touch min-w-[56px] items-center justify-center rounded-xl px-2 py-1"
-            style={{ backgroundColor: colors.secondary }}
+            hitSlop={6}
+            className="h-11 w-11 items-center justify-center rounded-full"
           >
-            <Ionicons name="time-outline" size={20} color={colors.ink} />
-            <AppText variant="caption" className="mt-0.5 text-ink">
-              ইতিহাস
-            </AppText>
+            <Ionicons name="menu" size={24} color={colors.ink} />
           </Pressable>
+          <View className="min-w-0 flex-1">
+            <AppText variant="bodyLg" className="font-bengali-bold text-ink">
+              আরণ্য
+            </AppText>
+            <AppText variant="caption" className="text-muted" numberOfLines={1}>
+              {loadHint || (llmReady ? "জেমা চালু" : hasModel ? "অফলাইন প্রস্তুত" : "সহকারী")}
+            </AppText>
+          </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="নতুন আলোচনা"
             onPress={() => void newChat()}
-            hitSlop={8}
-            className="min-h-touch min-w-[56px] items-center justify-center rounded-xl px-2 py-1"
-            style={{ backgroundColor: colors.primary }}
+            hitSlop={6}
+            className="h-11 w-11 items-center justify-center rounded-full"
           >
-            <Ionicons name="add" size={22} color={colors.white} />
-            <AppText variant="caption" className="mt-0.5 text-white">
-              নতুন
-            </AppText>
+            <Ionicons name="create-outline" size={22} color={colors.ink} />
           </Pressable>
         </View>
 
@@ -744,7 +690,7 @@ export default function AssistantScreen() {
 
         {live ? (
           <View className="flex-1 items-center justify-between px-6 pb-6 pt-4">
-            <View className="w-full items-center pt-6">
+            <View className="w-full items-center pt-4">
               <AppText variant="caption" className="mb-2 text-primary">
                 কণ্ঠে আলোচনা
               </AppText>
@@ -758,7 +704,17 @@ export default function AssistantScreen() {
 
             <VoiceOrb phase={livePhase} level={level} />
 
-            <View className="w-full items-center gap-4">
+            <View className="w-full items-center gap-3">
+              {lastUser ? (
+                <View className="w-full rounded-2xl bg-primary px-4 py-3">
+                  <AppText variant="caption" className="mb-1 text-white/80">
+                    আপনি
+                  </AppText>
+                  <AppText variant="body" numberOfLines={2} className="text-white">
+                    {lastUser.text}
+                  </AppText>
+                </View>
+              ) : null}
               {lastAssistant ? (
                 <View className="w-full rounded-2xl border border-border bg-white px-5 py-4">
                   <AppText variant="caption" className="mb-1 text-muted">
@@ -770,7 +726,7 @@ export default function AssistantScreen() {
                 </View>
               ) : (
                 <AppText variant="caption" className="text-center text-muted">
-                  প্রশ্ন শোনার পর উত্তর দেওয়া হবে
+                  কথা বলুন — শোনা শেষ হলে উত্তর এখানে দেখাবে
                 </AppText>
               )}
 
@@ -782,10 +738,7 @@ export default function AssistantScreen() {
                 style={{ backgroundColor: colors.forest900 }}
               >
                 <Ionicons name="stop" size={18} color={colors.white} />
-                <AppText
-                  variant="body"
-                  className="font-bengali-bold text-white"
-                >
+                <AppText variant="body" className="font-bengali-bold text-white">
                   শেষ করুন
                 </AppText>
               </Pressable>
@@ -816,40 +769,21 @@ export default function AssistantScreen() {
               showsVerticalScrollIndicator={false}
               accessibilityLabel="আলোচনার বার্তা"
               ListEmptyComponent={
-                <View className="flex-1 items-center justify-center px-2 py-8">
-                  <View
-                    className="mb-5 h-20 w-20 items-center justify-center rounded-2xl"
-                    style={{ backgroundColor: colors.secondary }}
-                  >
-                    <Ionicons
-                      name="leaf-outline"
-                      size={36}
-                      color={colors.primary}
-                    />
-                  </View>
+                <View className="flex-1 items-center justify-center px-6 py-10">
                   <AppText variant="display" className="text-center text-ink">
                     {firstName ? `${greet}, ${firstName}` : greet}
                   </AppText>
-                  <AppText
-                    variant="body"
-                    className="mt-2 text-center text-muted"
-                  >
-                    {user?.district?.nameBn
-                      ? `${user.district.nameBn} এলাকার ফসল, রোগ ও আবহাওয়া নিয়ে জিজ্ঞাসা করুন।`
-                      : "ফসলের রোগ, সার-সেচ বা আবহাওয়া নিয়ে জিজ্ঞাসা করুন।"}
+                  <AppText variant="body" className="mt-2 text-center text-muted">
+                    ফসল, রোগ, সার বা আবহাওয়া জিজ্ঞাসা করুন
                   </AppText>
-
-                  <View className="mt-6 w-full gap-2.5">
-                    <AppText variant="caption" className="text-muted">
-                      দ্রুত প্রশ্ন — ট্যাপ করলে লেখায় জিজ্ঞাসা হবে
-                    </AppText>
+                  <View className="mt-8 w-full gap-2">
                     {SUGGESTIONS.map((s) => (
                       <Pressable
                         key={s}
                         accessibilityRole="button"
                         accessibilityLabel={`প্রশ্ন: ${s}`}
                         onPress={() => void sendText(s)}
-                        className="min-h-touch justify-center rounded-2xl border border-border bg-white px-4 py-3.5"
+                        className="rounded-full border border-border bg-white px-4 py-3"
                       >
                         <AppText variant="body" className="text-ink">
                           {s}
@@ -878,10 +812,11 @@ export default function AssistantScreen() {
                 if (item.role === "user") {
                   return (
                     <View
-                      className="max-w-[84%] self-end rounded-2xl rounded-br-md bg-primary px-4 py-3"
+                      className="max-w-[85%] self-end rounded-3xl px-4 py-2.5"
+                      style={{ backgroundColor: colors.secondary }}
                       accessibilityLabel={`আপনি: ${item.text}`}
                     >
-                      <AppText variant="body" className="text-white">
+                      <AppText variant="body" className="leading-6 text-ink">
                         {item.text}
                       </AppText>
                     </View>
@@ -891,27 +826,22 @@ export default function AssistantScreen() {
                   !item.text && (typing || live) && item.id === lastId;
                 return (
                   <View
-                    className="max-w-[90%] flex-row items-end gap-2.5 self-start"
+                    className="w-full flex-row items-start gap-2.5"
                     accessibilityLabel={
                       waiting ? "উত্তর লেখা হচ্ছে" : `উত্তর: ${item.text}`
                     }
                   >
                     <View
-                      className="h-8 w-8 items-center justify-center rounded-lg"
-                      style={{ backgroundColor: colors.secondary }}
-                      importantForAccessibility="no"
+                      className="mt-0.5 h-8 w-8 items-center justify-center rounded-full"
+                      style={{ backgroundColor: colors.primary }}
                     >
-                      <Ionicons
-                        name="leaf"
-                        size={15}
-                        color={colors.primary}
-                      />
+                      <Ionicons name="sparkles" size={15} color={colors.white} />
                     </View>
-                    <View className="flex-shrink rounded-2xl rounded-bl-md border border-border bg-white px-4 py-3">
+                    <View className="min-w-0 flex-1 pt-1">
                       {waiting ? (
                         <TypingDots />
                       ) : (
-                        <AppText variant="body" className="leading-6 text-ink">
+                        <AppText variant="body" className="leading-7 text-ink">
                           {item.text || "…"}
                         </AppText>
                       )}
@@ -922,60 +852,61 @@ export default function AssistantScreen() {
             />
 
             <View
-              className="border-t border-border bg-white px-3 pt-2.5"
+              className="px-3 pt-1"
               style={{
                 paddingBottom: Math.max(
-                  keyboardLift > 0 ? 10 : insets.bottom,
-                  10,
+                  keyboardLift > 0 ? 8 : insets.bottom,
+                  8,
                 ),
               }}
             >
               <View
-                className="flex-row items-end gap-2 rounded-2xl border border-border px-2 py-1.5"
-                style={{ backgroundColor: colors.neutral }}
+                className="flex-row items-end gap-1 rounded-full border border-border bg-white px-2 py-1.5"
               >
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={live ? "কণ্ঠ বন্ধ করুন" : "কণ্ঠ চালু করুন"}
+                  disabled={typing}
+                  onPress={() => void toggleVoiceInput()}
+                  className="mb-0.5 h-11 w-11 items-center justify-center rounded-full"
+                >
+                  <Ionicons
+                    name={live ? "mic" : "mic-outline"}
+                    size={22}
+                    color={live ? colors.primary : colors.ink}
+                  />
+                </Pressable>
                 <TextInput
                   value={draft}
                   onChangeText={setDraft}
-                  placeholder="বাংলায় প্রশ্ন লিখুন…"
+                  placeholder="আরণ্যকে জিজ্ঞাসা করুন"
                   placeholderTextColor={colors.muted}
                   multiline
                   editable={!typing}
                   accessibilityLabel="বার্তা লেখার ঘর"
-                  className="max-h-28 min-h-[44px] flex-1 px-3 py-2.5 font-bengali text-body text-ink"
+                  className="max-h-28 min-h-[40px] flex-1 px-1 py-2 font-bengali text-body text-ink"
                 />
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={
-                    draft.trim() ? "পাঠান" : "কণ্ঠে আলোচনা (নিশ্চিতকরণ লাগবে)"
-                  }
-                  disabled={typing}
+                  accessibilityLabel={typing ? "থামান" : "পাঠান"}
+                  disabled={!typing && !draft.trim()}
                   onPress={() => {
-                    if (draft.trim()) void sendText(draft);
-                    else void startLive();
+                    if (typing) abortInFlightUi();
+                    else if (draft.trim()) void sendText(draft);
                   }}
-                  className="mb-0.5 h-12 w-12 items-center justify-center rounded-xl"
+                  className="mb-0.5 h-11 w-11 items-center justify-center rounded-full"
                   style={{
-                    backgroundColor: draft.trim()
-                      ? colors.primary
-                      : colors.secondary,
-                    opacity: typing ? 0.5 : 1,
+                    backgroundColor:
+                      typing || draft.trim() ? colors.primary : colors.secondary,
                   }}
                 >
                   <Ionicons
-                    name={draft.trim() ? "arrow-up" : "mic-outline"}
-                    size={22}
-                    color={draft.trim() ? colors.white : colors.ink}
+                    name={typing ? "stop" : "arrow-up"}
+                    size={20}
+                    color={typing || draft.trim() ? colors.white : colors.muted}
                   />
                 </Pressable>
               </View>
-              {keyboardLift <= 0 ? (
-                <AppText variant="caption" className="mt-2 text-center text-muted">
-                  {typing
-                    ? "উত্তর প্রস্তুত হচ্ছে…"
-                    : "লিখে পাঠান — মাইক চাপলে আগে নিশ্চিতকরণ চাইবে"}
-                </AppText>
-              ) : null}
             </View>
           </View>
         )}

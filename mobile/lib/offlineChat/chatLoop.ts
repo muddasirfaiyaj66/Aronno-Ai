@@ -34,6 +34,7 @@ import {
   titleFromUserText,
 } from "@/lib/offlineChat/sessionStore";
 import { sanitizeAssistantReply } from "@/lib/offlineChat/sanitize";
+import { fetchIsOnline } from "@/hooks/useIsOnline";
 
 export { sanitizeAssistantReply } from "@/lib/offlineChat/sanitize";
 export { buildWelcomeBn };
@@ -170,12 +171,24 @@ export async function runLlmTurn(
       : []),
   ];
 
-  // 4) Always generate from the offline model
+  if (await fetchIsOnline()) {
+    onStatus?.("ক্লাউড জেমা উত্তর দিচ্ছে…");
+    const cloud = await cloudReply(cleaned, history).catch(() => "");
+    const cloudText = sanitizeAssistantReply(cloud);
+    if (cloudText && !isUnusableModelText(cloudText, cleaned)) {
+      emitAll(cloudText, onTextChunk, shouldContinue);
+      end("cloud");
+      return cloudText;
+    }
+  }
+
+  // Offline Gemma when the cloud model is unavailable.
   if (!isLlmReady()) {
     onStatus?.("জেমা মডেল লোড হচ্ছে… একটু অপেক্ষা করুন");
     const loaded = await ensureLlmLoaded().catch(() => null);
     if (!loaded || !isLlmReady()) {
-      const spoken = spokenFromFacts(facts) || LOAD_FAIL_REPLY;
+      const spoken =
+        socialFallback(cleaned) || spokenFromFacts(facts) || LOAD_FAIL_REPLY;
       emitAll(spoken, onTextChunk, shouldContinue);
       end("llm-missing");
       return spoken;
@@ -205,11 +218,33 @@ export async function runLlmTurn(
 
   let reply = sanitizeAssistantReply(full);
   if (!reply || isUnusableModelText(reply, cleaned)) {
-    reply = spokenFromFacts(facts) || LOAD_FAIL_REPLY;
+    reply = socialFallback(cleaned) || spokenFromFacts(facts) || LOAD_FAIL_REPLY;
   }
   emitAll(reply, onTextChunk, shouldContinue);
   end(intentHit ? `ok:${intentHit.intent}` : "ok");
   return reply;
+}
+
+async function cloudReply(
+  text: string,
+  history: LlmHistoryTurn[],
+): Promise<string> {
+  const { replyWithCloudGemma } = await import("@/lib/offlineChat/cloudGemma");
+  return replyWithCloudGemma(text, history);
+}
+
+function socialFallback(text: string): string | null {
+  const t = text.trim();
+  if (/^(?:hi|hai|hello|hey|হ্যালো|নমস্কার|হাই)[\s!?.]*$/i.test(t)) {
+    return "নমস্কার। ফসল, রোগ, সার বা আবহাওয়া — কী জানতে চান?";
+  }
+  if (/obosta|অবস্থা|কেমন\s*আছ/i.test(t) && t.length < 40) {
+    return "ভালো আছি। আপনার ফসলে কোনো সমস্যা দেখা দিয়েছে?";
+  }
+  if (/^(?:kire|কিরে|oi|ওই)[\s!?.]*$/i.test(t)) {
+    return "বলুন — কী জানতে চান?";
+  }
+  return null;
 }
 
 function isUnusableModelText(reply: string, question: string): boolean {
@@ -230,7 +265,12 @@ function spokenFromFacts(facts: string[]): string {
         .replace(/^অ্যাপের বর্তমান ডেটা\s*[—-]\s*/u, "")
         .trim(),
     )
-    .filter((f) => f.length > 12 && !/^উদ্দেশ্য/.test(f));
+    .filter(
+      (f) =>
+        f.length > 12 &&
+        !/^(?:উদ্দেশ্য|নির্দেশ|অ্যাপ ডেটা)/.test(f) &&
+        !/সংক্ষিপ্ত অভিবাদন|জিজ্ঞাসা নিন|প্রশ্নের উত্তর দিতে পারছি না/.test(f),
+    );
   return lines.slice(0, 3).join(" ").replace(/\s+/g, " ").slice(0, 520);
 }
 

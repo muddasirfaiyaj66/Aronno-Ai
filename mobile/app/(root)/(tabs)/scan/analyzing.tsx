@@ -275,16 +275,8 @@ export default function AnalyzingScreen() {
       try {
         onlineRef.current = await fetchIsOnline();
 
-        // Prefer on-device TFLite when available — much faster than Cloudinary + Gemini.
-        if (flow === "disease") {
-          const localOk = await runOfflineDisease();
-          if (localOk) return;
-        }
-        if (flow === "tool") {
-          const localOk = await runOfflineTool();
-          if (localOk) return;
-        }
-
+        // Online: disease and tool photos go to the backend (Gemini).
+        // Offline models run only when there is no network, or if Gemini fails.
         if (!onlineRef.current) {
           if (flow === "receipt") {
             const ok = await runOfflineReceipt();
@@ -292,8 +284,12 @@ export default function AnalyzingScreen() {
             throw new Error("OFFLINE_RECEIPT");
           }
           if (flow === "tool") {
+            const ok = await runOfflineTool();
+            if (ok) return;
             throw new Error("OFFLINE_TOOL");
           }
+          const ok = await runOfflineDisease();
+          if (ok) return;
           throw new Error("OFFLINE_DISEASE");
         }
 

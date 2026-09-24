@@ -16,6 +16,7 @@ import { enablePlaybackAudio, SPEECH_RECORDING, STT_SPEECH_RECORDING } from "@/l
 import { userFacingError } from "@/lib/userFacingError";
 import { useTranscribeMutation } from "@/services/api";
 import {
+  cleanSttTranscript,
   hasOfflineSttFiles,
   startListening,
   warmSttForLive,
@@ -103,10 +104,11 @@ export default function VoiceCaptureScreen() {
       stopOfflineRef.current = startListening(
         (partial) => setTranscript(partial),
         (finalText) => {
-          setTranscript(finalText.trim());
+          const cleaned = cleanSttTranscript(finalText).trim();
+          setTranscript(cleaned);
           setIsRecording(false);
           stopOfflineRef.current = null;
-          if (!finalText.trim()) {
+          if (!cleaned) {
             setError("কথা বোঝা যায়নি। আরেকটু স্পষ্ট করে বলুন, অথবা লিখে জানান।");
           }
         },
@@ -141,11 +143,12 @@ export default function VoiceCaptureScreen() {
           audioBase64,
           mimeType: mimeFromAudioUri(uri),
         }).unwrap();
-        if (!transcriptBn.trim()) {
+        const cleaned = cleanSttTranscript(transcriptBn).trim();
+        if (!cleaned) {
           setMode("text");
           setError("কথা পরিষ্কার শোনা যায়নি। এখানে লিখে দিন।");
         } else {
-          setTranscript(transcriptBn.trim());
+          setTranscript(cleaned);
         }
       } catch (err) {
         setMode("text");

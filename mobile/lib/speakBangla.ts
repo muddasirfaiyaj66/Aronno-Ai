@@ -60,23 +60,54 @@ async function resolveBanglaVoice(): Promise<VoicePick> {
 }
 
 /**
- * Make Bangla TTS less choppy: expand symbols, soften punctuation,
- * keep short fluent phrases.
+ * Make Bangla TTS fluent, natural and conversational (like Gemini voice):
+ * expands symbols, cleans markdown and prompt tags, softens punctuation.
  */
 export function prepareSpeechText(raw: string): string {
-  return raw
-    .replace(/https?:\/\/\S+/gi, "")
-    .replace(/(\d+)\s*°\s*[Cc]?/g, "$1 ডিগ্রি ")
-    .replace(/[°˚]/g, " ডিগ্রি ")
-    .replace(/%/g, " শতাংশ ")
-    .replace(/(\d+)\s*কিমি\/?ঘ(?:ণ্টা)?/g, "$1 কিলোমিটার প্রতি ঘণ্টা ")
-    .replace(/[•·▪︎]/g, " ")
-    .replace(/[–—]/g, " ")
-    .replace(/[/|\\]/g, " ")
-    .replace(/["«»]/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 3900);
+  let s = (raw ?? "").trim();
+  if (!s) return "";
+
+  // Strip URLs and web references
+  s = s.replace(/https?:\/\/\S+/gi, "");
+
+  // Strip markdown formatting symbols
+  s = s.replace(/\*\*([^*]+)\*\*/g, "$1");
+  s = s.replace(/\*([^*]+)\*/g, "$1");
+  s = s.replace(/_([^_]+)_/g, "$1");
+  s = s.replace(/`([^`]+)`/g, "$1");
+  s = s.replace(/^#+\s+/gm, "");
+
+  // Strip prompt tags or brackets
+  s = s.replace(/\[[^\]]*\]/g, "");
+  s = s.replace(/<[^>]+>/g, "");
+
+  // Expand unit and technical symbols to natural spoken Bengali
+  s = s.replace(/(\d+)\s*°\s*[Cc]?/g, "$1 ডিগ্রি সেলসিয়াস ");
+  s = s.replace(/(\d+)\s*°\s*[Ff]?/g, "$1 ডিগ্রি ফারেনহাইট ");
+  s = s.replace(/[°˚]/g, " ডিগ্রি ");
+  s = s.replace(/%/g, " শতাংশ ");
+  s = s.replace(/(\d+)\s*কিমি\/?ঘ(?:ণ্টা)?/g, "$1 কিলোমিটার প্রতি ঘণ্টা ");
+  s = s.replace(/(\d+)\s*কেজি\/?বিঘা/g, "$1 কেজি প্রতি বিঘা ");
+  s = s.replace(/\bকেজি\b/g, " কেজি ");
+  s = s.replace(/\bমিমি\b/g, " মিলিমিটার ");
+  s = s.replace(/৳\s*(\d+)/g, "$1 টাকা");
+  s = s.replace(/৳/g, " টাকা ");
+
+  // Soften list bullets and numbering for natural speech
+  s = s.replace(/^\s*\d+[.)]\s*/gm, "");
+  s = s.replace(/^\s*[•·▪︎*+\-]\s*/gm, "");
+
+  // Replace slash and hyphens with natural pauses
+  s = s.replace(/[/|\\]/g, " বা ");
+  s = s.replace(/[–—_~]/g, " ");
+  s = s.replace(/["'«»]/g, "");
+
+  // Normalize punctuation spacing
+  s = s.replace(/\s*([।!?.,;:])\s*/g, "$1 ");
+  s = s.replace(/([।!?]){2,}/g, "$1");
+  s = s.replace(/\s+/g, " ").trim();
+
+  return s.slice(0, 3900);
 }
 
 /** Split into speakable chunks so the engine doesn't rush or drop mid-clause. */

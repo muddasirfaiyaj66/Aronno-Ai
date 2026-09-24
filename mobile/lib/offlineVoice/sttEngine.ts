@@ -205,21 +205,68 @@ async function transcribeWithCloud(uri: string): Promise<string> {
   return (result.transcriptBn ?? "").trim();
 }
 
-/** Light cleanup only — never rewrite words (that adds new errors). */
+/**
+ * Robust Bangla STT post-processing for offline voice.
+ * Cleans model artifacts, normalises phonetics, and removes stutter/filler
+ * to ensure accurate downstream NLU and model responses.
+ */
 export function cleanSttTranscript(raw: string): string {
   let s = (raw ?? "").trim();
   if (!s) return "";
-  // Strip model tags / bracket noise
+
+  // Strip model tags / bracket noise / HTML
   s = s.replace(/<[^>]+>/g, "");
   s = s.replace(/\[[^\]]*\]/g, "");
-  // Zero-width / BOM that break Bangla rendering and matching
-  s = s.replace(/[\u200B-\u200D\uFEFF]/g, "");
-  // Normalize Arabic/Bangla punctuation spacing
+  s = s.replace(/\([^)]{0,12}(?:noise|music|laughter|silence|breath|cough)[^)]*\)/gi, "");
+
+  // Zero-width spaces, joiners, and BOM marks that break Bangla matching
+  s = s.replace(/[\u200B-\u200D\uFEFF\u200E\u200F]/g, "");
+
+  // Collapse vowel sign stutters (in Bangla a vowel mark cannot repeat on a letter)
+  s = s.replace(/([\u09BE-\u09CC\u09D7\u09BC])\1+/gu, "$1");
+
+  // Collapse runaway character stutter (e.g. কককক -> কক, aaaa -> aa)
+  s = s.replace(/([\u0980-\u09FF\w])\1{2,}/gu, "$1$1");
+
+  // Syllable stutter in Bengali (2-3 char sequences repeated 3+ times)
+  s = s.replace(/([\u0980-\u09FF]{2,3})\1{2,}/gu, "$1");
+
+  // Common spoken filler prefixes that confuse the LLM
+  s = s.replace(/^(?:ওই\s+যে|মানে\s+|বলছিলাম\s+যে|আরে\s+|শুনুন\s+)+/i, "");
+
+  // Common Bengali ASR phonetic misrecognitions in agriculture
+  s = s.replace(/টোমেটো/g, "টমেটো");
+  s = s.replace(/পোটেটো/g, "আলু");
+  s = s.replace(/\bধান\s*এ\b/g, "ধানে");
+  s = s.replace(/\bধান\s*এর\b/g, "ধানের");
+  s = s.replace(/\bআলু\s*র\b/g, "আলুর");
+  s = s.replace(/\bআলু\s*তে\b/g, "আলুতে");
+  s = s.replace(/\bটমেটো\s*র\b/g, "টমেটোর");
+  s = s.replace(/\bটমেটো\s*তে\b/g, "টমেটোতে");
+  s = s.replace(/\bমরিচ\s*এর\b/g, "মরিচের");
+  s = s.replace(/\bমরিচ\s*এ\b/g, "মরিচে");
+  s = s.replace(/\bকীট\s+নাশক\b/g, "কীটনাশক");
+  s = s.replace(/\bছত্রাক\s+নাশক\b/g, "ছত্রাকনাশক");
+  s = s.replace(/\bপোকা\s+মাকড়\b/g, "পোকামাকড়");
+  s = s.replace(/\bইউরিয়া\b/g, "ইউরিয়া");
+  s = s.replace(/\bপটাস\b/g, "পটাশ");
+  s = s.replace(/\bটেম্পারেচার\b|\bটেম্পরেচার\b/g, "তাপমাত্রা");
+  s = s.replace(/\bআবহাওয়া\b/g, "আবহাওয়া");
+
+  // Normalize punctuation and whitespace
   s = s.replace(/\s*([।!?.,;:])\s*/g, "$1 ");
+  s = s.replace(/([।!?]){2,}/g, "$1");
   s = s.replace(/\s+/g, " ").trim();
-  // Collapse runaway character stutter (aaaa → aa) without touching doubles
-  s = s.replace(/(.)\1{3,}/gu, "$1$1");
-  return s.trim();
+
+  // Drop single isolated characters or noise filler words
+  if (/^(?:[a-zA-Z]|[\u0980-\u09FF]|[।!?.,;:\-\s])+$/.test(s) && s.length <= 2) {
+    return "";
+  }
+  if (/^(?:হ্যাঁ|আহ|উম|ও|এই|ওই|হুম|আচ্ছা|হ্যালো|hello|hi)[।.!?\s]*$/i.test(s) && s.length < 5) {
+    return "";
+  }
+
+  return s;
 }
 
 async function transcribeUri(uri: string): Promise<string> {

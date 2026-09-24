@@ -91,6 +91,7 @@ async function releaseContext() {
 
 async function resolveLoadChoice(
   preferredId?: string,
+  opts?: { allowHuge?: boolean },
 ): Promise<ModelCatalogEntry | null> {
   const installed = (await listInstalled()).filter((e) => e.kind === "llm");
   if (!installed.length) return null;
@@ -98,14 +99,11 @@ async function resolveLoadChoice(
   const savedId = preferredId ?? (await getPreferredLlmId()) ?? undefined;
   const byId = (id?: string) =>
     id ? installed.find((e) => e.id === id) : undefined;
-
-  // Explicit pick first; else saved; else lightest (stable on phones).
-  return (
-    byId(preferredId) ??
-    byId(savedId) ??
-    [...installed].sort((a, b) => a.sizeMb - b.sizeMb)[0] ??
-    null
-  );
+  const lightest = [...installed].sort((a, b) => a.sizeMb - b.sizeMb)[0];
+  const picked = byId(preferredId) ?? byId(savedId) ?? lightest ?? null;
+  // 4B+mmproj OOMs mid-range phones unless the farmer explicitly tapped it.
+  if (picked && picked.sizeMb > 1500 && !opts?.allowHuge) return lightest ?? null;
+  return picked;
 }
 
 async function loadLlmEntry(
@@ -167,25 +165,28 @@ async function loadLlmEntry(
       messageBn: "মেমোরিতে লোড হচ্ছে — একটু অপেক্ষা করুন…",
     });
 
-    ctx = await initLlama(
-      {
-        model: modelPath,
-        n_ctx: wantVision ? 2048 : 1024,
-        n_threads: 2,
-        n_gpu_layers: 0,
-        use_mlock: false,
-        ctx_shift: wantVision ? false : undefined,
-      },
-      (progress) => {
-        logMetric("llm.load.progress", progress);
-        emitProgress({
-          modelId: choice.id,
-          phase: "loading",
-          progress,
-          messageBn: `লোড ${Math.round((progress ?? 0) * 100)}%…`,
-        });
-      },
-    );
+    const initParams = {
+      n_ctx: wantVision ? 2048 : 1024,
+      n_threads: 2,
+      n_gpu_layers: 0,
+      use_mlock: false,
+      ctx_shift: wantVision ? false : undefined,
+    };
+    const onProgress = (progress: number) => {
+      logMetric("llm.load.progress", progress);
+      emitProgress({
+        modelId: choice.id,
+        phase: "loading",
+        progress,
+        messageBn: `লোড ${Math.round((progress ?? 0) * 100)}%…`,
+      });
+    };
+    try {
+      ctx = await initLlama({ ...initParams, model: modelPath }, onProgress);
+    } catch {
+      // Some Android builds only open a raw path, not file://.
+      ctx = await initLlama({ ...initParams, model: rawPath }, onProgress);
+    }
 
     if (wantVision && mmproj) {
       const ok = await ctx.initMultimodal({
@@ -240,13 +241,14 @@ async function loadLlmEntry(
  */
 export async function autoLoadLlm(
   preferredId?: string,
+  opts?: { allowHuge?: boolean },
 ): Promise<string | null> {
   if (loadInFlight) return loadInFlight;
 
   loadInFlight = (async () => {
     const end = markStart("llm.autoload");
     try {
-      const choice = await resolveLoadChoice(preferredId);
+      const choice = await resolveLoadChoice(preferredId, opts);
       if (!choice) {
         end("none-installed");
         return null;
@@ -281,9 +283,9 @@ export async function ensureLlmLoaded(): Promise<string | null> {
 export async function selectLlm(id: string): Promise<string | null> {
   await setPreferredLlmId(id);
   if (ctx && activeModelId === id) return id;
-  // Force reload even if another model is warm.
   if (loadInFlight) await loadInFlight.catch(() => null);
-  return autoLoadLlm(id);
+  const entry = catalogById(id);
+  return autoLoadLlm(id, { allowHuge: (entry?.sizeMb ?? 0) > 1500 });
 }
 
 export function isLlmReady(): boolean {
@@ -368,25 +370,47 @@ async function completeOnce(
     onToken(cleaned);
   };
 
-  await llama.completion(
-    {
-      prompt,
-      n_predict: 160,
-      temperature,
-      top_k: 40,
-      top_p: 0.9,
-      min_p: 0.05,
-      penalty_repeat: 1.12,
-      stop: ["<end_of_turn>", "<start_of_turn>", "<|im_end|>", "<|im_start|>"],
-    },
-    (data: TokenData) => {
-      const piece = data.token ?? "";
-      if (!piece) return;
-      raw += piece;
-      tagHold += piece;
-      flushTags(false);
-    },
-  );
+  const stop = ["<end_of_turn>", "<start_of_turn>", "<|im_end|>", "<|im_start|>"];
+  const sampling = {
+    n_predict: 220,
+    temperature,
+    top_k: 40,
+    top_p: 0.9,
+    min_p: 0.05,
+    penalty_repeat: 1.1,
+    stop,
+  };
+
+  try {
+    // Native chat template — small Gemma follows this more reliably than a raw prompt.
+    await llama.completion(
+      {
+        ...sampling,
+        messages: [{ role: "user", content: promptBn.trim() }],
+      },
+      (data: TokenData) => {
+        const piece = data.token ?? "";
+        if (!piece) return;
+        raw += piece;
+        tagHold += piece;
+        flushTags(false);
+      },
+    );
+  } catch {
+    await llama.completion(
+      {
+        ...sampling,
+        prompt,
+      },
+      (data: TokenData) => {
+        const piece = data.token ?? "";
+        if (!piece) return;
+        raw += piece;
+        tagHold += piece;
+        flushTags(false);
+      },
+    );
+  }
   flushTags(true);
 
   // If tag stripping ate everything, still emit raw cleaned text once.
@@ -413,24 +437,23 @@ export async function streamLlmReply(
   const userText = opts.userText ?? "";
   const history = opts.history ?? [];
 
-  if (await completeOnce(ctx, promptBn, userText, 0.35, onToken, history)) {
+  if (await completeOnce(ctx, promptBn, userText, 0.2, onToken, history)) {
     end("ok");
     return;
   }
 
-  // Retry with a shorter, firmer prompt if first pass was empty.
+  // Retry with a shorter, focused prompt if first pass was empty.
   const short = [
-    "বাংলায় সংক্ষিপ্ত কৃষি উত্তর দিন। প্রশ্ন কপি করবেন না।",
-    `প্রশ্ন: ${userText || promptBn.slice(-200)}`,
-    "উত্তর:",
+    "নির্দেশনা: আপনি আরণ্য — বাংলাদেশের কৃষকদের বিশ্বস্ত সহকারী। বাংলায় ২–৩টি বাক্যে সরাসরি, প্রাসঙ্গিক ও সঠিক উত্তর দিন। প্রশ্ন পুনরায় লিখবেন না।",
+    `কৃষকের প্রশ্ন: ${userText || promptBn.slice(-200)}`,
   ].join("\n");
-  if (await completeOnce(ctx, short, userText, 0.2, onToken)) {
+  if (await completeOnce(ctx, short, userText, 0.15, onToken)) {
     end("ok-retry");
     return;
   }
 
   onToken(
-    "উত্তর তৈরি হয়নি। মডেল ম্যানেজার থেকে একটি মডেল «চালু করুন», তারপর আবার জিজ্ঞাসা করুন।",
+    "দুঃখিত, উত্তরটি প্রস্তুত করা যায়নি। প্রশ্নটি আরেকটু স্পষ্ট করে বলুন, অথবা মডেল ম্যানেজার থেকে মডেলটি চালু আছে কিনা দেখুন।",
   );
   end("empty-fallback");
 }

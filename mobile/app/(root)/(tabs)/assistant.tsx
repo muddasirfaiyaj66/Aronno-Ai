@@ -370,8 +370,9 @@ export default function AssistantScreen() {
       const stt = catalogByKind("stt")[0];
       setSttReady(stt ? await isInstalled(stt) : false);
 
-      // Warm preferred Gemma so chat can answer from the model.
+      // Warm Gemma in the background so the chat screen is usable immediately.
       if (installed && !isLlmReady()) {
+        setLoadHint("জেমা মডেল লোড হচ্ছে…");
         const unsub = subscribeLlmLoad((p) => {
           if (p.messageBn) setLoadHint(p.messageBn);
           if (p.phase === "done") {
@@ -382,18 +383,14 @@ export default function AssistantScreen() {
             setLoadHint(p.messageBn ?? "মডেল লোড ব্যর্থ");
           }
         });
-        try {
-          setLoadHint("জেমা মডেল লোড হচ্ছে…");
-          const id = await ensureLlmLoaded();
-          setLlmReady(!!id);
-          if (!id) {
-            setLoadHint("মডেল ম্যানেজার থেকে «চালু করুন» চাপুন");
-          } else {
-            setLoadHint("");
-          }
-        } finally {
-          unsub();
-        }
+        void ensureLlmLoaded()
+          .then((id) => {
+            setLlmReady(!!id);
+            if (!id) setLoadHint("মডেল ম্যানেজার থেকে «চালু করুন» চাপুন");
+            else setLoadHint("");
+          })
+          .catch(() => setLoadHint("মডেল লোড যায়নি"))
+          .finally(() => unsub());
       }
     } catch {
       setHasModel(false);

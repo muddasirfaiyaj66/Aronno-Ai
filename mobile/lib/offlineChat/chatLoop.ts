@@ -57,26 +57,14 @@ export function buildChatPrompt(
   intentLabel?: string,
 ): string {
   const name = currentUserFirstName();
-  const facts = extraContext.filter(Boolean).slice(0, 8);
+  const facts = Array.from(new Set(extraContext.filter(Boolean))).slice(0, 6);
 
   return [
-    "আপনি আরণ্য — বাংলাদেশের কৃষকদের অফলাইন কৃষি সহায়ক।",
-    "বাংলায় ২–৪টি সংক্ষিপ্ত, ব্যবহারিক বাক্যে উত্তর দিন।",
-    "প্রশ্ন আবার লিখবেন না। ইংরেজি ট্যাগ/প্রম্পট কপি করবেন না। অপ্রয়োজনীয় অভিবাদন দেবেন না।",
-    intentLabel
-      ? `সনাক্তকৃত উদ্দেশ্য: ${intentLabel} — এই উদ্দেশ্য অনুযায়ী উত্তর গঠন করুন।`
-      : "",
-    "‘সহায়ক তথ্য’ এবং ‘যাচাইকৃত’ লাইনগুলো প্রামাণিক। সেগুলোর সংখ্যা/নাম/নির্দেশের সঙ্গে বিরোধ করবেন না; নিজের ভাষায় গুছিয়ে বলুন।",
-    "কৃষির বাইরের সাধারণ প্রশ্ন (সময়, তারিখ, অভিবাদন) হলে সরাসরি উত্তর দিন — কৃষি তথ্য জোর করে ঢোকাবেন না।",
-    "'অ্যাপের বর্তমান ডেটা' থাকলে সেটিই প্রশ্নের নির্দিষ্ট সংখ্যা। ওই মান হুবহু ব্যবহার করুন; নতুন সংখ্যা বানাবেন না।",
-    "সহায়ক তথ্য না থাকলে সাধারণ নিরাপদ পরামর্শ দিতে পারেন। প্রমাণ ছাড়া ওষুধের নির্দিষ্ট নাম/মাত্রা বা লাইভ বাজারদর বলবেন না।",
-    "নিশ্চিত না হলে লক্ষণ, ছবি স্ক্যান ও কৃষি অফিসের পরামর্শ চাইবেন।",
-    "প্রশ্ন বুঝতে না পারলে 'আমি বুঝতে পারিনি, আবার বলুন' বলুন।",
-    name ? `কৃষকের নাম: ${name} (নিজেকে এই নাম বলবেন না)` : "",
-    facts.length ? `সহায়ক তথ্য:\n- ${facts.join("\n- ")}` : "",
-    "",
-    `কৃষকের প্রশ্ন: ${userTextBn.trim()}`,
-    "উত্তর:",
+    "তুমি আরণ্য। বাংলায় ২–৩টি সহজ বাক্যে উত্তর দাও। প্রশ্ন কপি করবে না।",
+    intentLabel ? `বিষয়: ${intentLabel}` : "",
+    name ? `কৃষক: ${name}` : "",
+    facts.length ? `তথ্য:\n- ${facts.join("\n- ")}` : "",
+    `প্রশ্ন: ${userTextBn.trim()}`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -187,9 +175,10 @@ export async function runLlmTurn(
     onStatus?.("জেমা মডেল লোড হচ্ছে… একটু অপেক্ষা করুন");
     const loaded = await ensureLlmLoaded().catch(() => null);
     if (!loaded || !isLlmReady()) {
-      emitAll(LOAD_FAIL_REPLY, onTextChunk, shouldContinue);
+      const spoken = spokenFromFacts(facts) || LOAD_FAIL_REPLY;
+      emitAll(spoken, onTextChunk, shouldContinue);
       end("llm-missing");
-      return LOAD_FAIL_REPLY;
+      return spoken;
     }
     onStatus?.("");
   }
@@ -201,53 +190,48 @@ export async function runLlmTurn(
 
   const prompt = buildChatPrompt(cleaned, facts, intentHit?.intent);
   let full = "";
-  let prefixBuf = "";
-  let prefixDone = false;
-
-  const feed = (token: string) => {
-    if (!prefixDone) {
-      prefixBuf += token;
-      if (prefixBuf.length < 12 && !/[\n।.!?]/.test(prefixBuf)) return;
-      const cleanedPrefix = sanitizeAssistantReply(prefixBuf);
-      prefixDone = true;
-      prefixBuf = "";
-      if (!cleanedPrefix) return;
-      full += cleanedPrefix;
-      if (shouldContinue()) onTextChunk(cleanedPrefix);
-      return;
-    }
-    full += token;
-    if (shouldContinue()) onTextChunk(token);
-  };
+  onStatus?.("জেমা উত্তর লিখছে…");
 
   try {
-    await streamLlmReply(prompt, feed, {
+    await streamLlmReply(prompt, (token) => {
+      full += token;
+    }, {
       userText: cleaned,
       history,
     });
   } catch (err) {
     end(err instanceof Error ? err.message : "stream-fail");
-    if (!full) {
-      emitAll(LOAD_FAIL_REPLY, onTextChunk, shouldContinue);
-      return LOAD_FAIL_REPLY;
-    }
-  }
-
-  if (!prefixDone && prefixBuf) {
-    const cleanedPrefix = sanitizeAssistantReply(prefixBuf);
-    if (cleanedPrefix && shouldContinue()) {
-      full += cleanedPrefix;
-      onTextChunk(cleanedPrefix);
-    }
   }
 
   let reply = sanitizeAssistantReply(full);
-  if (!reply) {
-    reply = LOAD_FAIL_REPLY;
-    if (shouldContinue()) onTextChunk(reply);
+  if (!reply || isUnusableModelText(reply, cleaned)) {
+    reply = spokenFromFacts(facts) || LOAD_FAIL_REPLY;
   }
+  emitAll(reply, onTextChunk, shouldContinue);
   end(intentHit ? `ok:${intentHit.intent}` : "ok");
   return reply;
+}
+
+function isUnusableModelText(reply: string, question: string): boolean {
+  const compact = reply.replace(/\s+/g, "");
+  const q = question.replace(/\s+/g, "");
+  if (compact.length < 8) return true;
+  if (q.length > 6 && compact.includes(q) && compact.length < q.length + 24) return true;
+  return /নির্দেশনা:|প্রামাণিক তথ্য|কৃষকের প্রশ্ন|start_of_turn|im_start/i.test(reply);
+}
+
+/** When Gemma echoes or fails, still give the farmer the grounded facts. */
+function spokenFromFacts(facts: string[]): string {
+  const lines = facts
+    .map((f) =>
+      f
+        .replace(/^(?:উদ্দেশ্য|নির্দেশ)\s*[:：]\s*/u, "")
+        .replace(/^যাচাইকৃত[^:：]{0,24}[:：]\s*/u, "")
+        .replace(/^অ্যাপের বর্তমান ডেটা\s*[—-]\s*/u, "")
+        .trim(),
+    )
+    .filter((f) => f.length > 12 && !/^উদ্দেশ্য/.test(f));
+  return lines.slice(0, 3).join(" ").replace(/\s+/g, " ").slice(0, 520);
 }
 
 export async function persistTurn(
@@ -319,15 +303,17 @@ export async function replyToText(
 export async function startChatTurn(
   handlers: ChatTurnHandlers,
 ): Promise<() => void> {
-  const { startListening } = await import("@/lib/offlineVoice/sttEngine");
+  const { cleanSttTranscript, startListening } = await import(
+    "@/lib/offlineVoice/sttEngine"
+  );
   return startListening(
     (partial) => handlers.onPartialTranscript?.(partial),
     async (finalTextBn) => {
-      handlers.onFinalTranscript?.(finalTextBn);
+      const cleaned = cleanSttTranscript(finalTextBn).trim();
+      handlers.onFinalTranscript?.(cleaned);
       try {
         logMetric("chat.voice.final");
-        const cleaned = finalTextBn.trim();
-        if (!cleaned) {
+        if (!cleaned || cleaned.length < 2) {
           handlers.onDone();
           return;
         }

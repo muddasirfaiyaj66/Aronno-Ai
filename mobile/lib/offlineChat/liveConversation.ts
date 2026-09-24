@@ -5,7 +5,11 @@
  * Keep startup light: warm STT only. Do NOT load Gemma here in parallel —
  * sherpa + llama together OOMs many phones (slow, then crash).
  */
-import { listenUntilSilence, warmSttForLive } from "@/lib/offlineVoice/sttEngine";
+import {
+  cleanSttTranscript,
+  listenUntilSilence,
+  warmSttForLive,
+} from "@/lib/offlineVoice/sttEngine";
 import { speakOffline, stopOfflineSpeech } from "@/lib/offlineVoice/ttsEngine";
 import { persistTurn, runLlmTurn } from "@/lib/offlineChat/chatLoop";
 import { getActiveSessionId } from "@/lib/offlineChat/sessionStore";
@@ -91,8 +95,8 @@ export function startLiveConversation(
       }
       deadMicTurns = 0;
 
-      const heard = text.trim();
-      if (!heard) {
+      const heard = cleanSttTranscript(text).trim();
+      if (!heard || heard.length < 2) {
         emptyTurns += 1;
         if (emptyTurns >= EMPTY_BEFORE_NOTICE) {
           handlers.onNotice?.(

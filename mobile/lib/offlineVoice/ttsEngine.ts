@@ -7,7 +7,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio } from "expo-av";
 import { catalogById, catalogByKind } from "@/lib/modelManager/catalog";
 import { isInstalled, localDir } from "@/lib/modelManager/modelManager";
-import { speakBangla, stopBanglaSpeech } from "@/lib/speakBangla";
+import {
+  prepareSpeechText,
+  speakBangla,
+  stopBanglaSpeech,
+} from "@/lib/speakBangla";
 import { enablePlaybackAudio } from "@/lib/speechRecording";
 import { logMetric, markStart } from "@/lib/offline/metrics";
 
@@ -216,8 +220,8 @@ export async function speakOffline(
     onError?: () => void;
   },
 ): Promise<void> {
-  const cleaned = text.replace(/\s+/g, " ").trim().slice(0, 3900);
-  if (!cleaned) {
+  const prepared = prepareSpeechText(text);
+  if (!prepared) {
     handlers?.onDone?.();
     return;
   }
@@ -228,7 +232,7 @@ export async function speakOffline(
   }
 
   if (sherpaReady) {
-    const ok = await speakWithSherpa(cleaned, handlers);
+    const ok = await speakWithSherpa(prepared, handlers);
     if (ok) {
       end("sherpa");
       return;
@@ -237,7 +241,7 @@ export async function speakOffline(
   }
 
   try {
-    await speakBangla(cleaned, handlers);
+    await speakBangla(prepared, handlers);
     end("expo-speech");
   } catch (err) {
     end("error");

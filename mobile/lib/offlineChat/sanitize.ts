@@ -16,14 +16,18 @@ export function sanitizeAssistantReply(
   const userName = currentUserFirstName();
   let out = text
     .replace(
-      /^(?:\s*(?:কৃষক|আরণ্য|সহকারী|assistant|user|model|farmer|উত্তর)\s*[:：\-–—]\s*)+/gim,
+      /^(?:\s*(?:কৃষক|আরণ্য|সহকারী|assistant|user|model|farmer|উত্তর|\[উত্তর\]|\[প্রশ্ন\]|\[ভূমিকা\]|\[নিয়ম\]|\[কৃষক\]|\[সহায়ক তথ্য\])\s*[:：\-–—]?\s*)+/gim,
       "",
     )
     .replace(
-      /\n\s*(?:কৃষক|আরণ্য|সহকারী|assistant|user|model)\s*[:：\-–—]\s*/g,
+      /\n\s*(?:কৃষক|আরণ্য|সহকারী|assistant|user|model|\[উত্তর\]|\[প্রশ্ন\])\s*[:：\-–—]?\s*/g,
       "\n",
     )
     .replace(/<\/?[^>]+>/g, "")
+    .replace(/\*\*[^*]{0,60}\*\*/g, (m) => m.replace(/\*\*/g, ""))
+    .replace(/(?:কৃষকের\s+)?প্রশ্ন\s*:[^\n]*/gi, "")
+    .replace(/\[(?:ভূমিকা|নিয়ম|উদ্দেশ্য|চিহ্নিত বিষয়|কৃষক|সহায়ক তথ্য|প্রামাণিক তথ্য|প্রশ্ন|উত্তর)\]/gi, "")
+    .replace(/\[(?:চিহ্নিত বিষয়|প্রামাণিক তথ্য|কৃষক):[^\]]*\]/gi, "")
     .replace(/এই বিষয়ে নিশ্চিত তথ্য নেই[।.!?]?\s*/gi, "এই বিষয়ে নিশ্চিত তথ্য নেই। ");
 
   if (!opts.allowGreeting) {

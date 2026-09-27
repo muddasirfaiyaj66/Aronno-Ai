@@ -46,16 +46,7 @@ app-example
 /android
 
 # Offline AI: STT/TTS binaries download on device (Model Manager).
-# Vision TFLite + class_names + KB ship with the app.
-assets/models/stt/**/*
-!assets/models/stt/**/.gitkeep
-assets/models/tts/**/*
-!assets/models/tts/**/.gitkeep
+# Disease and tool photos use the backend Gemini API — no bundled vision models.
 *.onnx
 *.gguf
-# Ignore stray TFLite elsewhere, but keep bundled vision models
 *.tflite
-!assets/models/vision/*.tflite
-!assets/models/vision/class_names.json
-!assets/models/vision/README.md
-!assets/models/vision/.gitkeep

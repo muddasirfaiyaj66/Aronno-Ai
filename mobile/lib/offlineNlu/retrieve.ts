@@ -2,7 +2,7 @@
  * RAG-lite: keyword + token retrieval over bn_knowledge_base.json,
  * plus session facts (profile, cached weather, season) for grounding.
  */
-import kb from "@/assets/models/kb/bn_knowledge_base.json";
+import kb from "@/assets/kb/bn_knowledge_base.json";
 import { store } from "@/store";
 import type { CurrentWeather } from "@/types/weather";
 

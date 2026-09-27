@@ -1,4 +1,4 @@
-import kb from "@/assets/models/kb/bn_knowledge_base.json";
+import kb from "@/assets/kb/bn_knowledge_base.json";
 
 export type KbDisease = (typeof kb.diseases)[number];
 export type KbTool = (typeof kb.tools)[number];

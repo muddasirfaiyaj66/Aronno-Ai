@@ -5,7 +5,7 @@
 import type { DiagnosisResult } from "@/types/diagnosis";
 import type { ToolResult } from "@/types/tools";
 import type { SeverityLevel } from "@/components/ui";
-import kb from "@/assets/models/kb/bn_knowledge_base.json";
+import kb from "@/assets/kb/bn_knowledge_base.json";
 import { findDiseaseById, findToolById } from "@/lib/offlineNlu/knowledgeBase";
 
 function normalize(s: string) {

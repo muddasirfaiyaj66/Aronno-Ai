@@ -12,11 +12,7 @@ import {
 } from "@/services/api";
 import { userFacingError } from "@/lib/userFacingError";
 import { fetchIsOnline } from "@/hooks/useIsOnline";
-import { classifyLeaf, isDiseaseModelAvailable } from "@/lib/offlineVision/diseaseModel";
-import { detectTool, isToolModelAvailable } from "@/lib/offlineVision/toolModel";
 import {
-  classifyLeafWithGemma,
-  detectToolWithGemma,
   isGemmaVisionAvailable,
   scanReceiptWithGemma,
 } from "@/lib/offlineVision/gemmaVision";
@@ -193,23 +189,6 @@ export default function AnalyzingScreen() {
     };
 
     const runOfflineDisease = async (): Promise<boolean> => {
-      if (params.imageUri && (await isDiseaseModelAvailable())) {
-        const result = await classifyLeaf(params.imageUri);
-        if (result && !cancelled) {
-          logMetric("analyzing.offline.disease.vision");
-          await finalizeDisease(result);
-          return true;
-        }
-      }
-      // Gemma 3 multimodal fallback (slower, needs 4B+mmproj)
-      if (params.imageUri && (await isGemmaVisionAvailable())) {
-        const result = await classifyLeafWithGemma(params.imageUri);
-        if (result && !cancelled) {
-          logMetric("analyzing.offline.disease.gemma");
-          await finalizeDisease(result);
-          return true;
-        }
-      }
       if (params.transcript) {
         const matched = matchDiseaseFromTranscript(
           params.transcript,
@@ -225,22 +204,6 @@ export default function AnalyzingScreen() {
     };
 
     const runOfflineTool = async (): Promise<boolean> => {
-      if (params.imageUri && (await isToolModelAvailable())) {
-        const result = await detectTool(params.imageUri);
-        if (result && !cancelled) {
-          logMetric("analyzing.offline.tool.vision");
-          await finalizeTool(result);
-          return true;
-        }
-      }
-      if (params.imageUri && (await isGemmaVisionAvailable())) {
-        const result = await detectToolWithGemma(params.imageUri);
-        if (result && !cancelled) {
-          logMetric("analyzing.offline.tool.gemma");
-          await finalizeTool(result);
-          return true;
-        }
-      }
       if (params.transcript) {
         const matched = matchToolFromTranscript(params.transcript);
         if (matched && !cancelled) {
@@ -275,8 +238,8 @@ export default function AnalyzingScreen() {
       try {
         onlineRef.current = await fetchIsOnline();
 
-        // Online: disease and tool photos go to the backend (Gemini).
-        // Offline models run only when there is no network, or if Gemini fails.
+        // Disease and tool photos always go to the backend (Gemini).
+        // Offline text matching is only for a spoken or typed name, never a local image model.
         if (!onlineRef.current) {
           if (flow === "receipt") {
             const ok = await runOfflineReceipt();
@@ -351,7 +314,7 @@ export default function AnalyzingScreen() {
         goDiagnosis(router, result, params.imageUri);
       } catch (err) {
         if (cancelled) return;
-        // Online Gemini failed → try offline vision/KB once
+        // Gemini failed. A spoken name can still match the local text list.
         if (onlineRef.current) {
           try {
             if (flow === "receipt") {

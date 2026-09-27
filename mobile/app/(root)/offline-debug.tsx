@@ -11,10 +11,6 @@ import {
 import { currentModelId, isLlmReady } from "@/lib/modelManager/llmEngine";
 import { isTTSReady } from "@/lib/offlineVoice/ttsEngine";
 import { isSTTReady } from "@/lib/offlineVoice/sttEngine";
-import {
-  isDiseaseModelAvailable,
-} from "@/lib/offlineVision/diseaseModel";
-import { isToolModelAvailable } from "@/lib/offlineVision/toolModel";
 
 function formatEvent(e: MetricEvent) {
   const time = new Date(e.at).toLocaleTimeString();
@@ -30,8 +26,6 @@ export default function OfflineDebugScreen() {
     llmId: null as string | null,
     stt: false,
     tts: false,
-    disease: false,
-    tool: false,
   });
 
   const refreshStatus = useCallback(async () => {
@@ -40,8 +34,6 @@ export default function OfflineDebugScreen() {
       llmId: currentModelId(),
       stt: await isSTTReady(),
       tts: isTTSReady(),
-      disease: await isDiseaseModelAvailable(),
-      tool: await isToolModelAvailable(),
     });
   }, []);
 
@@ -60,9 +52,7 @@ export default function OfflineDebugScreen() {
       <View className="gap-2 px-5 py-3">
         <AppText variant="caption">
           LLM: {status.llm ? `চালু (${status.llmId})` : "বন্ধ"} · STT:{" "}
-          {status.stt ? "হ্যাঁ" : "না"} · TTS: {status.tts ? "sherpa" : "OS"} ·
-          রোগ মডেল: {status.disease ? "আছে" : "নেই"} · হাতিয়ার:{" "}
-          {status.tool ? "আছে" : "নেই"}
+          {status.stt ? "হ্যাঁ" : "না"} · TTS: {status.tts ? "sherpa" : "OS"}
         </AppText>
         <View className="flex-row gap-2">
           <SecondaryButton label="রিফ্রেশ" onPress={() => void refreshStatus()} />

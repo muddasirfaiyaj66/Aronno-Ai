@@ -8,7 +8,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import NetInfo from "@react-native-community/netinfo";
-import { AppText, ScreenHeader, SecondaryButton } from "@/components/ui";
+import { AppText, ScreenHeader } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import {
   MODEL_CATALOG,
@@ -38,10 +38,6 @@ import {
   getPreferredLlmId,
   setPreferredLlmId,
 } from "@/lib/modelManager/preferredLlm";
-import {
-  pickAndInstallVision,
-  visionInstallStatus,
-} from "@/lib/offlineVision/importModel";
 
 function ProgressBar({ progress }: { progress: number }) {
   const pct = Math.max(0, Math.min(100, Math.round(progress * 100)));
@@ -308,11 +304,6 @@ export default function ModelsScreen() {
     tone: "ok" | "err";
     text: string;
   } | null>(null);
-  const [vision, setVision] = useState({
-    disease: false,
-    tool: false,
-    classNames: false,
-  });
 
   const refresh = useCallback(async () => {
     const flags: Record<string, boolean> = {};
@@ -323,7 +314,6 @@ export default function ModelsScreen() {
     setUsedMb(await storageUsedMb());
     setActiveId(currentModelId());
     setPreferredId(await getPreferredLlmId());
-    setVision(await visionInstallStatus());
   }, []);
 
   useEffect(() => {
@@ -484,16 +474,6 @@ export default function ModelsScreen() {
     }
   }
 
-  async function importVision(kind: "disease" | "tool" | "classNames") {
-    setBanner(null);
-    const result = await pickAndInstallVision(kind);
-    setBanner({
-      tone: result.ok ? "ok" : "err",
-      text: result.messageBn,
-    });
-    if (result.ok) await refresh();
-  }
-
   const activeName =
     MODEL_CATALOG.find((e) => e.id === (activeId ?? preferredId))?.nameBn ??
     null;
@@ -631,30 +611,6 @@ export default function ModelsScreen() {
             onDelete={() => void handleDelete(item)}
           />
         ))}
-
-        <View className="mt-4 gap-3 border-t border-border pt-4">
-          <AppText variant="body" className="font-bengali-bold text-ink">
-            ভিশন মডেল
-          </AppText>
-          <AppText variant="caption" className="leading-5">
-            অ্যাপে বান্ডেল করা আছে। নিচের বাটন শুধু নতুন ট্রেনিং দিয়ে
-            রিপ্লেস করতে। রোগ: {vision.disease ? "আছে" : "নেই"} · হাতিয়ার:{" "}
-            {vision.tool ? "আছে" : "নেই"} · class_names:{" "}
-            {vision.classNames ? "আছে" : "নেই"}
-          </AppText>
-          <SecondaryButton
-            label="রোগ মডেল আপডেট (.tflite)"
-            onPress={() => void importVision("disease")}
-          />
-          <SecondaryButton
-            label="হাতিয়ার মডেল আপডেট (.tflite)"
-            onPress={() => void importVision("tool")}
-          />
-          <SecondaryButton
-            label="class_names.json আপডেট"
-            onPress={() => void importVision("classNames")}
-          />
-        </View>
       </ScrollView>
     </SafeAreaView>
   );

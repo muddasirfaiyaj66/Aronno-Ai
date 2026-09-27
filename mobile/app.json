@@ -92,13 +92,6 @@
         }
       ],
       "llama.rn",
-      [
-        "react-native-fast-tflite",
-        {
-          "enableCoreMLDelegate": true,
-          "enableAndroidGpuLibraries": true
-        }
-      ],
       "@siteed/sherpa-onnx.rn",
       "expo-document-picker",
       "expo-sqlite",

@@ -1,1 +1,0 @@
-# After training, drop crop_disease_int8.tflite, tool_detector_int8.tflite, class_names.json here.

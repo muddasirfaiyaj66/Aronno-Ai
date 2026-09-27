@@ -88,7 +88,7 @@ export default function HomeScreen() {
         refreshControl={refreshControl}
       >
         <View className="flex-row items-center justify-between px-5 pt-2 pb-4">
-          <View className="flex-1 pr-3">
+          <View className="min-w-0 flex-1 pr-3">
             <AppText variant="caption" className="font-bengali-semibold text-primary">
               {t("আরণ্য", "Aronno")}
             </AppText>

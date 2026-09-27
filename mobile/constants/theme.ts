@@ -19,6 +19,6 @@ export const colors = {
 
 export const tabBar = {
   height: 84,
-  iconSize: 26,
-  labelSize: 13,
+  iconSize: 22,
+  labelSize: 11,
 } as const;

@@ -27,7 +27,7 @@ const TAB_META: Record<
   index: { label: "হোম", icon: "home-outline", iconFocused: "home" },
   history: { label: "ইতিহাস", icon: "time-outline", iconFocused: "time" },
   assistant: {
-    label: "সহকারী",
+    label: "চ্যাট",
     icon: "chatbubbles-outline",
     iconFocused: "chatbubbles",
   },
@@ -67,7 +67,7 @@ function ScanFab({
       accessibilityRole="button"
       accessibilityLabel="স্ক্যান"
       accessibilityState={{ selected: focused }}
-      style={{ alignItems: "center", marginTop: -22, width: 76 }}
+      style={{ alignItems: "center", marginTop: -22, width: 68 }}
     >
       <View style={{ alignItems: "center", justifyContent: "center" }}>
         <Animated.View
@@ -170,6 +170,7 @@ function SideTab({
         style={{
           marginTop: 2,
           marginBottom: 2,
+          width: "100%",
           color,
           fontFamily: "NotoSansBengali_700Bold",
           fontSize: tabBar.labelSize,

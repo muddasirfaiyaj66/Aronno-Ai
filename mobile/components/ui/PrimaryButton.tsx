@@ -74,7 +74,11 @@ export function PrimaryButton({
       ) : (
         <>
           {icon}
-          <AppText variant="bodyLg" className="font-bengali-bold text-white">
+          <AppText
+            variant="bodyLg"
+            numberOfLines={1}
+            className="shrink font-bengali-bold text-white"
+          >
             {label}
           </AppText>
         </>

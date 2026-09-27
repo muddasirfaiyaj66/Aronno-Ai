@@ -34,7 +34,11 @@ export function SecondaryButton({
       ) : (
         icon
       )}
-      <AppText variant="bodyLg" className="font-bengali-bold text-primary">
+      <AppText
+        variant="bodyLg"
+        numberOfLines={1}
+        className="shrink font-bengali-bold text-primary"
+      >
         {label}
       </AppText>
     </Pressable>

@@ -1,7 +1,7 @@
-import { View } from "react-native";
+import { ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { AppText, HeroChoiceCard, ScreenHeader } from "@/components/ui";
+import { HeroChoiceCard, ScreenHeader } from "@/components/ui";
 import { useLocale } from "@/context/locale";
 
 export default function CaptureLauncherScreen() {
@@ -13,12 +13,28 @@ export default function CaptureLauncherScreen() {
       <ScreenHeader
         title={t("স্ক্যান", "Scan")}
         subtitle={t(
-          "বাংলা কণ্ঠ অথবা লেখা — ছবির জন্য হোমের একমাত্র বাটন ব্যবহার করুন",
-          "Bangla voice or text — use the single home photo button for leaves",
+          "পাতার ছবি, বাংলা কণ্ঠ, অথবা লেখা",
+          "A leaf photo, Bangla voice, or text",
         )}
       />
 
-      <View className="flex-1 gap-3 px-5 pt-5">
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="gap-3 px-5 pb-8 pt-5"
+        showsVerticalScrollIndicator={false}
+      >
+        <HeroChoiceCard
+          tone="photo"
+          icon="camera"
+          title={t("পাতার ছবি তুলুন", "Photograph a leaf")}
+          subtitle={t("ক্যামেরা দিয়ে রোগ শনাক্ত করুন", "Identify disease with the camera")}
+          onPress={() =>
+            router.push({
+              pathname: "/(root)/(tabs)/scan/photo",
+              params: { flow: "disease" },
+            })
+          }
+        />
         <HeroChoiceCard
           tone="voice"
           icon="mic"
@@ -43,14 +59,7 @@ export default function CaptureLauncherScreen() {
             })
           }
         />
-
-        <AppText variant="caption" className="mt-4 text-center leading-6">
-          {t(
-            "পাতার ছবি তুলতে হোম স্ক্রিনের «পাতার ছবি তুলুন» চাপুন — একটাই বাটন।",
-            "To photograph a leaf, use the single «Photograph a leaf» button on Home.",
-          )}
-        </AppText>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

@@ -19,6 +19,8 @@ import type { AuthUser } from '../auth/auth.types';
 import { AdminService } from './admin.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AdminInsightsService } from './admin-insights.service';
+import { DeliverySettingsService } from '../marketplace/services/delivery-settings.service';
+import { WalletService } from '../marketplace/services/wallet.service';
 import { z } from 'zod';
 
 const broadcastSchema = z.object({
@@ -36,6 +38,11 @@ const reportActionSchema = z.object({
 
 const shopActiveSchema = z.object({ isActive: z.boolean() });
 const productStatusSchema = z.object({ status: z.enum(['active', 'inactive']) });
+const deliverySchema = z.object({
+  sameCityBdt: z.number().int().min(0).max(5000),
+  otherCityBdt: z.number().int().min(0).max(5000),
+});
+const payoutActionSchema = z.object({ action: z.enum(['paid', 'rejected']) });
 
 @Controller('admin')
 @Roles('ADMIN')
@@ -44,7 +51,45 @@ export class AdminController {
     private readonly admin: AdminService,
     private readonly notifications: NotificationsService,
     private readonly insights: AdminInsightsService,
+    private readonly delivery: DeliverySettingsService,
+    private readonly wallet: WalletService,
   ) {}
+
+  @Get('delivery')
+  deliveryRates() {
+    return this.delivery.current();
+  }
+
+  @Patch('delivery')
+  async setDelivery(
+    @CurrentUser() actor: AuthUser,
+    @Body(new ZodPipe(deliverySchema)) body: z.infer<typeof deliverySchema>,
+  ) {
+    const rates = await this.delivery.update(body.sameCityBdt, body.otherCityBdt);
+    await this.insights.audit(actor.id, 'DELIVERY_RATES', rates.id, {
+      sameCityBdt: body.sameCityBdt,
+      otherCityBdt: body.otherCityBdt,
+    });
+    return rates;
+  }
+
+  @Get('payouts')
+  payouts() {
+    return this.wallet.listForAdmin();
+  }
+
+  @Post('payouts/:id')
+  async resolvePayout(
+    @CurrentUser() actor: AuthUser,
+    @Param('id') id: string,
+    @Body(new ZodPipe(payoutActionSchema)) body: z.infer<typeof payoutActionSchema>,
+  ) {
+    const payout = await this.wallet.resolve(id, body.action);
+    await this.insights.audit(actor.id, body.action === 'paid' ? 'PAYOUT_PAID' : 'PAYOUT_REJECTED', id, {
+      amountBdt: payout.amountBdt,
+    });
+    return payout;
+  }
 
   @Get('overview')
   overview() {

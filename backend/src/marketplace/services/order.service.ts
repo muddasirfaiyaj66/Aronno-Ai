@@ -8,13 +8,25 @@ import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateOrderDto, UpdateOrderStatusDto } from '../dto/order.dto';
 import { NotificationsService } from '../../notifications/notifications.service';
+import { ProductAvailabilityService } from './product-availability.service';
+import { PaymentService } from './payment.service';
+import { DeliverySettingsService } from './delivery-settings.service';
+
+const PAYMENT_METHODS = new Set(['cash_on_delivery', 'online', 'mobile_banking']);
+const CLIENT_MONEY_FIELDS = ['totalBdt', 'subtotalBdt', 'deliveryFeeBdt', 'amount', 'total_amount'];
 
 @Injectable()
 export class OrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly payments: PaymentService,
+    private readonly delivery: DeliverySettingsService,
   ) {}
+
+  private availability(): ProductAvailabilityService {
+    return ProductAvailabilityService.getInstance();
+  }
 
   private async resolveDistrict(districtIdOrSlug: string) {
     if (!districtIdOrSlug) return null;
@@ -26,7 +38,25 @@ export class OrderService {
     return this.prisma.district.findUnique({ where: { slug: districtIdOrSlug } });
   }
 
+  async quote(buyerUserId: string, shopId: string, destinationDistrictId: string) {
+    const priced = await this.priceCart(buyerUserId, shopId, destinationDistrictId);
+    return {
+      currency: 'BDT' as const,
+      subtotalBdt: priced.subtotalBdt,
+      deliveryFeeBdt: priced.deliveryFeeBdt,
+      totalBdt: priced.totalBdt,
+      sameCity: priced.sameCity,
+      items: priced.orderItems,
+    };
+  }
+
   async createOrder(buyerUserId: string, dto: CreateOrderDto) {
+    this.rejectClientAmount(dto);
+    const method = dto.paymentMethod || 'cash_on_delivery';
+    if (!PAYMENT_METHODS.has(method)) {
+      throw new BadRequestException('Unknown payment method.');
+    }
+
     const shop = await this.prisma.shop.findUnique({
       where: { id: dto.shopId },
     });
@@ -43,81 +73,15 @@ export class OrderService {
       throw new BadRequestException('Invalid district ID.');
     }
 
-    const cart = await this.prisma.cart.findUnique({
-      where: { userId: buyerUserId },
+    const priced = await this.priceCart(buyerUserId, dto.shopId, dto.districtId);
+    const buyer = await this.prisma.user.findUnique({
+      where: { id: buyerUserId },
+      select: { email: true, displayName: true },
     });
+    if (!buyer) throw new NotFoundException('Buyer not found.');
 
-    if (!cart || !cart.items.length) {
-      throw new BadRequestException('Your cart is empty.');
-    }
-
-    const productIds = cart.items.map((i) => i.productId);
-    const products = await this.prisma.product.findMany({
-      where: { id: { in: productIds }, shopId: dto.shopId },
-    });
-
-    if (!products.length) {
-      throw new BadRequestException('No items in cart belong to this shop.');
-    }
-
-    const productMap = new Map(products.map((p) => [p.id, p]));
-    const orderItems: Array<{
-      productId: string;
-      productName: string;
-      unit: any;
-      pricePerUnit: number;
-      quantity: number;
-      totalPrice: number;
-      imageUrl: string | null;
-    }> = [];
-
-    let subtotalBdt = 0;
-    const itemsToRemoveFromCart: string[] = [];
-
-    for (const item of cart.items) {
-      const product = productMap.get(item.productId);
-      if (!product) continue;
-
-      if (product.status !== 'active') {
-        throw new BadRequestException(`Product "${product.name}" is no longer available.`);
-      }
-
-      if (item.quantity > product.availableQuantity) {
-        throw new BadRequestException(
-          `Insufficient stock for "${product.name}". Available: ${product.availableQuantity} ${product.unit}.`,
-        );
-      }
-
-      const itemTotal = product.pricePerUnit * item.quantity;
-      subtotalBdt += itemTotal;
-      itemsToRemoveFromCart.push(item.productId);
-
-      orderItems.push({
-        productId: product.id,
-        productName: product.name,
-        unit: product.unit,
-        pricePerUnit: product.pricePerUnit,
-        quantity: item.quantity,
-        totalPrice: itemTotal,
-        imageUrl: product.images[0]?.url ?? null,
-      });
-    }
-
-    if (!orderItems.length) {
-      throw new BadRequestException('No valid items found for checkout.');
-    }
-
-    const deliveryFeeBdt = 60; // Flat delivery fee
-    const totalBdt = subtotalBdt + deliveryFeeBdt;
+    const isGateway = method === 'online' || method === 'mobile_banking';
     const orderNumber = `ARN-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    // Build payment status from submitted payment method
-    const paymentStatusValue =
-      dto.paymentMethod === 'cash_on_delivery' || !dto.paymentMethod
-        ? 'cash_on_delivery'
-        : 'pending';
-
-    // Build a full shipping address string including upazila & buyer name
     const fullAddress = [
       dto.buyerName ? `প্রাপক: ${dto.buyerName}` : null,
       dto.shippingAddress,
@@ -126,20 +90,30 @@ export class OrderService {
       .filter(Boolean)
       .join(' | ');
 
-    const order = await this.prisma.order.create({
+    const stockLines = priced.orderItems.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+    }));
+    await this.availability().reserveAll(stockLines);
+
+    let order;
+    try {
+      order = await this.prisma.order.create({
       data: {
         orderNumber,
         buyerUserId,
         shopId: shop.id,
         sellerUserId: shop.ownerUserId,
-        items: orderItems,
-        subtotalBdt,
-        deliveryFeeBdt,
-        totalBdt,
+        items: priced.orderItems,
+        subtotalBdt: priced.subtotalBdt,
+        deliveryFeeBdt: priced.deliveryFeeBdt,
+        totalBdt: priced.totalBdt,
         shippingAddress: fullAddress,
         contactPhone: dto.contactPhone,
         districtId: district.id,
-        paymentStatus: paymentStatusValue as any,
+        paymentStatus: isGateway ? 'pending' : 'cash_on_delivery',
+        paymentMethod: method,
+        paymentTranId: isGateway ? this.payments.tranId() : null,
         notes: dto.notes,
       },
       include: {
@@ -147,39 +121,125 @@ export class OrderService {
         district: true,
       },
     });
+    } catch (error) {
+      await this.availability().releaseAll(stockLines);
+      throw error;
+    }
 
-    // Deduct stock for each product
-    for (const item of orderItems) {
-      const p = productMap.get(item.productId)!;
-      const newStock = p.availableQuantity - item.quantity;
-      await this.prisma.product.update({
-        where: { id: item.productId },
-        data: {
-          availableQuantity: newStock,
-          ...(newStock <= 0 && { status: 'out_of_stock' }),
-        },
+    const cart = await this.prisma.cart.findUnique({ where: { userId: buyerUserId } });
+    if (cart) {
+      const remainingCartItems = cart.items.filter(
+        (item) => !priced.itemsToRemoveFromCart.includes(item.productId),
+      );
+      await this.prisma.cart.update({
+        where: { userId: buyerUserId },
+        data: { items: remainingCartItems },
       });
     }
 
-    // Remove purchased items from Cart
-    const remainingCartItems = cart.items.filter(
-      (i) => !itemsToRemoveFromCart.includes(i.productId),
-    );
-    await this.prisma.cart.update({
-      where: { userId: buyerUserId },
-      data: { items: remainingCartItems },
+    if (!isGateway) {
+      void this.notifications
+        .notifyOrder({
+          buyerUserId,
+          sellerUserId: shop.ownerUserId,
+          orderId: order.id,
+          status: order.status,
+        })
+        .catch(() => undefined);
+      return { ...order, gatewayUrl: null as string | null };
+    }
+
+    try {
+      const gatewayUrl = await this.payments.openGateway({
+        order,
+        method: method as 'online' | 'mobile_banking',
+        customerName: dto.buyerName || buyer.displayName || 'Aronno buyer',
+        email: buyer.email,
+        phone: dto.contactPhone,
+        address: fullAddress,
+        city: district.slug,
+      });
+      return { ...order, gatewayUrl };
+    } catch (error) {
+      await this.payments.markFailed(order.id, stockLines);
+      throw error;
+    }
+  }
+
+  private rejectClientAmount(dto: CreateOrderDto) {
+    const extra = dto as CreateOrderDto & Record<string, unknown>;
+    if (CLIENT_MONEY_FIELDS.some((field) => extra[field] !== undefined)) {
+      throw new BadRequestException('The payable amount is calculated by the server.');
+    }
+  }
+
+  private async priceCart(buyerUserId: string, shopId: string, destinationDistrictId: string) {
+    const cart = await this.prisma.cart.findUnique({ where: { userId: buyerUserId } });
+    if (!cart || !cart.items.length) {
+      throw new BadRequestException('Your cart is empty.');
+    }
+
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: cart.items.map((item) => item.productId) }, shopId },
+      include: { shop: { select: { isActive: true } } },
     });
+    if (!products.length) {
+      throw new BadRequestException('No items in cart belong to this shop.');
+    }
 
-    void this.notifications
-      .notifyOrder({
-        buyerUserId,
-        sellerUserId: shop.ownerUserId,
-        orderId: order.id,
-        status: order.status,
-      })
-      .catch(() => undefined);
+    const productMap = new Map(products.map((product) => [product.id, product]));
+    const availability = this.availability();
+    const orderItems: Array<{
+      productId: string;
+      productName: string;
+      unit: (typeof products)[number]['unit'];
+      pricePerUnit: number;
+      quantity: number;
+      totalPrice: number;
+      imageUrl: string | null;
+    }> = [];
+    const itemsToRemoveFromCart: string[] = [];
+    let subtotalBdt = 0;
 
-    return order;
+    for (const item of cart.items) {
+      const product = productMap.get(item.productId);
+      if (!product) continue;
+      availability.ensurePurchasable(product, item.quantity);
+      const totalPrice = availability.lineTotal(product.pricePerUnit, item.quantity);
+      subtotalBdt += totalPrice;
+      itemsToRemoveFromCart.push(item.productId);
+      orderItems.push({
+        productId: product.id,
+        productName: product.name,
+        unit: product.unit,
+        pricePerUnit: product.pricePerUnit,
+        quantity: item.quantity,
+        totalPrice,
+        imageUrl: product.images[0]?.url ?? null,
+      });
+    }
+
+    if (!orderItems.length) {
+      throw new BadRequestException('No valid items found for checkout.');
+    }
+
+    const shop = await this.prisma.shop.findUnique({
+      where: { id: shopId },
+      select: { districtId: true },
+    });
+    const destination = await this.resolveDistrict(destinationDistrictId);
+    if (!shop || !destination) {
+      throw new BadRequestException('Invalid district ID.');
+    }
+    const fee = await this.delivery.feeFor(shop.districtId, destination.id);
+    return {
+      orderItems,
+      itemsToRemoveFromCart,
+      subtotalBdt,
+      deliveryFeeBdt: fee.deliveryFeeBdt,
+      sameCity: fee.sameCity,
+      totalBdt: subtotalBdt + fee.deliveryFeeBdt,
+    };
   }
 
   async getBuyerOrders(buyerUserId: string) {
@@ -253,13 +313,19 @@ export class OrderService {
       throw new ForbiddenException('You do not have permission to view or update this order.');
     }
 
-    // Buyer can only cancel a pending order
+    const gatewayUnpaid =
+      order.paymentMethod !== 'cash_on_delivery' && order.paymentStatus !== 'paid';
+
+    // Buyer can only cancel a pending order that has not already been paid online.
     if (isBuyer) {
       if (dto.status !== 'cancelled') {
         throw new ForbiddenException('Buyers can only cancel orders.');
       }
       if (order.status !== 'pending') {
         throw new BadRequestException('Buyers can only cancel orders that are still pending.');
+      }
+      if (order.paymentStatus === 'paid') {
+        throw new BadRequestException('A paid online order cannot be cancelled here.');
       }
     }
 
@@ -272,13 +338,23 @@ export class OrderService {
             `Allowed next statuses: [${allowed.join(', ') || 'none'}].`,
         );
       }
+      if (gatewayUnpaid && dto.status !== 'cancelled') {
+        throw new BadRequestException('Wait until the online payment is verified.');
+      }
     }
+
+    const collectOnDelivery =
+      dto.status === 'delivered' &&
+      (order.paymentMethod === 'cash_on_delivery' || !order.paymentMethod);
 
     const updated = await this.prisma.order.update({
       where: { id: orderId },
       data: {
         status: dto.status,
-        ...(dto.status === 'delivered' && { paymentStatus: 'paid' }),
+        ...(collectOnDelivery ? { paymentStatus: 'paid' as const } : {}),
+        ...(dto.status === 'cancelled' && order.paymentStatus === 'pending'
+          ? { paymentStatus: 'failed' as const }
+          : {}),
       },
       include: {
         shop: true,
@@ -296,24 +372,14 @@ export class OrderService {
       })
       .catch(() => undefined);
 
-    if (dto.status === 'cancelled' && order.status !== 'cancelled') {
-      for (const item of order.items) {
-        const product = await this.prisma.product.findUnique({
-          where: { id: item.productId },
-        });
-        if (product) {
-          const restoredStock = product.availableQuantity + item.quantity;
-          await this.prisma.product.update({
-            where: { id: item.productId },
-            data: {
-              availableQuantity: restoredStock,
-              ...(product.status === 'out_of_stock' && restoredStock > 0
-                ? { status: 'active' }
-                : {}),
-            },
-          });
-        }
-      }
+    if (
+      dto.status === 'cancelled' &&
+      order.status !== 'cancelled' &&
+      order.paymentStatus !== 'failed'
+    ) {
+      await this.availability().releaseAll(
+        order.items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
+      );
     }
 
     return updated;

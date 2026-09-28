@@ -725,6 +725,12 @@ model Order {
   totalBdt        Int
   status          OrderStatus   @default(pending)
   paymentStatus   PaymentStatus @default(cash_on_delivery)
+  /// cash_on_delivery | online | mobile_banking. The charged amount is never taken from the client.
+  paymentMethod   String        @default("cash_on_delivery")
+  paymentTranId   String?
+  paymentValId    String?
+  paymentGateway  String?
+  paidAt          DateTime?
   shippingAddress String
   contactPhone    String
   districtId      String        @db.ObjectId
@@ -740,6 +746,34 @@ model Order {
   @@index([buyerUserId])
   @@index([shopId])
   @@index([sellerUserId])
+  @@index([status, createdAt])
+  @@index([paymentTranId])
+}
+
+/// Rates the admin can change. Same city as the shop, or another city.
+model DeliveryRate {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  key          String   @unique
+  sameCityBdt  Int
+  otherCityBdt Int
+  updatedAt    DateTime @updatedAt
+}
+
+/// Seller withdrawal. The amount is checked against server-side earnings.
+model Payout {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String   @db.ObjectId
+  shopId        String   @db.ObjectId
+  amountBdt     Int
+  channel       String
+  accountName   String
+  accountNumber String
+  bankName      String?
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, createdAt])
   @@index([status, createdAt])
 }
 

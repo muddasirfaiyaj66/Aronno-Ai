@@ -29,10 +29,13 @@ const CHART_COLORS = [
 
 const tooltipStyle = {
   borderRadius: 12,
-  border: "1px solid #d5ddd8",
-  background: "#fff",
+  border: "1px solid var(--border)",
+  background: "var(--white)",
+  color: "var(--ink)",
   fontSize: 13,
 };
+
+const tick = { fill: "currentColor", fontSize: 12 };
 
 type Slice = { name: string; value: number };
 
@@ -62,7 +65,7 @@ export function RoleDonut({ data }: { data: Slice[] }) {
           verticalAlign="bottom"
           height={36}
           formatter={(value) => (
-            <span style={{ color: "#5b6b64", fontSize: 13 }}>{value}</span>
+            <span style={{ color: "var(--muted)", fontSize: 13 }}>{value}</span>
           )}
         />
       </PieChart>
@@ -73,22 +76,13 @@ export function RoleDonut({ data }: { data: Slice[] }) {
 export function StatusBars({ data }: { data: Slice[] }) {
   if (data.every((d) => d.value === 0)) return <EmptyChart />;
   return (
+    <div className="text-muted">
     <ResponsiveContainer width="100%" height={260}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#d5ddd8" vertical={false} />
-        <XAxis
-          dataKey="name"
-          tick={{ fill: "#5b6b64", fontSize: 12 }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <YAxis
-          allowDecimals={false}
-          tick={{ fill: "#5b6b64", fontSize: 12 }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "#eef2ee" }} />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+        <XAxis dataKey="name" tick={tick} axisLine={false} tickLine={false} />
+        <YAxis allowDecimals={false} tick={tick} axisLine={false} tickLine={false} />
+        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "var(--panel)" }} />
         <Bar dataKey="value" radius={[10, 10, 4, 4]} maxBarSize={56}>
           {data.map((_, i) => (
             <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
@@ -96,50 +90,41 @@ export function StatusBars({ data }: { data: Slice[] }) {
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+    </div>
   );
 }
 
 export function DistrictBars({ data }: { data: Slice[] }) {
   if (data.length === 0) return <EmptyChart />;
   return (
+    <div className="text-muted">
     <ResponsiveContainer width="100%" height={280}>
       <BarChart
         layout="vertical"
         data={data}
         margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
       >
-        <CartesianGrid strokeDasharray="3 3" stroke="#d5ddd8" horizontal={false} />
-        <XAxis
-          type="number"
-          allowDecimals={false}
-          tick={{ fill: "#5b6b64", fontSize: 12 }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <YAxis
-          type="category"
-          dataKey="name"
-          width={88}
-          tick={{ fill: "#1c2b24", fontSize: 12 }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "#eef2ee" }} />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+        <XAxis type="number" allowDecimals={false} tick={tick} axisLine={false} tickLine={false} />
+        <YAxis type="category" dataKey="name" width={88} tick={tick} axisLine={false} tickLine={false} />
+        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "var(--panel)" }} />
         <Bar dataKey="value" fill="#1b5e4a" radius={[0, 8, 8, 0]} maxBarSize={22} />
       </BarChart>
     </ResponsiveContainer>
+    </div>
   );
 }
 
 export function SignupArea({
   data,
-  name = "নতুন অ্যাকাউন্ট",
+  name = "New accounts",
 }: {
   data: { label: string; count: number }[];
   name?: string;
 }) {
   if (data.every((d) => d.count === 0)) return <EmptyChart />;
   return (
+    <div className="text-muted">
     <ResponsiveContainer width="100%" height={280}>
       <AreaChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
         <defs>
@@ -148,19 +133,9 @@ export function SignupArea({
             <stop offset="100%" stopColor="#4fa883" stopOpacity={0.02} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#d5ddd8" vertical={false} />
-        <XAxis
-          dataKey="label"
-          tick={{ fill: "#5b6b64", fontSize: 12 }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <YAxis
-          allowDecimals={false}
-          tick={{ fill: "#5b6b64", fontSize: 12 }}
-          axisLine={false}
-          tickLine={false}
-        />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+        <XAxis dataKey="label" tick={tick} axisLine={false} tickLine={false} />
+        <YAxis allowDecimals={false} tick={tick} axisLine={false} tickLine={false} />
         <Tooltip contentStyle={tooltipStyle} />
         <Area
           type="monotone"
@@ -172,13 +147,14 @@ export function SignupArea({
         />
       </AreaChart>
     </ResponsiveContainer>
+    </div>
   );
 }
 
 function EmptyChart() {
   return (
     <div className="flex h-[240px] items-center justify-center text-sm text-muted">
-      এখনো যথেষ্ট ডেটা নেই।
+      Not enough data yet.
     </div>
   );
 }

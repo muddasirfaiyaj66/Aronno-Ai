@@ -16,7 +16,9 @@ export class EnvelopeInterceptor implements NestInterceptor {
     if (
       SKIP.has(req.path) ||
       req.path.startsWith('/api/uploads') ||
-      req.path.startsWith('/api/tts/audio')
+      req.path.startsWith('/api/tts/audio') ||
+      req.path.startsWith('/api/marketplace/payments/sslcommerz') ||
+      req.path.startsWith('/marketplace/payments/sslcommerz')
     ) {
       return next.handle();
     }

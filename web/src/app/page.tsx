@@ -43,48 +43,44 @@ export default function HomePage() {
     <div className="min-h-screen bg-sand">
       <SiteHeader />
       <main>
-        <section className="mx-auto grid max-w-6xl items-center gap-10 px-5 py-12 md:px-6 md:py-20 lg:grid-cols-[1.05fr_0.95fr]">
-          <div>
-            <p className="section-label">আরণ্য · বাংলাদেশ</p>
-            <h1 className="mt-4 max-w-xl font-display text-[clamp(2.7rem,6vw,4.6rem)] text-forest">
+        <section className="relative isolate min-h-[78vh] overflow-hidden bg-forest-deep text-sand">
+          <Image
+            src="/marketing/field.jpg"
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover object-[center_30%] opacity-45"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-forest-deep via-forest-deep/88 to-forest-deep/25" />
+          <div className="relative mx-auto flex min-h-[78vh] max-w-6xl flex-col justify-end px-5 py-16 md:px-6 md:py-20">
+            <p className="text-xs font-semibold tracking-[0.18em] text-leaf uppercase">আরণ্য · বাংলাদেশ</p>
+            <h1 className="mt-4 max-w-3xl font-display text-[clamp(3rem,7vw,5.4rem)] text-sand">
               মাঠের সিদ্ধান্ত, পরিষ্কার বাংলায়।
             </h1>
-            <p className="mt-5 max-w-lg text-lg leading-relaxed text-muted">
+            <p className="mt-5 max-w-xl text-lg leading-relaxed text-sand/75">
               রোগ শনাক্তকরণ, সার ও স্প্রে, আবহাওয়া এবং বাজার — কৃষক যা করেন, সেই মুহূর্তের জন্য। নেট না থাকলেও মূল কাজ চলে।
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/heatmap" className="btn btn-primary">
                 হিট ম্যাপ খুলুন
               </Link>
-              <Link href="/market" className="btn btn-ghost">
+              <Link href="/market" className="rounded-[0.65rem] border border-white/25 px-5 py-3 text-sm font-semibold text-sand">
                 বাজার দেখুন
               </Link>
             </div>
-            <dl className="mt-10 grid max-w-lg grid-cols-3 gap-4 border-t border-border pt-6">
+            <dl className="mt-12 grid max-w-lg grid-cols-3 gap-6 border-t border-white/15 pt-6">
               {[
                 ["৬৪", "জেলা"],
                 ["বাংলা", "ভাষা"],
                 ["অফলাইন", "সক্ষম"],
               ].map(([value, label]) => (
                 <div key={label}>
-                  <dt className="font-display text-2xl text-forest">{value}</dt>
-                  <dd className="text-sm text-muted">{label}</dd>
+                  <dt className="font-display text-3xl text-sand">{value}</dt>
+                  <dd className="text-sm text-sand/60">{label}</dd>
                 </div>
               ))}
             </dl>
-          </div>
-          <div className="relative">
-            <div className="absolute -left-4 -top-4 hidden h-full w-full rounded-[2rem] bg-forest/10 md:block" aria-hidden />
-            <div className="relative aspect-[4/5] overflow-hidden rounded-[2rem] shadow-[0_30px_60px_-36px_rgba(7,31,24,0.7)] sm:aspect-[5/4]">
-              <Image
-                src="/marketing/field.jpg"
-                alt="ধানক্ষেতে কৃষক"
-                fill
-                priority
-                sizes="(min-width: 1024px) 46vw, 100vw"
-                className="object-cover object-[center_30%]"
-              />
-            </div>
           </div>
         </section>
 
@@ -99,25 +95,43 @@ export default function HomePage() {
               </div>
               <p className="max-w-sm text-muted">জটিল ড্যাশবোর্ড নয়। ছবি, কণ্ঠ, বাজার — যেটা এখন দরকার।</p>
             </div>
-            <div className="mt-12 grid gap-6 md:grid-cols-3">
-              {CAPABILITIES.map((item) => (
-                <article key={item.title} className="group overflow-hidden rounded-[1.6rem] border border-border bg-sand/40">
-                  <div className="relative h-52">
-                    <Image
-                      src={item.image}
-                      alt={item.alt}
-                      fill
-                      sizes="(min-width: 768px) 30vw, 100vw"
-                      className="object-cover transition duration-500 group-hover:scale-[1.03]"
-                    />
-                  </div>
-                  <div className="p-6">
-                    <p className="text-xs font-semibold tracking-[0.14em] text-leaf uppercase">{item.kicker}</p>
-                    <h3 className="mt-2 text-xl font-semibold text-ink">{item.title}</h3>
-                    <p className="mt-2 leading-relaxed text-muted">{item.body}</p>
-                  </div>
-                </article>
-              ))}
+            <div className="mt-12 grid gap-5 lg:grid-cols-[1.35fr_1fr]">
+              <article className="group overflow-hidden rounded-[1.6rem] border border-border bg-sand/40">
+                <div className="relative h-72 lg:h-[28rem]">
+                  <Image
+                    src={CAPABILITIES[0].image}
+                    alt={CAPABILITIES[0].alt}
+                    fill
+                    sizes="(min-width: 1024px) 55vw, 100vw"
+                    className="object-cover transition duration-500 group-hover:scale-[1.03]"
+                  />
+                </div>
+                <div className="p-6">
+                  <p className="text-xs font-semibold tracking-[0.14em] text-leaf uppercase">{CAPABILITIES[0].kicker}</p>
+                  <h3 className="mt-2 text-xl font-semibold text-ink">{CAPABILITIES[0].title}</h3>
+                  <p className="mt-2 leading-relaxed text-muted">{CAPABILITIES[0].body}</p>
+                </div>
+              </article>
+              <div className="grid gap-5">
+                {CAPABILITIES.slice(1).map((item) => (
+                  <article key={item.title} className="group overflow-hidden rounded-[1.6rem] border border-border bg-sand/40">
+                    <div className="relative h-40">
+                      <Image
+                        src={item.image}
+                        alt={item.alt}
+                        fill
+                        sizes="(min-width: 1024px) 36vw, 100vw"
+                        className="object-cover transition duration-500 group-hover:scale-[1.03]"
+                      />
+                    </div>
+                    <div className="p-5">
+                      <p className="text-xs font-semibold tracking-[0.14em] text-leaf uppercase">{item.kicker}</p>
+                      <h3 className="mt-2 text-lg font-semibold text-ink">{item.title}</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-muted">{item.body}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
             </div>
           </div>
         </section>

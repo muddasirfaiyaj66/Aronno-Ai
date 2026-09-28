@@ -14,15 +14,15 @@ import {
 import type { AuthUser } from "@/lib/types";
 
 const PRIORITY: { id: BroadcastPriority; label: string }[] = [
-  { id: "normal", label: "সাধারণ" },
-  { id: "important", label: "গুরুত্বপূর্ণ" },
-  { id: "emergency", label: "জরুরি" },
+  { id: "normal", label: "Normal" },
+  { id: "important", label: "Important" },
+  { id: "emergency", label: "Emergency" },
 ];
 
 function when(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("bn-BD", { dateStyle: "medium", timeStyle: "short" });
+  return date.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 }
 
 export default function AdminNotificationsPage() {
@@ -75,12 +75,12 @@ export default function AdminNotificationsPage() {
         userId: audience === "user" ? userId : undefined,
         districtSlug: audience === "district" ? districtSlug : undefined,
       });
-      setOk(`${sent.recipientCount} জন ব্যবহারকারীর কাছে পাঠানো হয়েছে।`);
+      setOk(`Sent to ${sent.recipientCount} people.`);
       setTitle("");
       setBody("");
       setHistory((prev) => [sent, ...prev]);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "বিজ্ঞপ্তি পাঠানো যায়নি।");
+      setError(err instanceof ApiError ? err.message : "Could not send the alert.");
     } finally {
       setLoading(false);
     }
@@ -89,35 +89,35 @@ export default function AdminNotificationsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-3xl text-forest md:text-4xl">বিজ্ঞপ্তি পাঠান</h1>
+        <h1 className="text-3xl font-semibold text-ink">Alerts</h1>
         <p className="mt-2 max-w-2xl text-muted">
-          সবাইকে, একজনকে, অথবা হিট ম্যাপের জেলায়। জেলার বার্তা রোগের হিসাব থেকে সাজানো থাকে — পাঠানোর আগে বদলাতে পারবেন।
+          Send to everyone, one person, or a heatmap district. A district draft is filled from disease counts. Edit it before sending.
         </p>
       </div>
 
       <form onSubmit={onSubmit} className="panel space-y-4 p-6 sm:p-8">
         <label className="block space-y-1.5">
-          <span className="text-sm font-semibold text-muted">হিট ম্যাপের জেলা</span>
+          <span className="text-sm font-semibold text-muted">Heatmap district</span>
           <select className="field" value={districtSlug} onChange={(e) => applyPlace(e.target.value)}>
-            <option value="">জেলা বেছে নিলে বার্তা বসে যাবে</option>
+            <option value="">Choose a district to draft the message</option>
             {places.map((place) => (
               <option key={place.slug} value={place.slug}>
-                {place.nameBn} · {place.caseCount} রিপোর্ট · {place.level}
+                {place.nameBn} · {place.caseCount} reports · {place.level}
               </option>
             ))}
           </select>
         </label>
         <label className="block space-y-1.5">
-          <span className="text-sm font-semibold text-muted">শিরোনাম</span>
+          <span className="text-sm font-semibold text-muted">Title</span>
           <input className="field" required minLength={2} maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
         <label className="block space-y-1.5">
-          <span className="text-sm font-semibold text-muted">বার্তা</span>
+          <span className="text-sm font-semibold text-muted">Message</span>
           <textarea className="field min-h-28" required minLength={2} maxLength={600} value={body} onChange={(e) => setBody(e.target.value)} />
         </label>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block space-y-1.5">
-            <span className="text-sm font-semibold text-muted">গুরুত্ব</span>
+            <span className="text-sm font-semibold text-muted">Priority</span>
             <select className="field" value={priority} onChange={(e) => setPriority(e.target.value as BroadcastPriority)}>
               {PRIORITY.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -127,23 +127,23 @@ export default function AdminNotificationsPage() {
             </select>
           </label>
           <label className="block space-y-1.5">
-            <span className="text-sm font-semibold text-muted">কাদের কাছে</span>
+            <span className="text-sm font-semibold text-muted">Audience</span>
             <select
               className="field"
               value={audience}
               onChange={(e) => setAudience(e.target.value as "all" | "user" | "district")}
             >
-              <option value="all">সব ব্যবহারকারী</option>
-              <option value="district">হিট ম্যাপের জেলা</option>
-              <option value="user">একজন ব্যবহারকারী</option>
+              <option value="all">Everyone</option>
+              <option value="district">Heatmap district</option>
+              <option value="user">One person</option>
             </select>
           </label>
         </div>
         {audience === "user" ? (
           <label className="block space-y-1.5">
-            <span className="text-sm font-semibold text-muted">ব্যবহারকারী</span>
+            <span className="text-sm font-semibold text-muted">User</span>
             <select className="field" required value={userId} onChange={(e) => setUserId(e.target.value)}>
-              <option value="">বেছে নিন</option>
+              <option value="">Choose</option>
               {users.map((user) => (
                 <option key={user.id} value={user.id}>
                   {user.displayName} · {user.email}
@@ -155,14 +155,14 @@ export default function AdminNotificationsPage() {
         {error ? <p className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p> : null}
         {ok ? <p className="rounded-xl bg-leaf/15 px-3 py-2 text-sm font-semibold text-forest">{ok}</p> : null}
         <button type="submit" className="btn btn-primary" disabled={loading}>
-          {loading ? "পাঠানো হচ্ছে…" : "বিজ্ঞপ্তি পাঠান"}
+          {loading ? "Sending…" : "Send alert"}
         </button>
       </form>
 
       <section className="space-y-3">
-        <h2 className="font-display text-2xl text-forest">সাম্প্রতিক পাঠানো</h2>
+        <h2 className="text-2xl font-semibold text-ink">Recent sends</h2>
         {history.length === 0 ? (
-          <p className="text-muted">এখনও কোনো অ্যাডমিন বিজ্ঞপ্তি নেই।</p>
+          <p className="text-muted">No admin alerts yet.</p>
         ) : (
           history.map((item) => (
             <article key={item.id} className="panel px-5 py-4">
@@ -172,11 +172,11 @@ export default function AdminNotificationsPage() {
               </div>
               <p className="mt-1 text-sm text-muted">{item.body}</p>
               <p className="mt-2 text-xs font-semibold text-forest">
-                {item.priority === "emergency" ? "জরুরি" : item.priority === "important" ? "গুরুত্বপূর্ণ" : "সাধারণ"}
+                {item.priority === "emergency" ? "Emergency" : item.priority === "important" ? "Important" : "Normal"}
                 {" · "}
-                {item.audience === "user" ? "একজন" : item.audience === "district" ? "জেলা" : "সবাই"}
+                {item.audience === "user" ? "One person" : item.audience === "district" ? "District" : "Everyone"}
                 {" · "}
-                {item.recipientCount} জন
+                {item.recipientCount} recipients
               </p>
             </article>
           ))

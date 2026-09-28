@@ -33,41 +33,31 @@ export function PublicHeader({ solid = false }: { solid?: boolean }) {
           />
           <span className="font-display text-2xl tracking-tight">আরণ্য</span>
         </Link>
-        <Link
-          href="/admin/login"
-          className={
-            solid
-              ? "btn btn-ghost !min-h-9 !px-3 text-sm md:hidden"
-              : "rounded-lg border border-white/20 bg-white/8 px-3 py-2 text-sm font-semibold text-sand md:hidden"
-          }
-        >
-          প্রশাসক
-        </Link>
-        <nav className="hidden items-center gap-1 md:flex">
+        <nav className={`hidden items-center gap-1 rounded-full p-1 md:flex ${solid ? "border border-border bg-white" : "bg-white/10"}`}>
           {NAV.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
+              className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
                 solid
                   ? "text-muted hover:bg-sand hover:text-forest"
-                  : "text-sand/75 hover:text-sand"
+                  : "text-sand/80 hover:bg-white/10 hover:text-sand"
               }`}
             >
               {item.label}
             </Link>
           ))}
-          <Link
-            href="/admin/login"
-            className={
-              solid
-                ? "btn btn-ghost !min-h-9 !px-3 text-sm"
-                : "rounded-lg border border-white/20 bg-white/8 px-4 py-2 text-sm font-semibold text-sand backdrop-blur-sm transition hover:bg-white/15"
-            }
-          >
-            প্রশাসক
-          </Link>
         </nav>
+        <Link
+          href="/admin/login"
+          className={
+            solid
+              ? "btn btn-primary !min-h-10 !px-4 text-sm"
+              : "rounded-lg border border-white/20 bg-white/8 px-4 py-2 text-sm font-semibold text-sand backdrop-blur-sm transition hover:bg-white/15"
+          }
+        >
+          প্রশাসক
+        </Link>
       </div>
       <nav className="flex gap-2 overflow-x-auto px-5 pb-3 md:hidden">
         {NAV.map((item) => (
@@ -130,14 +120,10 @@ export function PublicShell({
   return (
     <div className="site-canvas min-h-screen">
       <PublicHeader solid />
-      <main className="mx-auto max-w-6xl px-5 py-10 md:px-6 md:py-14">
-        <div className="rounded-[1.6rem] border border-border bg-white px-6 py-8 md:px-10">
-          <p className="section-label">আরণ্য</p>
-          <h1 className="mt-3 font-display text-3xl text-forest md:text-5xl">{title}</h1>
-          {subtitle ? (
-            <p className="mt-3 max-w-2xl text-lg leading-relaxed text-muted">{subtitle}</p>
-          ) : null}
-        </div>
+      <main className="mx-auto max-w-6xl px-5 py-8 md:px-6 md:py-12">
+        <p className="section-label">আরণ্য</p>
+        <h1 className="mt-2 max-w-3xl font-display text-4xl text-forest md:text-5xl">{title}</h1>
+        {subtitle ? <p className="mt-3 max-w-2xl text-lg leading-relaxed text-muted">{subtitle}</p> : null}
         <div className="mt-8">{children}</div>
       </main>
       <PublicFooter />

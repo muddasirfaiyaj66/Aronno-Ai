@@ -29,8 +29,8 @@ export class CreateOrderDto {
   upazila?: string;
 
   /**
-   * Payment method for v1. Only 'cash_on_delivery' is supported.
-   * Defaults to 'cash_on_delivery' if omitted.
+   * cash_on_delivery, online (SSLCommerz cards and banks), or mobile_banking
+   * (bKash, Nagad, Rocket through SSLCommerz). The server prices the order.
    */
   @IsString()
   @IsOptional()

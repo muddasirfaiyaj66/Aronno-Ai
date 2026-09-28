@@ -24,14 +24,14 @@ export default function CreateAdminPage() {
         email: email.trim().toLowerCase(),
         password,
       });
-      setOk(`${user.displayName} অ্যাডমিন হিসেবে তৈরি হয়েছে।`);
+      setOk(`${user.displayName} is now an admin.`);
       setDisplayName("");
       setEmail("");
       setPassword("");
       setTimeout(() => router.push("/admin/users"), 900);
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : "অ্যাডমিন তৈরি করা যায়নি।",
+        err instanceof ApiError ? err.message : "Could not create the admin.",
       );
     } finally {
       setLoading(false);
@@ -41,28 +41,26 @@ export default function CreateAdminPage() {
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div>
-        <h1 className="font-display text-3xl text-forest md:text-4xl">
-          নতুন অ্যাডমিন
-        </h1>
+        <h1 className="text-3xl font-semibold text-ink">New admin</h1>
         <p className="mt-1 text-muted">
-          পাসওয়ার্ডে অন্তত ১০ অক্ষর, বড়/ছোট হাত, সংখ্যা ও বিশেষ চিহ্ন লাগবে।
+          The password needs at least 10 characters, upper and lower case, a number, and a symbol.
         </p>
       </div>
 
       <form onSubmit={onSubmit} className="panel space-y-4 p-6 sm:p-8">
         <label className="block space-y-1.5">
-          <span className="text-sm font-semibold text-muted">নাম</span>
+          <span className="text-sm font-semibold text-muted">Name</span>
           <input
             className="field"
             required
             minLength={2}
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="যেমন: রহিম অ্যাডমিন"
+            placeholder="Admin name"
           />
         </label>
         <label className="block space-y-1.5">
-          <span className="text-sm font-semibold text-muted">ইমেইল</span>
+          <span className="text-sm font-semibold text-muted">Email</span>
           <input
             className="field"
             type="email"
@@ -73,7 +71,7 @@ export default function CreateAdminPage() {
           />
         </label>
         <label className="block space-y-1.5">
-          <span className="text-sm font-semibold text-muted">পাসওয়ার্ড</span>
+          <span className="text-sm font-semibold text-muted">Password</span>
           <input
             className="field"
             type="password"
@@ -81,7 +79,7 @@ export default function CreateAdminPage() {
             minLength={10}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="শক্তিশালী পাসওয়ার্ড"
+            placeholder="A strong password"
           />
         </label>
 
@@ -97,7 +95,7 @@ export default function CreateAdminPage() {
         ) : null}
 
         <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-          {loading ? "তৈরি হচ্ছে…" : "অ্যাডমিন তৈরি করুন"}
+          {loading ? "Creating…" : "Create admin"}
         </button>
       </form>
     </div>

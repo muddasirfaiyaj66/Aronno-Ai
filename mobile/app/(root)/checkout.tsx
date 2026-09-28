@@ -9,6 +9,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import {
   AppText,
   PrimaryButton,
@@ -21,6 +22,8 @@ import {
   useGetCartQuery,
   useGetDistrictsQuery,
   useGetMeQuery,
+  useLazyGetOrderQuery,
+  useQuoteOrderMutation,
 } from "@/services/api";
 import { getApiError } from "@/services/api";
 import { formatPriceBn, formatUnitBn, toBn } from "@/utils/marketFormatters";
@@ -269,20 +272,30 @@ function AddressStep({
 }
 
 // ─── Order summary ────────────────────────────────────────────────────────────
-const DELIVERY_FEE = 60;
+type PayMethod = "cash_on_delivery" | "online" | "mobile_banking";
+
+type ServerQuote = {
+  subtotalBdt: number;
+  deliveryFeeBdt: number;
+  totalBdt: number;
+  sameCity: boolean;
+};
 
 function SummaryStep({
   cart,
+  quote,
   onNext,
   onBack,
 }: {
   cart: any;
+  quote: ServerQuote | null;
   onNext: () => void;
   onBack: () => void;
 }) {
   const items: any[] = cart?.items ?? [];
-  const subtotal: number = cart?.totalBdt ?? 0;
-  const total = subtotal + DELIVERY_FEE;
+  const subtotal = quote?.subtotalBdt ?? 0;
+  const deliveryFee = quote?.deliveryFeeBdt ?? 0;
+  const total = quote?.totalBdt ?? 0;
 
   return (
     <View className="gap-5">
@@ -334,10 +347,10 @@ function SummaryStep({
 
           <View className="flex-row justify-between">
             <AppText variant="body" className="text-muted font-bengali-medium">
-              ডেলিভারি চার্জ
+              {quote?.sameCity ? "ডেলিভারি · একই জেলা" : "ডেলিভারি · অন্য জেলা"}
             </AppText>
             <AppText variant="body" className="font-bengali-semibold text-ink">
-              {formatPriceBn(DELIVERY_FEE)}
+              {quote ? formatPriceBn(deliveryFee) : "—"}
             </AppText>
           </View>
 
@@ -346,7 +359,7 @@ function SummaryStep({
               সর্বমোট পরিশোধযোগ্য
             </AppText>
             <AppText variant="subtitle" className="font-bengali-bold text-primary">
-              {formatPriceBn(total)}
+              {quote ? formatPriceBn(total) : "—"}
             </AppText>
           </View>
         </View>
@@ -360,8 +373,9 @@ function SummaryStep({
         />
         <View className="flex-1">
           <PrimaryButton
-            label="পরবর্তী ধাপ"
+            label={quote ? "পরবর্তী ধাপ" : "মূল্য যাচাই হচ্ছে..."}
             onPress={onNext}
+            disabled={!quote}
             icon={<Ionicons name="arrow-forward" size={18} color={colors.white} />}
           />
         </View>
@@ -371,23 +385,52 @@ function SummaryStep({
 }
 
 // ─── Payment step ─────────────────────────────────────────────────────────────
+const PAY_OPTIONS: {
+  id: PayMethod;
+  title: string;
+  body: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  {
+    id: "cash_on_delivery",
+    title: "ক্যাশ অন ডেলিভারি",
+    body: "পণ্য পাওয়ার সময় নগদ পরিশোধ করুন",
+    icon: "cash",
+  },
+  {
+    id: "online",
+    title: "অনলাইন পেমেন্ট",
+    body: "কার্ড ও ব্যাংক — SSLCommerz দিয়ে যাচাই হবে",
+    icon: "card",
+  },
+  {
+    id: "mobile_banking",
+    title: "মোবাইল ব্যাংকিং",
+    body: "বিকাশ, নগদ বা রকেট — SSLCommerz দিয়ে যাচাই হবে",
+    icon: "phone-portrait",
+  },
+];
+
 function PaymentStep({
-  cart,
   form,
+  quote,
+  method,
+  onMethod,
   onConfirm,
   onBack,
   isLoading,
   error,
 }: {
-  cart: any;
   form: AddressForm;
+  quote: ServerQuote | null;
+  method: PayMethod;
+  onMethod: (method: PayMethod) => void;
   onConfirm: () => void;
   onBack: () => void;
   isLoading: boolean;
   error: string | null;
 }) {
-  const subtotal: number = cart?.totalBdt ?? 0;
-  const total = subtotal + DELIVERY_FEE;
+  const total = quote?.totalBdt ?? 0;
 
   return (
     <View className="gap-5">
@@ -417,23 +460,37 @@ function PaymentStep({
         icon={<Ionicons name="wallet" size={20} color={colors.primary} />}
       >
         <View className="gap-3">
-          {/* Cash on delivery — only option for v1 */}
-          <View className="flex-row items-center gap-3 rounded-xl border-2 border-primary bg-primary/5 p-4">
-            <View className="h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <Ionicons name="cash" size={24} color={colors.primary} />
-            </View>
-            <View className="flex-1">
-              <AppText variant="body" className="font-bengali-bold text-ink">
-                ক্যাশ অন ডেলিভারি
-              </AppText>
-              <AppText variant="caption" className="text-muted font-bengali-medium">
-                পণ্য পাওয়ার সময় নগদ পরিশোধ করুন
-              </AppText>
-            </View>
-            <View className="h-5 w-5 items-center justify-center rounded-full border-2 border-primary bg-forest-700">
-              <View className="h-2 w-2 rounded-full bg-white" />
-            </View>
-          </View>
+          {PAY_OPTIONS.map((option) => {
+            const selected = method === option.id;
+            return (
+              <Pressable
+                key={option.id}
+                onPress={() => onMethod(option.id)}
+                className={`flex-row items-center gap-3 rounded-xl border-2 p-4 ${
+                  selected ? "border-primary bg-primary/5" : "border-border bg-card"
+                }`}
+              >
+                <View className="h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                  <Ionicons name={option.icon} size={24} color={colors.primary} />
+                </View>
+                <View className="flex-1">
+                  <AppText variant="body" className="font-bengali-bold text-ink">
+                    {option.title}
+                  </AppText>
+                  <AppText variant="caption" className="text-muted font-bengali-medium">
+                    {option.body}
+                  </AppText>
+                </View>
+                <View
+                  className={`h-5 w-5 items-center justify-center rounded-full border-2 ${
+                    selected ? "border-primary bg-forest-700" : "border-border"
+                  }`}
+                >
+                  {selected ? <View className="h-2 w-2 rounded-full bg-white" /> : null}
+                </View>
+              </Pressable>
+            );
+          })}
 
           {/* Total to pay */}
           <View className="flex-row items-center justify-between rounded-xl bg-neutral px-4 py-3">
@@ -445,7 +502,7 @@ function PaymentStep({
               className="font-bengali-bold text-primary"
               style={{ fontSize: 20 }}
             >
-              {formatPriceBn(total)}
+              {quote ? formatPriceBn(total) : "—"}
             </AppText>
           </View>
         </View>
@@ -470,6 +527,7 @@ function PaymentStep({
           <PrimaryButton
             label={isLoading ? "অর্ডার হচ্ছে..." : "অর্ডার নিশ্চিত করুন"}
             onPress={onConfirm}
+            disabled={!quote || isLoading}
             loading={isLoading}
             icon={
               isLoading ? undefined : (
@@ -516,7 +574,7 @@ function SuccessScreen({
           className="text-muted font-bengali-medium text-center"
           style={{ lineHeight: 24 }}
         >
-          দোকানদার শীঘ্রই আপনার অর্ডার নিশ্চিত করবেন। ডেলিভারির সময় নগদ অর্থ প্রদান করুন।
+          দোকানদার শীঘ্রই আপনার অর্ডার নিশ্চিত করবেন।
         </AppText>
       </View>
 
@@ -537,8 +595,12 @@ export default function CheckoutScreen() {
   const { data: cart } = useGetCartQuery();
   const { data: me } = useGetMeQuery();
   const [checkout, { isLoading }] = useCheckoutMutation();
+  const [quoteOrder] = useQuoteOrderMutation();
+  const [fetchOrder] = useLazyGetOrderQuery();
 
   const [step, setStep] = useState<Step>(1);
+  const [payMethod, setPayMethod] = useState<PayMethod>("cash_on_delivery");
+  const [quote, setQuote] = useState<ServerQuote | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [completedOrder, setCompletedOrder] = useState<{ orderNumber: string } | null>(null);
 
@@ -565,8 +627,27 @@ export default function CheckoutScreen() {
   const updateForm = (partial: Partial<AddressForm>) =>
     setForm((prev) => ({ ...prev, ...partial }));
 
+  useEffect(() => {
+    if (step < 2 || !cart?.shopId || !form.districtId) return;
+    let cancelled = false;
+    setQuote(null);
+    quoteOrder({ shopId: cart.shopId, districtId: form.districtId })
+      .unwrap()
+      .then((priced) => {
+        if (!cancelled) setQuote(priced);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const { message } = getApiError(err);
+        setCheckoutError(message ?? "সার্ভার থেকে মূল্য যাচাই করা যায়নি।");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step, cart?.shopId, form.districtId, quoteOrder]);
+
   const handleConfirm = async () => {
-    if (isLoading) return; // Prevent double submission
+    if (isLoading || !quote) return;
     if (!cart?.shopId) {
       setCheckoutError("কার্টে দোকানের তথ্য পাওয়া যায়নি। অনুগ্রহ করে কার্টে ফিরে যান।");
       return;
@@ -580,11 +661,32 @@ export default function CheckoutScreen() {
         districtId: form.districtId,
         buyerName: form.buyerName,
         upazila: form.upazila || undefined,
-        paymentMethod: "cash_on_delivery",
+        paymentMethod: payMethod,
       }).unwrap();
 
+      if (result.gatewayUrl) {
+        await WebBrowser.openAuthSessionAsync(result.gatewayUrl, "aronno://payment");
+        let status = result.paymentStatus;
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          const fresh = await fetchOrder(result.id).unwrap();
+          status = fresh.paymentStatus;
+          if (status === "paid" || status === "failed") break;
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+        }
+        if (status === "paid") {
+          setCompletedOrder({ orderNumber: result.orderNumber });
+          return;
+        }
+        setCheckoutError(
+          status === "failed"
+            ? "পেমেন্ট হয়নি। অর্ডার বাতিল হয়েছে এবং স্টক ফিরিয়ে দেওয়া হয়েছে।"
+            : "পেমেন্ট এখনো নিশ্চিত হয়নি। অর্ডার তালিকায় অবস্থা দেখুন।",
+        );
+        return;
+      }
+
       setCompletedOrder({ orderNumber: result.orderNumber });
-    } catch (err: any) {
+    } catch (err: unknown) {
       const { message } = getApiError(err);
       setCheckoutError(
         message ?? "অর্ডার প্রক্রিয়াকরণে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।"
@@ -651,6 +753,7 @@ export default function CheckoutScreen() {
         {step === 2 && (
           <SummaryStep
             cart={cart}
+            quote={quote}
             onNext={() => setStep(3)}
             onBack={() => setStep(1)}
           />
@@ -658,8 +761,10 @@ export default function CheckoutScreen() {
 
         {step === 3 && (
           <PaymentStep
-            cart={cart}
             form={form}
+            quote={quote}
+            method={payMethod}
+            onMethod={setPayMethod}
             onConfirm={handleConfirm}
             onBack={() => setStep(2)}
             isLoading={isLoading}

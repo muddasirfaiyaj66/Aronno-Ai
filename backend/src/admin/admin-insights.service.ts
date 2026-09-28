@@ -5,6 +5,16 @@ import type { AuthUser } from '../auth/auth.types';
 
 const ORDER_STATUSES = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'] as const;
 
+function countsAsRevenue(order: {
+  status: string;
+  paymentStatus?: string | null;
+  paymentMethod?: string | null;
+}) {
+  if (order.status === 'cancelled') return false;
+  const method = order.paymentMethod || 'cash_on_delivery';
+  return method === 'cash_on_delivery' || order.paymentStatus === 'paid';
+}
+
 @Injectable()
 export class AdminInsightsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -37,6 +47,8 @@ export class AdminInsightsService {
             shopId: true,
             totalBdt: true,
             status: true,
+            paymentStatus: true,
+            paymentMethod: true,
             createdAt: true,
             shop: { select: { name: true } },
           },
@@ -50,11 +62,11 @@ export class AdminInsightsService {
     let verified = 0;
     let farmers = 0;
     for (const user of userRows) {
-      roleMap.set(user.role.nameBn, (roleMap.get(user.role.nameBn) ?? 0) + 1);
+      roleMap.set(user.role.slug, (roleMap.get(user.role.slug) ?? 0) + 1);
       if (user.role.slug === 'USER') farmers += 1;
       if (user.isActive) active += 1;
       if (user.emailVerifiedAt) verified += 1;
-      const district = user.district?.nameBn ?? 'জেলা নেই';
+      const district = user.district?.nameBn ?? 'No district';
       districtMap.set(district, (districtMap.get(district) ?? 0) + 1);
     }
 
@@ -66,7 +78,7 @@ export class AdminInsightsService {
     let revenue = 0;
     for (const order of orders) {
       byStatus[order.status] += 1;
-      const earned = order.status === 'cancelled' ? 0 : order.totalBdt;
+      const earned = countsAsRevenue(order) ? order.totalBdt : 0;
       revenue += earned;
       const row = shopEarn.get(order.shopId) ?? {
         name: order.shop.name,
@@ -104,7 +116,7 @@ export class AdminInsightsService {
       weeklySignups: bucketWeeks(userRows.map((row) => ({ at: row.createdAt, amount: 1 }))),
       weeklySales: bucketWeeks(
         orders
-          .filter((order) => order.status !== 'cancelled')
+          .filter((order) => countsAsRevenue(order))
           .map((order) => ({ at: order.createdAt, amount: order.totalBdt })),
       ),
       topShops: [...shopEarn.entries()]
@@ -130,7 +142,7 @@ export class AdminInsightsService {
         include: {
           owner: { select: { id: true, displayName: true, email: true, isActive: true } },
           district: { select: { nameBn: true } },
-          orders: { select: { totalBdt: true, status: true } },
+          orders: { select: { totalBdt: true, status: true, paymentStatus: true, paymentMethod: true } },
           _count: { select: { products: true } },
         },
       }),
@@ -150,7 +162,7 @@ export class AdminInsightsService {
     ]);
     return {
       shops: shops.map((shop) => {
-        const paid = shop.orders.filter((order) => order.status !== 'cancelled');
+        const paid = shop.orders.filter((order) => countsAsRevenue(order));
         return {
           id: shop.id,
           name: shop.name,
@@ -284,6 +296,12 @@ export class AdminInsightsService {
       },
     });
     return { id: updated.id, status: updated.status, action: updated.action };
+  }
+
+  audit(actorUserId: string, action: string, target: string, metadata?: Record<string, unknown>) {
+    return this.prisma.auditLog.create({
+      data: { actorUserId, action, target, metadata: metadata as object | undefined },
+    });
   }
 }
 

@@ -22,4 +22,12 @@ export const PUBLIC_MUTATIONS = new Set([
   '/api/auth/reset-password',
   '/api/auth/refresh',
   '/api/auth/logout',
+  '/api/marketplace/payments/sslcommerz/success',
+  '/api/marketplace/payments/sslcommerz/fail',
+  '/api/marketplace/payments/sslcommerz/cancel',
+  '/api/marketplace/payments/sslcommerz/ipn',
+  '/marketplace/payments/sslcommerz/success',
+  '/marketplace/payments/sslcommerz/fail',
+  '/marketplace/payments/sslcommerz/cancel',
+  '/marketplace/payments/sslcommerz/ipn',
 ]);

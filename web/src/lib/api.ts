@@ -216,6 +216,47 @@ export async function sendBroadcast(input: {
   });
 }
 
+export type DeliveryRates = {
+  id: string;
+  sameCityBdt: number;
+  otherCityBdt: number;
+};
+
+export type AdminPayout = {
+  id: string;
+  amountBdt: number;
+  channel: string;
+  accountName: string;
+  accountNumber: string;
+  bankName: string | null;
+  status: string;
+  createdAt: string;
+  seller: { id: string; displayName: string; email: string } | null;
+  shop: { id: string; name: string } | null;
+};
+
+export async function getDeliveryRates() {
+  return apiFetch<DeliveryRates>("/api/admin/delivery");
+}
+
+export async function setDeliveryRates(sameCityBdt: number, otherCityBdt: number) {
+  return apiFetch<DeliveryRates>("/api/admin/delivery", {
+    method: "PATCH",
+    body: JSON.stringify({ sameCityBdt, otherCityBdt }),
+  });
+}
+
+export async function listPayouts() {
+  return apiFetch<AdminPayout[]>("/api/admin/payouts");
+}
+
+export async function resolvePayout(id: string, action: "paid" | "rejected") {
+  return apiFetch<{ id: string; status: string }>(`/api/admin/payouts/${id}`, {
+    method: "POST",
+    body: JSON.stringify({ action }),
+  });
+}
+
 export async function patchUserRole(
   id: string,
   roleSlug: "SUPERADMIN" | "ADMIN" | "USER",

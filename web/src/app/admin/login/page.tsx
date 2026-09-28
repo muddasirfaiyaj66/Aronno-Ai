@@ -21,7 +21,7 @@ export default function AdminLoginPage() {
     try {
       const user = await login(email.trim().toLowerCase(), password);
       if (!isStaff(user.role.slug)) {
-        setError("শুধু অ্যাডমিন অ্যাকাউন্ট দিয়ে প্রবেশ করা যায়।");
+        setError("Only an admin account can sign in here.");
         return;
       }
       router.replace("/admin");
@@ -30,7 +30,7 @@ export default function AdminLoginPage() {
       setError(
         err instanceof ApiError
           ? err.message
-          : "লগইন করা যায়নি। ইমেইল ও পাসওয়ার্ড দেখুন।",
+          : "Could not sign in. Check the email and password.",
       );
     } finally {
       setLoading(false);
@@ -42,9 +42,9 @@ export default function AdminLoginPage() {
       <div className="hero-field relative hidden w-[46%] overflow-hidden lg:block">
         <div className="hero-sheen absolute inset-0" />
         <div className="relative flex h-full flex-col justify-end p-12 text-sand">
-          <p className="font-display text-6xl leading-none">আরণ্য</p>
+          <p className="text-6xl leading-none font-semibold">Aronno</p>
           <p className="mt-6 max-w-sm text-lg text-sand/75">
-            দলের জন্য নিরাপদ অ্যাডমিন প্যানেল — ব্যবহারকারী ও বিশ্লেষণ।
+            Operations monitor for accounts, sales, payouts, and delivery fees.
           </p>
         </div>
       </div>
@@ -59,18 +59,16 @@ export default function AdminLoginPage() {
               height={40}
               className="rounded-xl"
             />
-            <span className="font-display text-2xl text-forest">আরণ্য</span>
+            <span className="text-2xl font-semibold text-forest">Aronno</span>
           </Link>
 
           <div className="panel p-6 shadow-[0_24px_60px_-40px_rgba(10,40,31,0.45)] sm:p-8">
-            <h1 className="font-display text-3xl text-forest">অ্যাডমিন লগইন</h1>
-            <p className="mt-2 text-muted">
-              শুধু অনুমোদিত অ্যাডমিন ও সুপারঅ্যাডমিন প্রবেশ করতে পারবেন।
-            </p>
+            <h1 className="text-3xl font-semibold text-ink">Admin sign in</h1>
+            <p className="mt-2 text-muted">Only an admin or super admin can open the monitor.</p>
 
             <form onSubmit={onSubmit} className="mt-8 space-y-4">
               <label className="block space-y-1.5">
-                <span className="text-sm font-semibold text-muted">ইমেইল</span>
+                <span className="text-sm font-semibold text-muted">Email</span>
                 <input
                   className="field"
                   type="email"
@@ -82,7 +80,7 @@ export default function AdminLoginPage() {
                 />
               </label>
               <label className="block space-y-1.5">
-                <span className="text-sm font-semibold text-muted">পাসওয়ার্ড</span>
+                <span className="text-sm font-semibold text-muted">Password</span>
                 <input
                   className="field"
                   type="password"
@@ -108,14 +106,14 @@ export default function AdminLoginPage() {
                 className="btn btn-primary w-full"
                 disabled={loading}
               >
-                {loading ? "প্রবেশ হচ্ছে…" : "প্রবেশ করুন"}
+                {loading ? "Signing in…" : "Sign in"}
               </button>
             </form>
           </div>
 
           <p className="mt-6 text-center text-sm text-muted">
             <Link href="/" className="font-semibold text-forest hover:underline">
-              প্রচার পাতায় ফিরে যান
+              Back to the site
             </Link>
           </p>
         </div>

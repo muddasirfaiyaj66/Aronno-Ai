@@ -118,10 +118,21 @@ const STATUS_TABS: { id: string; label: string }[] = [
 // ─── Payment method label ─────────────────────────────────────────────────────
 const PAYMENT_LABEL: Record<string, string> = {
   cash_on_delivery: "ক্যাশ অন ডেলিভারি",
+  online: "অনলাইন পেমেন্ট",
+  mobile_banking: "মোবাইল ব্যাংকিং",
   paid: "পরিশোধিত",
-  pending: "অপেক্ষমাণ",
-  failed: "ব্যর্থ",
+  pending: "পেমেন্ট যাচাই হচ্ছে",
+  failed: "পেমেন্ট হয়নি",
 };
+
+function paymentCaption(method?: string, status?: string) {
+  const methodLabel = PAYMENT_LABEL[method ?? "cash_on_delivery"] ?? "ক্যাশ অন ডেলিভারি";
+  if (!method || method === "cash_on_delivery") {
+    return status === "paid" ? "ক্যাশ অন ডেলিভারি · পরিশোধিত" : methodLabel;
+  }
+  const statusLabel = PAYMENT_LABEL[status ?? ""] ?? status;
+  return statusLabel ? `${methodLabel} · ${statusLabel}` : methodLabel;
+}
 
 // ─── Order card ───────────────────────────────────────────────────────────────
 function OrderCard({
@@ -207,7 +218,7 @@ function OrderCard({
               {formatPriceBn(order.totalBdt)}
             </AppText>
             <AppText variant="caption" className="text-muted font-bengali-medium">
-              {PAYMENT_LABEL[order.paymentStatus] ?? order.paymentStatus}
+              {paymentCaption(order.paymentMethod, order.paymentStatus)}
             </AppText>
           </View>
         </View>

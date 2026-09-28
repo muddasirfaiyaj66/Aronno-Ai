@@ -10,29 +10,24 @@ const LINKS = [
 
 export function SiteHeader() {
   return (
-    <header className="site-header border-b border-border bg-white/95 shadow-[0_1px_0_rgba(16,31,24,0.04)] backdrop-blur-md">
+    <header className="site-header border-b border-border bg-sand/95 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3 md:px-6">
         <Link href="/" className="flex items-center gap-3 text-forest">
-          <Image src="/icon.png" alt="" width={40} height={40} className="rounded-xl" priority />
-          <span className="leading-none">
-            <span className="block font-display text-[1.55rem] tracking-tight">আরণ্য</span>
-            <span className="mt-1 block text-[0.65rem] font-semibold tracking-[0.16em] text-muted uppercase">
-              Aronno
-            </span>
-          </span>
+          <Image src="/icon.png" alt="" width={36} height={36} className="rounded-lg" priority />
+          <span className="font-display text-2xl leading-none tracking-tight">আরণ্য</span>
         </Link>
-        <nav className="hidden items-center gap-1 md:flex">
+        <nav className="hidden items-center gap-1 rounded-full border border-border bg-white/80 p-1 md:flex">
           {LINKS.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-full px-3.5 py-2 text-sm font-medium text-muted transition hover:bg-sand hover:text-forest"
+              className="rounded-full px-3.5 py-1.5 text-sm font-medium text-muted transition hover:bg-sand hover:text-forest"
             >
               {item.label}
             </Link>
           ))}
         </nav>
-        <Link href="/admin/login" className="btn btn-ghost !min-h-10 !px-4 text-sm">
+        <Link href="/admin/login" className="btn btn-primary !min-h-10 !px-4 text-sm">
           প্রশাসক
         </Link>
       </div>
@@ -41,7 +36,7 @@ export function SiteHeader() {
           <Link
             key={item.href}
             href={item.href}
-            className="shrink-0 rounded-full bg-sand px-3 py-1.5 text-sm font-medium text-forest"
+            className="shrink-0 rounded-full border border-border bg-white px-3 py-1.5 text-sm font-medium text-forest"
           >
             {item.label}
           </Link>

@@ -25,6 +25,25 @@ import { ReviewModal } from "@/components/market/ReviewModal";
 import { useGetOrderQuery, useUpdateOrderStatusMutation } from "@/services/api";
 import { formatDateBn, formatPriceBn, formatUnitBn, toBn } from "@/utils/marketFormatters";
 
+function paymentLabel(method?: string, status?: string) {
+  const methods: Record<string, string> = {
+    cash_on_delivery: "ক্যাশ অন ডেলিভারি",
+    online: "অনলাইন পেমেন্ট",
+    mobile_banking: "মোবাইল ব্যাংকিং",
+  };
+  const states: Record<string, string> = {
+    paid: "পরিশোধিত",
+    pending: "যাচাই হচ্ছে",
+    failed: "হয়নি",
+    cash_on_delivery: "ক্যাশ অন ডেলিভারি",
+  };
+  const methodLabel = methods[method ?? "cash_on_delivery"] ?? states[status ?? ""] ?? "ক্যাশ অন ডেলিভারি";
+  if (!method || method === "cash_on_delivery") {
+    return status === "paid" ? "ক্যাশ অন ডেলিভারি · পরিশোধিত" : methodLabel;
+  }
+  return `${methodLabel} · ${states[status ?? ""] ?? status ?? ""}`;
+}
+
 const TRACKING_STEPS = [
   { key: "pending", label: "অর্ডার করা হয়েছে", desc: "অর্ডারটি সফলভাবে জমা দেওয়া হয়েছে" },
   { key: "confirmed", label: "অর্ডার নিশ্চিত করা হয়েছে", desc: "বিক্রেতা অর্ডারটি গ্রহণ ও নিশ্চিত করেছেন" },
@@ -363,9 +382,7 @@ export default function OrderDetailsScreen() {
                 পেমেন্ট পদ্ধতি
               </AppText>
               <AppText variant="caption" className="font-bengali-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
-                {order.paymentStatus === "cash_on_delivery" || !order.paymentStatus
-                  ? "ক্যাশ অন ডেলিভারি"
-                  : order.paymentStatus}
+                {paymentLabel(order.paymentMethod, order.paymentStatus)}
               </AppText>
             </View>
           </View>

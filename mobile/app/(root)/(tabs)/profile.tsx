@@ -5,9 +5,11 @@ import {
   Image,
   KeyboardAvoidingView,
   Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -31,8 +33,10 @@ import {
   useGetMeQuery,
   useGetProfessionsQuery,
   useGetSessionsQuery,
+  useGetWalletQuery,
   useLogoutMutation,
   usePatchMeMutation,
+  useRequestPayoutMutation,
   useRevokeSessionMutation,
 } from "@/services/api";
 import { userFacingError } from "@/lib/userFacingError";
@@ -41,6 +45,7 @@ import { matchDistrictSlug, useFarmLocation } from "@/hooks/useFarmLocation";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { uploadImageToCloudinary } from "@/services/cloudinary";
 import { deviceLabel } from "@/lib/deviceLabel";
+import { formatPriceBn } from "@/utils/marketFormatters";
 import * as ImagePicker from "expo-image-picker";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
@@ -65,6 +70,8 @@ export default function ProfileScreen() {
   const [patchMe, { isLoading, error }] = usePatchMeMutation();
   const { preference, setPreference } = useTheme();
   const { data: sessionData } = useGetSessionsQuery();
+  const { data: wallet, refetch: refetchWallet } = useGetWalletQuery();
+  const [requestPayout, { isLoading: payingOut }] = useRequestPayoutMutation();
   const [revokeSession, { isLoading: revoking }] = useRevokeSessionMutation();
   const location = useFarmLocation();
   const [editing, setEditing] = useState(false);
@@ -79,6 +86,14 @@ export default function ProfileScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [payoutOpen, setPayoutOpen] = useState(false);
+  const [payoutChannel, setPayoutChannel] = useState<"bank" | "bkash" | "nagad">("bkash");
+  const [payoutAmount, setPayoutAmount] = useState("");
+  const [payoutName, setPayoutName] = useState("");
+  const [payoutAccount, setPayoutAccount] = useState("");
+  const [payoutBank, setPayoutBank] = useState("");
+  const [payoutError, setPayoutError] = useState<string | null>(null);
+  const [payoutOk, setPayoutOk] = useState(false);
 
   useEffect(() => {
     if (!me) return;
@@ -93,8 +108,9 @@ export default function ProfileScreen() {
       refetchMe(),
       refetchProfessions(),
       refetchDistricts(),
+      refetchWallet(),
     ]);
-  }, [refetchMe, refetchProfessions, refetchDistricts]);
+  }, [refetchMe, refetchProfessions, refetchDistricts, refetchWallet]);
 
   const { refreshControl } = usePullToRefresh(refreshAll);
 
@@ -227,6 +243,26 @@ export default function ProfileScreen() {
       },
       { text: "বাতিল", style: "cancel" },
     ]);
+  };
+
+  const submitPayout = async () => {
+    setPayoutError(null);
+    setPayoutOk(false);
+    const amountBdt = Number(payoutAmount.replace(/[^\d]/g, ""));
+    try {
+      await requestPayout({
+        amountBdt,
+        channel: payoutChannel,
+        accountName: payoutName.trim(),
+        accountNumber: payoutAccount.trim(),
+        bankName: payoutChannel === "bank" ? payoutBank.trim() : undefined,
+      }).unwrap();
+      setPayoutOk(true);
+      setPayoutAmount("");
+      setPayoutOpen(false);
+    } catch (err) {
+      setPayoutError(userFacingError(err, "generic", "টাকা তোলা যায়নি।"));
+    }
   };
 
   const confirmLogout = () => {
@@ -388,6 +424,125 @@ export default function ProfileScreen() {
               </AppText>
             ) : null}
           </View>
+
+          <View className="overflow-hidden rounded-3xl border border-border bg-card">
+            <View className="flex-row">
+              {[
+                ["খরচ", wallet?.spentBdt ?? 0],
+                ["আয়", wallet?.earnedBdt ?? 0],
+                ["তুলতে পারবেন", wallet?.availableBdt ?? 0],
+              ].map(([label, value], index) => (
+                <View
+                  key={String(label)}
+                  className={`flex-1 px-3 py-4 ${index > 0 ? "border-l border-border" : ""}`}
+                >
+                  <AppText variant="caption" className="text-muted">
+                    {label}
+                  </AppText>
+                  <AppText variant="body" className="mt-1 font-bengali-bold text-ink">
+                    {formatPriceBn(Number(value))}
+                  </AppText>
+                </View>
+              ))}
+            </View>
+            {wallet?.shop ? (
+              <Pressable
+                onPress={() => {
+                  setPayoutError(null);
+                  setPayoutOpen(true);
+                }}
+                accessibilityRole="button"
+                className="border-t border-border px-4 py-3"
+              >
+                <AppText variant="body" className="text-center font-bengali-bold text-primary">
+                  আয় তুলুন · ব্যাংক, বিকাশ বা নগদ
+                </AppText>
+              </Pressable>
+            ) : (
+              <AppText variant="caption" className="border-t border-border px-4 py-3 text-center text-muted">
+                দোকান খুললে আয় এখান থেকে তুলতে পারবেন।
+              </AppText>
+            )}
+            {payoutOk ? (
+              <AppText variant="caption" className="px-4 pb-3 text-center text-primary">
+                অনুরোধ পাঠানো হয়েছে। অ্যাডমিন পাঠানোর পর নিশ্চিত করবেন।
+              </AppText>
+            ) : null}
+          </View>
+
+          <Modal visible={payoutOpen} transparent animationType="fade" onRequestClose={() => setPayoutOpen(false)}>
+            <Pressable className="flex-1 justify-end bg-black/40" onPress={() => setPayoutOpen(false)}>
+              <Pressable className="rounded-t-3xl bg-card px-5 pb-8 pt-5" onPress={() => undefined}>
+                <AppText variant="subtitle" className="font-bengali-bold text-ink">
+                  আয় তুলুন
+                </AppText>
+                <AppText variant="caption" className="mt-1 text-muted">
+                  সর্বোচ্চ {formatPriceBn(wallet?.availableBdt ?? 0)}। অঙ্ক সার্ভার মিলিয়ে নেয়।
+                </AppText>
+                <View className="mt-4 flex-row gap-2">
+                  {(
+                    [
+                      ["bkash", "বিকাশ"],
+                      ["nagad", "নগদ"],
+                      ["bank", "ব্যাংক"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <Pressable
+                      key={id}
+                      onPress={() => setPayoutChannel(id)}
+                      className={`flex-1 rounded-2xl border px-2 py-3 ${
+                        payoutChannel === id ? "border-primary bg-primary/10" : "border-border"
+                      }`}
+                    >
+                      <AppText variant="caption" className="text-center font-bengali-bold text-ink">
+                        {label}
+                      </AppText>
+                    </Pressable>
+                  ))}
+                </View>
+                <TextInput
+                  value={payoutAmount}
+                  onChangeText={setPayoutAmount}
+                  keyboardType="number-pad"
+                  placeholder="টাকার পরিমাণ"
+                  placeholderTextColor={colors.muted}
+                  className="mt-4 rounded-2xl border border-border px-4 py-3 text-ink"
+                />
+                <TextInput
+                  value={payoutName}
+                  onChangeText={setPayoutName}
+                  placeholder="অ্যাকাউন্টের নাম"
+                  placeholderTextColor={colors.muted}
+                  className="mt-3 rounded-2xl border border-border px-4 py-3 text-ink"
+                />
+                <TextInput
+                  value={payoutAccount}
+                  onChangeText={setPayoutAccount}
+                  keyboardType={payoutChannel === "bank" ? "number-pad" : "phone-pad"}
+                  placeholder={payoutChannel === "bank" ? "অ্যাকাউন্ট নম্বর" : "০১xxxxxxxxx"}
+                  placeholderTextColor={colors.muted}
+                  className="mt-3 rounded-2xl border border-border px-4 py-3 text-ink"
+                />
+                {payoutChannel === "bank" ? (
+                  <TextInput
+                    value={payoutBank}
+                    onChangeText={setPayoutBank}
+                    placeholder="ব্যাংকের নাম"
+                    placeholderTextColor={colors.muted}
+                    className="mt-3 rounded-2xl border border-border px-4 py-3 text-ink"
+                  />
+                ) : null}
+                {payoutError ? (
+                  <AppText variant="caption" className="mt-3 text-severity-high">
+                    {payoutError}
+                  </AppText>
+                ) : null}
+                <View className="mt-4">
+                  <PrimaryButton label="অনুরোধ পাঠান" loading={payingOut} onPress={() => void submitPayout()} />
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
 
           {editing ? (
           <>

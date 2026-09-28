@@ -34,7 +34,7 @@ export default function AdminUsersPage() {
         await reload();
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "তালিকা আনা যায়নি।");
+          setError(e instanceof Error ? e.message : "Could not load users.");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -74,7 +74,7 @@ export default function AdminUsersPage() {
       const next = await patchUserActive(u.id, !u.isActive);
       setUsers((prev) => prev.map((row) => (row.id === u.id ? next : row)));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "আপডেট ব্যর্থ।");
+      setError(e instanceof ApiError ? e.message : "Could not update the user.");
     } finally {
       setBusyId(null);
     }
@@ -88,41 +88,37 @@ export default function AdminUsersPage() {
       const next = await patchUserRole(u.id, roleSlug);
       setUsers((prev) => prev.map((row) => (row.id === u.id ? next : row)));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "রোল বদলানো যায়নি।");
+      setError(e instanceof ApiError ? e.message : "Could not change the role.");
     } finally {
       setBusyId(null);
     }
   }
 
   if (loading) {
-    return <p className="text-muted">ব্যবহারকারী লোড হচ্ছে…</p>;
+    return <p className="text-muted">Loading users…</p>;
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-3xl text-forest md:text-4xl">
-          ব্যবহারকারী
-        </h1>
-        <p className="mt-1 text-muted">
-          সব অ্যাকাউন্ট, ভূমিকা ও সক্রিয় অবস্থা — একই ব্যাকএন্ড থেকে।
-        </p>
+        <h1 className="text-3xl font-semibold text-ink">Users</h1>
+        <p className="mt-1 text-muted">Accounts, roles, and whether someone can sign in.</p>
       </div>
 
       <div className="panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
         <input
           className="field max-w-md"
-          placeholder="নাম, ইমেইল, ফোন বা জেলা খুঁজুন"
+          placeholder="Search name, email, phone, or district"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
         <div className="flex flex-wrap gap-2">
           {(
             [
-              ["all", "সব"],
-              ["USER", "কৃষক"],
-              ["ADMIN", "অ্যাডমিন"],
-              ["inactive", "বন্ধ"],
+              ["all", "All"],
+              ["USER", "Farmers"],
+              ["ADMIN", "Admins"],
+              ["inactive", "Blocked"],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -132,7 +128,7 @@ export default function AdminUsersPage() {
               className={`rounded-xl px-3.5 py-2 text-sm font-semibold ${
                 filter === id
                   ? "bg-forest text-white"
-                  : "border border-border bg-white text-muted"
+                  : "border border-border bg-[var(--white)] text-muted"
               }`}
             >
               {label}
@@ -154,12 +150,12 @@ export default function AdminUsersPage() {
         <table className="min-w-full text-left text-sm">
           <thead className="border-b border-border bg-panel text-muted">
             <tr>
-              <th className="px-4 py-3 font-semibold">নাম</th>
-              <th className="px-4 py-3 font-semibold">ভূমিকা</th>
-              <th className="px-4 py-3 font-semibold">জেলা</th>
-              <th className="px-4 py-3 font-semibold">যাচাই</th>
-              <th className="px-4 py-3 font-semibold">অবস্থা</th>
-              <th className="px-4 py-3 font-semibold">কার্য</th>
+              <th className="px-4 py-3 font-semibold">Name</th>
+              <th className="px-4 py-3 font-semibold">Role</th>
+              <th className="px-4 py-3 font-semibold">District</th>
+              <th className="px-4 py-3 font-semibold">Email</th>
+              <th className="px-4 py-3 font-semibold">Status</th>
+              <th className="px-4 py-3 font-semibold">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -194,7 +190,7 @@ export default function AdminUsersPage() {
                       </select>
                     ) : (
                       <span className="rounded-lg bg-leaf/15 px-2.5 py-1 text-xs font-semibold text-forest">
-                        {u.role.nameBn}
+                        {u.role.slug}
                       </span>
                     )}
                   </td>
@@ -209,7 +205,7 @@ export default function AdminUsersPage() {
                           : "bg-harvest/15 text-harvest"
                       }`}
                     >
-                      {u.emailVerifiedAt ? "যাচাই" : "অযাচাই"}
+                      {u.emailVerifiedAt ? "Verified" : "Unverified"}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -220,7 +216,7 @@ export default function AdminUsersPage() {
                           : "bg-danger/10 text-danger"
                       }`}
                     >
-                      {u.isActive ? "সক্রিয়" : "বন্ধ"}
+                      {u.isActive ? "Active" : "Blocked"}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -230,7 +226,7 @@ export default function AdminUsersPage() {
                       onClick={() => void toggleActive(u)}
                       className="btn btn-ghost !min-h-9 !px-3 text-xs"
                     >
-                      {u.isActive ? "বন্ধ করুন" : "চালু করুন"}
+                      {u.isActive ? "Block" : "Activate"}
                     </button>
                   </td>
                 </tr>
@@ -239,7 +235,7 @@ export default function AdminUsersPage() {
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center text-muted">
-                  কোনো মিল পাওয়া যায়নি।
+                  No matches.
                 </td>
               </tr>
             ) : null}

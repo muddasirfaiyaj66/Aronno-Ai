@@ -23,6 +23,7 @@ const ORDER_LABEL: Record<string, string> = {
   shipped: 'পাঠানো হয়েছে',
   delivered: 'ডেলিভারি সম্পন্ন',
   cancelled: 'বাতিল করা হয়েছে',
+  paid: 'অনলাইন পেমেন্ট নিশ্চিত হয়েছে',
 };
 
 const HEAT_TTL_MS = 60_000;

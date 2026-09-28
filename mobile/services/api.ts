@@ -166,6 +166,7 @@ export const api = createApi({
     "Product",
     "Cart",
     "Order",
+    "Wallet",
     "Session",
     "Notification",
   ],
@@ -873,8 +874,57 @@ export const api = createApi({
         }
       },
     }),
+    getWallet: builder.query<
+      {
+        spentBdt: number;
+        earnedBdt: number;
+        availableBdt: number;
+        reservedBdt: number;
+        shop: { id: string; name: string } | null;
+        payouts: {
+          id: string;
+          amountBdt: number;
+          channel: string;
+          status: string;
+          accountNumber: string;
+          createdAt: string;
+        }[];
+      },
+      void
+    >({
+      query: () => "/marketplace/wallet",
+      transformResponse: (r) => unwrap(r),
+      providesTags: ["Wallet"],
+    }),
+    requestPayout: builder.mutation<
+      { id: string; status: string },
+      {
+        amountBdt: number;
+        channel: "bank" | "bkash" | "nagad";
+        accountName: string;
+        accountNumber: string;
+        bankName?: string;
+      }
+    >({
+      query: (body) => ({ url: "/marketplace/wallet/payouts", method: "POST", body }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Wallet"],
+    }),
+    quoteOrder: builder.mutation<
+      {
+        currency: "BDT";
+        subtotalBdt: number;
+        deliveryFeeBdt: number;
+        totalBdt: number;
+        sameCity: boolean;
+      },
+      { shopId: string; districtId: string }
+    >({
+      query: (body) => ({ url: "/marketplace/orders/quote", method: "POST", body }),
+      transformResponse: (r) => unwrap(r),
+    }),
     checkout: builder.mutation<
-      any,
+      { id: string; orderNumber: string; paymentStatus: string; gatewayUrl: string | null },
       {
         shopId: string;
         shippingAddress: string;
@@ -882,7 +932,7 @@ export const api = createApi({
         districtId: string;
         buyerName?: string;
         upazila?: string;
-        paymentMethod?: string;
+        paymentMethod?: "cash_on_delivery" | "online" | "mobile_banking";
         notes?: string;
       }
     >({
@@ -1020,7 +1070,11 @@ export const {
   useUpdateQuantityMutation,
   useRemoveItemMutation,
   useClearCartMutation,
+  useGetWalletQuery,
+  useRequestPayoutMutation,
+  useQuoteOrderMutation,
   useCheckoutMutation,
+  useLazyGetOrderQuery,
   useGetBuyerOrdersQuery,
   useGetShopOrdersQuery,
   useGetOrderQuery,

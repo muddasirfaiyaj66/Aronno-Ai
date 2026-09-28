@@ -6,10 +6,15 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AddCartItemDto, UpdateCartItemDto } from '../dto/cart.dto';
+import { ProductAvailabilityService } from './product-availability.service';
 
 @Injectable()
 export class CartService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private availability(): ProductAvailabilityService {
+    return ProductAvailabilityService.getInstance();
+  }
 
   async getCart(userId: string) {
     let cart = await this.prisma.cart.findUnique({
@@ -38,7 +43,7 @@ export class CartService {
     const enrichedItems = cart.items
       .map((item) => {
         const product = productMap.get(item.productId);
-        if (!product || product.status !== 'active' || !product.shop?.isActive) return null;
+        if (!product || !this.availability().isListed(product)) return null;
         const currentPrice = product.pricePerUnit;
         const totalPrice = currentPrice * item.quantity;
         return {
@@ -76,21 +81,10 @@ export class CartService {
       include: { shop: true },
     });
 
-    if (!product || product.status !== 'active' || !product.shop?.isActive) {
+    if (!product || !product.shop) {
       throw new NotFoundException('Product not found or shop is unavailable.');
     }
-
-    if (dto.quantity < product.minOrderQuantity) {
-      throw new BadRequestException(
-        `Minimum order quantity for this product is ${product.minOrderQuantity} ${product.unit}.`,
-      );
-    }
-
-    if (dto.quantity > product.availableQuantity) {
-      throw new BadRequestException(
-        `Only ${product.availableQuantity} ${product.unit} available in stock.`,
-      );
-    }
+    this.availability().ensurePurchasable(product, dto.quantity);
 
     let cart = await this.prisma.cart.findUnique({
       where: { userId },
@@ -154,11 +148,7 @@ export class CartService {
 
         if (existingIndex >= 0) {
           const newQty = updatedItems[existingIndex].quantity + dto.quantity;
-          if (newQty > product.availableQuantity) {
-            throw new BadRequestException(
-              `Cannot add ${dto.quantity}. Only ${product.availableQuantity} in stock.`,
-            );
-          }
+          this.availability().ensurePurchasable(product, newQty);
           updatedItems[existingIndex] = {
             ...updatedItems[existingIndex],
             quantity: newQty,
@@ -201,19 +191,10 @@ export class CartService {
     if (!cart) throw new NotFoundException('Cart not found.');
 
     const product = await this.prisma.product.findUnique({ where: { id: productId } });
-    if (!product || product.status !== 'active') {
+    if (!product) {
       throw new NotFoundException('Product unavailable.');
     }
-
-    if (dto.quantity < product.minOrderQuantity) {
-      throw new BadRequestException(
-        `Minimum order quantity is ${product.minOrderQuantity} ${product.unit}.`,
-      );
-    }
-
-    if (dto.quantity > product.availableQuantity) {
-      throw new BadRequestException(`Only ${product.availableQuantity} in stock.`);
-    }
+    this.availability().ensurePurchasable(product, dto.quantity);
 
     const updatedItems = cart.items.map((item) =>
       item.productId === productId

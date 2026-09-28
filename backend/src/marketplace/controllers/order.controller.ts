@@ -23,6 +23,12 @@ export class OrderController {
     private readonly reviewService: ReviewService,
   ) {}
 
+  @Post('quote')
+  async quote(@CurrentUser() user: AuthUser, @Body() dto: CreateOrderDto) {
+    const data = await this.orderService.quote(user.id, dto.shopId, dto.districtId);
+    return { success: true, data };
+  }
+
   @Post()
   async checkout(
     @CurrentUser() user: AuthUser,

@@ -1,0 +1,9 @@
+# Single-package project settings for pnpm v12+.
+# Expo + Metro on Windows: avoid broken nested watches under pnpm.
+nodeLinker: hoisted
+
+# Packages allowed to run install scripts.
+allowBuilds:
+  '@siteed/sherpa-onnx.rn': true
+  llama.rn: true
+  unrs-resolver: true

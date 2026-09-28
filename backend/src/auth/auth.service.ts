@@ -61,7 +61,23 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly mail: MailService,
   ) {
-    this.google = new OAuth2Client(this.config.get<string>('GOOGLE_CLIENT_ID'));
+    this.google = new OAuth2Client();
+  }
+
+  private googleAudiences(): string[] {
+    const values = [
+      this.config.get<string>('GOOGLE_CLIENT_ID'),
+      this.config.get<string>('GOOGLE_ANDROID_CLIENT_ID'),
+      this.config.get<string>('GOOGLE_IOS_CLIENT_ID'),
+    ];
+    return [
+      ...new Set(
+        values
+          .flatMap((value) => (value ?? '').split(','))
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    ];
   }
 
   toDto(user: {
@@ -408,8 +424,8 @@ export class AuthService {
     res: Response,
     meta: { userAgent?: string; ip?: string; deviceName?: string },
   ) {
-    const clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
-    if (!clientId) throw Errors.aiUnavailable();
+    const audiences = this.googleAudiences();
+    if (audiences.length === 0) throw Errors.googleUnavailable();
 
     let payload: {
       sub?: string;
@@ -420,7 +436,7 @@ export class AuthService {
     try {
       const ticket = await this.google.verifyIdToken({
         idToken,
-        audience: clientId,
+        audience: audiences,
       });
       payload = ticket.getPayload() ?? {};
     } catch {
@@ -455,6 +471,8 @@ export class AuthService {
         },
         include: userInclude,
       });
+    } else if (!user.isActive) {
+      throw Errors.forbidden();
     } else if (!user.googleSub) {
       user = await this.prisma.user.update({
         where: { id: user.id },

@@ -86,4 +86,10 @@ export const Errors = {
       'কোডের মেয়াদ শেষ। "আবার কোড পাঠান" চাপুন।',
       HttpStatus.BAD_REQUEST,
     ),
+  googleUnavailable: () =>
+    new ApiError(
+      'GOOGLE_UNAVAILABLE',
+      'গুগল লগইন এখন চালু নেই। ইমেইল দিয়ে লগইন করুন।',
+      HttpStatus.SERVICE_UNAVAILABLE,
+    ),
 };

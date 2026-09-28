@@ -9,6 +9,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "app.aronno.mobile",
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "আরণ্যকে আপনার ক্ষেতের আবহাওয়া দেখাতে অবস্থান ব্যবহারের অনুমতি দিন।",

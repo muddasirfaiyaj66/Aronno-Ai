@@ -38,7 +38,7 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen">
+    <div className="admin-login relative flex min-h-screen">
       <div className="hero-field relative hidden w-[46%] overflow-hidden lg:block">
         <div className="hero-sheen absolute inset-0" />
         <div className="relative flex h-full flex-col justify-end p-12 text-sand">

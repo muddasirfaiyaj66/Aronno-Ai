@@ -161,12 +161,24 @@ Remove spaces in `SMTP_PASS` if the server rejects it (`xxxxyyyyzzzzwwww`).
 
 ### 4.4 Google sign-in (optional)
 
-Leave `GOOGLE_CLIENT_ID` empty if you only use email/password.
+Leave the Google client IDs empty if you only use email and password. The login screen then says Google is not configured.
 
-1. [Google Cloud Console](https://console.cloud.google.com/) → new project → **APIs & Services → Credentials → OAuth client ID**.
-2. Create a **Web** client. Copy the client ID.
-3. Backend: `GOOGLE_CLIENT_ID=....apps.googleusercontent.com`
-4. Mobile: `EXPO_PUBLIC_GOOGLE_CLIENT_ID=` same value (or the Expo iOS/Android client if you split them later).
+1. [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services → OAuth consent screen**. Add the scopes `openid`, `email`, and `profile`. Add your Gmail address as a test user while the app is in testing.
+2. **Credentials → Create OAuth client ID → Web**. Copy that client ID.
+3. **Android** client: package name `app.aronno.mobile`. SHA-1 comes from the keystore that signs the dev client (`cd mobile/android` then `.\gradlew.bat signingReport`, or EAS credentials).
+4. **iOS** client: bundle ID `app.aronno.mobile`.
+5. Backend `.env`:
+
+```env
+GOOGLE_CLIENT_ID=WEB_CLIENT_ID.apps.googleusercontent.com
+GOOGLE_ANDROID_CLIENT_ID=ANDROID_CLIENT_ID.apps.googleusercontent.com
+GOOGLE_IOS_CLIENT_ID=IOS_CLIENT_ID.apps.googleusercontent.com
+```
+
+6. Mobile `.env` uses the same three IDs as `EXPO_PUBLIC_GOOGLE_CLIENT_ID` (web), `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID`, and `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`.
+7. Rebuild the phone app (`npx expo run:android` or an EAS dev build) after the Android or iOS ID is set. The rebuild registers the Google return link. Restart the API after the backend IDs change.
+
+The phone opens Google, then sends the ID token to `POST /api/auth/google`. The API checks that the token audience is one of those client IDs. It never trusts a name or email sent by the app itself. A new Google user is created as a verified farmer. An existing email account is linked on the first Google login.
 
 ### 4.5 Gemini / TTS / S3
 

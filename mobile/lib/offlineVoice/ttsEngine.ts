@@ -319,7 +319,77 @@ function bytesFromBase64(base64: string): Uint8Array {
   return bytes;
 }
 
-/** Online replies use Gemini's female Bangla voice. Offline stays on the phone. */
+/** Matches the backend free-tier clip. Longer text is several of these, not one big call. */
+const CLOUD_TTS_CHARS = 480;
+/** Six clips cover a full treatment read-aloud without spending the daily free quota on one tap. */
+const CLOUD_TTS_MAX_CHUNKS = 6;
+
+function cloudSpeechChunks(text: string): string[] {
+  const sentences = text
+    .split(/(?<=[।!?])\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const pieces = sentences.length ? sentences : [text];
+  const chunks: string[] = [];
+  let buf = "";
+
+  const flush = () => {
+    const next = buf.trim();
+    buf = "";
+    if (next && chunks.length < CLOUD_TTS_MAX_CHUNKS) chunks.push(next);
+  };
+
+  for (const piece of pieces) {
+    if (chunks.length >= CLOUD_TTS_MAX_CHUNKS) break;
+    let rest = piece;
+    while (rest && chunks.length < CLOUD_TTS_MAX_CHUNKS) {
+      const joined = buf ? `${buf} ${rest}` : rest;
+      if (joined.length <= CLOUD_TTS_CHARS) {
+        buf = joined;
+        rest = "";
+        break;
+      }
+      if (buf) flush();
+      if (rest.length <= CLOUD_TTS_CHARS) {
+        buf = rest;
+        rest = "";
+        break;
+      }
+      const window = rest.slice(0, CLOUD_TTS_CHARS);
+      const cut = Math.max(window.lastIndexOf(" "), window.lastIndexOf("।"));
+      const at = cut > 80 ? cut : CLOUD_TTS_CHARS;
+      chunks.push(rest.slice(0, at).trim());
+      rest = rest.slice(at).trim();
+    }
+  }
+  flush();
+  return chunks;
+}
+
+async function fetchCloudWav(text: string, gen: number, index: number) {
+  const { api } = await import("@/services/api");
+  const { store } = await import("@/store");
+  const { File, Paths } = await import("expo-file-system");
+  const result = await Promise.race([
+    store
+      .dispatch(
+        api.endpoints.speak.initiate({
+          textBn: text.slice(0, CLOUD_TTS_CHARS),
+        }),
+      )
+      .unwrap(),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 12000)),
+  ]);
+  const audio = result?.audioBase64;
+  if (!audio || audio.length < 80 || gen !== speakGen) return null;
+  const file = new File(Paths.cache, `aronno-voice-${gen}-${index}.wav`);
+  if (file.exists) file.delete();
+  file.create();
+  file.write(bytesFromBase64(audio));
+  return file;
+}
+
+/** Online replies use Gemini's free female Bangla voice. Offline stays on the phone. */
 async function speakWithCloudFemale(
   text: string,
   handlers?: {
@@ -330,28 +400,29 @@ async function speakWithCloudFemale(
 ): Promise<boolean> {
   const { fetchIsOnline } = await import("@/hooks/useIsOnline");
   if (!(await fetchIsOnline())) return false;
+  const chunks = cloudSpeechChunks(text);
+  if (!chunks.length) return false;
   const gen = speakGen;
+  let played = false;
   try {
-    const { api } = await import("@/services/api");
-    const { store } = await import("@/store");
-    const { File, Paths } = await import("expo-file-system");
-    const result = await Promise.race([
-      store
-        .dispatch(
-          api.endpoints.speak.initiate({ textBn: text.slice(0, 700) }),
-        )
-        .unwrap(),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 14000)),
-    ]);
-    const audio = result?.audioBase64;
-    if (!audio || audio.length < 80 || gen !== speakGen) return false;
-    const file = new File(Paths.cache, `aronno-voice-${gen}.wav`);
-    if (file.exists) file.delete();
-    file.create();
-    file.write(bytesFromBase64(audio));
     await enablePlaybackAudio();
-    await playFile(file.uri, gen);
-    file.delete();
+    let upcoming = fetchCloudWav(chunks[0], gen, 0);
+    for (let i = 0; i < chunks.length; i += 1) {
+      if (gen !== speakGen) {
+        handlers?.onStopped?.();
+        return true;
+      }
+      const file = await upcoming;
+      if (!file) break;
+      if (i + 1 < chunks.length) upcoming = fetchCloudWav(chunks[i + 1], gen, i + 1);
+      try {
+        await playFile(file.uri, gen);
+        played = true;
+      } finally {
+        if (file.exists) file.delete();
+      }
+    }
+    if (!played) return false;
     if (gen !== speakGen) {
       handlers?.onStopped?.();
       return true;
@@ -360,7 +431,7 @@ async function speakWithCloudFemale(
     handlers?.onDone?.();
     return true;
   } catch {
-    return false;
+    return played;
   }
 }
 

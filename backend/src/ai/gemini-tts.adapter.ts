@@ -4,6 +4,12 @@ import { Errors } from '../common/errors';
 import type { TtsPort } from './ports';
 
 const TTS_MODEL = 'gemini-3.8-flash-lite-tts';
+/**
+ * One free Flash-Lite call. The model allows 8,192 input tokens, but a long
+ * clip blows the free function time and the free daily audio budget.
+ * The app speaks longer answers as several clips of this size.
+ */
+const MAX_TTS_CHARS = 480;
 const FEMALE_VOICE = 'Kore';
 const STYLE =
   'Warm Bangladeshi woman in her thirties. Natural Dhaka Bangla, calm caring neighbor, moderate pace, soft empathy, conversational. Not a news reader, not theatrical, not a child.';
@@ -24,11 +30,11 @@ export class GeminiTtsAdapter implements TtsPort {
     const key = this.config.get<string>('GEMINI_API_KEY')?.trim() ?? '';
     if (key.length < 8) throw Errors.aiUnavailable();
 
-    const transcript = textBn.replace(/\s+/g, ' ').trim().slice(0, 700);
+    const transcript = textBn.replace(/\s+/g, ' ').trim().slice(0, MAX_TTS_CHARS);
     if (!transcript) throw Errors.aiUnavailable();
 
-    const model =
-      this.config.get<string>('GEMINI_TTS_MODEL')?.trim() || TTS_MODEL;
+    const configured = this.config.get<string>('GEMINI_TTS_MODEL')?.trim() ?? '';
+    const model = configured.includes('flash-lite-tts') ? configured : TTS_MODEL;
     const voice =
       this.config.get<string>('GEMINI_TTS_VOICE')?.trim() || FEMALE_VOICE;
 

@@ -18,7 +18,8 @@
         "EXPO_PUBLIC_API_URL": "https://aronno-api.vercel.app/api",
         "EXPO_PUBLIC_OLLAMA_API_KEY": "d435881fe5884918973f08d818b0beba",
         "EXPO_PUBLIC_OLLAMA_HOST": "https://ollama.com",
-        "EXPO_PUBLIC_OLLAMA_CHAT_MODEL": "gemma4:31b-cloud"
+        "EXPO_PUBLIC_OLLAMA_CHAT_MODEL": "gemma4:31b-cloud",
+        "EXPO_PUBLIC_GEMINI_TTS_API_KEY": "AQ.Ab8RN6Ipwyd1IXyffR9xVsAG6n3A11pX6wtUcCaYwUmPteyJcQ"
       }
     },
     "dev-client": {
@@ -36,7 +37,8 @@
         "EXPO_PUBLIC_API_URL": "https://aronno-api.vercel.app/api",
         "EXPO_PUBLIC_OLLAMA_API_KEY": "d435881fe5884918973f08d818b0beba",
         "EXPO_PUBLIC_OLLAMA_HOST": "https://ollama.com",
-        "EXPO_PUBLIC_OLLAMA_CHAT_MODEL": "gemma4:31b-cloud"
+        "EXPO_PUBLIC_OLLAMA_CHAT_MODEL": "gemma4:31b-cloud",
+        "EXPO_PUBLIC_GEMINI_TTS_API_KEY": "AQ.Ab8RN6Ipwyd1IXyffR9xVsAG6n3A11pX6wtUcCaYwUmPteyJcQ"
       }
     },
     "preview": {
@@ -53,7 +55,8 @@
         "EXPO_PUBLIC_API_URL": "https://aronno-api.vercel.app/api",
         "EXPO_PUBLIC_OLLAMA_API_KEY": "d435881fe5884918973f08d818b0beba",
         "EXPO_PUBLIC_OLLAMA_HOST": "https://ollama.com",
-        "EXPO_PUBLIC_OLLAMA_CHAT_MODEL": "gemma4:31b-cloud"
+        "EXPO_PUBLIC_OLLAMA_CHAT_MODEL": "gemma4:31b-cloud",
+        "EXPO_PUBLIC_GEMINI_TTS_API_KEY": "AQ.Ab8RN6Ipwyd1IXyffR9xVsAG6n3A11pX6wtUcCaYwUmPteyJcQ"
       }
     },
     "production": {
@@ -69,7 +72,8 @@
         "EXPO_PUBLIC_API_URL": "https://aronno-api.vercel.app/api",
         "EXPO_PUBLIC_OLLAMA_API_KEY": "d435881fe5884918973f08d818b0beba",
         "EXPO_PUBLIC_OLLAMA_HOST": "https://ollama.com",
-        "EXPO_PUBLIC_OLLAMA_CHAT_MODEL": "gemma4:31b-cloud"
+        "EXPO_PUBLIC_OLLAMA_CHAT_MODEL": "gemma4:31b-cloud",
+        "EXPO_PUBLIC_GEMINI_TTS_API_KEY": "AQ.Ab8RN6Ipwyd1IXyffR9xVsAG6n3A11pX6wtUcCaYwUmPteyJcQ"
       }
     }
   },

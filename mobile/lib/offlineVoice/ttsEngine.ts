@@ -23,6 +23,7 @@ let sherpaReady = false;
 let sherpaDisabled = false;
 let speakQueue: Promise<void> = Promise.resolve();
 let playingSound: Audio.Sound | null = null;
+let speakGen = 0;
 
 type TtsApi = {
   initialize: (config: Record<string, unknown>) => Promise<{
@@ -167,6 +168,66 @@ async function stopPlayingSound() {
   }
 }
 
+/** First sentence starts quickly; the rest is synthesized while it plays. */
+function speechPlan(text: string): string[] {
+  const parts = text
+    .split(/(?<=[।!?])\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length <= 1) return [text];
+  const first = parts[0];
+  const rest = parts.slice(1).join(" ");
+  if (rest.length <= 240) return [first, rest];
+  const mid = Math.ceil(parts.length / 2);
+  return [first, parts.slice(1, mid).join(" "), parts.slice(mid).join(" ")].filter(
+    Boolean,
+  );
+}
+
+async function synthesizeSherpa(
+  TTS: TtsApi,
+  text: string,
+): Promise<string | null> {
+  const result = await TTS.generateSpeech(text, {
+    speakingRate: 1.05,
+    playAudio: false,
+  });
+  if (!result.success || !result.filePath) return null;
+  return result.filePath.startsWith("file:")
+    ? result.filePath
+    : `file://${result.filePath}`;
+}
+
+async function playFile(uri: string, gen: number): Promise<void> {
+  if (gen !== speakGen) return;
+  await stopPlayingSound();
+  if (gen !== speakGen) return;
+  const { sound } = await Audio.Sound.createAsync(
+    { uri },
+    { shouldPlay: true, progressUpdateIntervalMillis: 80 },
+  );
+  if (gen !== speakGen) {
+    await sound.unloadAsync().catch(() => undefined);
+    return;
+  }
+  playingSound = sound;
+  await new Promise<void>((resolve, reject) => {
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (gen !== speakGen) {
+        resolve();
+        return;
+      }
+      if (!status.isLoaded) {
+        if ("error" in status && status.error) {
+          reject(new Error(String(status.error)));
+        }
+        return;
+      }
+      if (status.didJustFinish) resolve();
+    });
+  });
+}
+
 async function speakWithSherpa(
   text: string,
   handlers?: {
@@ -177,31 +238,27 @@ async function speakWithSherpa(
 ): Promise<boolean> {
   const TTS = await getTTS();
   if (!TTS || !sherpaReady) return false;
+  const gen = speakGen;
+  const plan = speechPlan(text);
   try {
     await enablePlaybackAudio();
-    const result = await TTS.generateSpeech(text, {
-      speakingRate: 1,
-      playAudio: false,
-    });
-    if (!result.success || !result.filePath) return false;
-
-    await stopPlayingSound();
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: result.filePath.startsWith("file:") ? result.filePath : `file://${result.filePath}` },
-      { shouldPlay: true },
-    );
-    playingSound = sound;
-    await new Promise<void>((resolve, reject) => {
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (!status.isLoaded) {
-          if ("error" in status && status.error) {
-            reject(new Error(String(status.error)));
-          }
-          return;
-        }
-        if (status.didJustFinish) resolve();
-      });
-    });
+    let upcoming = synthesizeSherpa(TTS, plan[0]);
+    for (let i = 0; i < plan.length; i++) {
+      if (gen !== speakGen) {
+        handlers?.onStopped?.();
+        return true;
+      }
+      const uri = await upcoming;
+      if (!uri) return false;
+      if (i + 1 < plan.length) {
+        upcoming = synthesizeSherpa(TTS, plan[i + 1]);
+      }
+      await playFile(uri, gen);
+    }
+    if (gen !== speakGen) {
+      handlers?.onStopped?.();
+      return true;
+    }
     await stopPlayingSound();
     handlers?.onDone?.();
     return true;
@@ -265,6 +322,7 @@ export async function ensureTtsInitialized(): Promise<void> {
 }
 
 export async function stopOfflineSpeech(): Promise<void> {
+  speakGen += 1;
   speakQueue = Promise.resolve();
   await stopPlayingSound();
   await stopBanglaSpeech().catch(() => undefined);

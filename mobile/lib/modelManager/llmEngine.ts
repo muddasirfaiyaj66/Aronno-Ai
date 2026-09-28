@@ -386,7 +386,13 @@ async function completeOnce(
     await llama.completion(
       {
         ...sampling,
-        messages: [{ role: "user", content: promptBn.trim() }],
+        messages: [
+          ...history.slice(-4).map((t) => ({
+            role: t.role === "assistant" ? "assistant" : "user",
+            content: t.text.trim().slice(0, 280),
+          })),
+          { role: "user", content: promptBn.trim() },
+        ],
       },
       (data: TokenData) => {
         const piece = data.token ?? "";
@@ -442,12 +448,8 @@ export async function streamLlmReply(
     return;
   }
 
-  // Retry with a shorter, focused prompt if first pass was empty.
-  const short = [
-    "নির্দেশনা: আপনি আরণ্য — বাংলাদেশের কৃষকদের বিশ্বস্ত সহকারী। বাংলায় ২–৩টি বাক্যে সরাসরি, প্রাসঙ্গিক ও সঠিক উত্তর দিন। প্রশ্ন পুনরায় লিখবেন না।",
-    `কৃষকের প্রশ্ন: ${userText || promptBn.slice(-200)}`,
-  ].join("\n");
-  if (await completeOnce(ctx, short, userText, 0.15, onToken)) {
+  // Retry the same grounded prompt. Do not drop app data or knowledge.
+  if (await completeOnce(ctx, promptBn, userText, 0.15, onToken, history)) {
     end("ok-retry");
     return;
   }

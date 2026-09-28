@@ -5,11 +5,12 @@
  */
 import { streamOffline } from "@/lib/offlineVoice/ttsEngine";
 import {
-  buildSessionFacts,
   buildWelcomeBn,
-  cachedWeather,
-  currentUserFirstName,
+  directLiveAnswer,
+  ensureCachedWeather,
+  liveSnapshot,
   retrieveContext,
+  type LiveSnapshot,
 } from "@/lib/offlineNlu/retrieve";
 import {
   ensureLlmLoaded,
@@ -43,29 +44,21 @@ export { buildWelcomeBn };
 const LOAD_FAIL_REPLY =
   "জেমা মডেল এখন চালু নেই। মডেল ম্যানেজার খুলে ডাউনলোড করা জেমাতে «চালু করুন» চাপুন, তারপর এখানে আবার জিজ্ঞাসা করুন।";
 
-/** Only send earlier chat turns when the farmer explicitly refers to them. */
-const WANTS_SESSION_CONTEXT_RE =
-  /আগের|পূর্বের|সেই|সেটা|ওটা|এটা|তারপর|আবার|হ্যাঁ|ঠিক আছে|বললাম|ওই রোগ|ওই ফসল|আগের কথা/i;
-
-const WANTS_WEATHER_CONTEXT_RE =
-  /বৃষ্টি|আবহাওয়া|তাপমাত্রা|টেম্পারেচার|কুয়াশা|ঝড়|রোদ|রৌদ্র|\b(?:weather|rain|temp|temperature|humidity)\b|স্প্রে|সেচ/i;
-
-const WANT_SCAN_RE =
-  /রোগ|দাগ|পাতা|হলুদ|পোকা|ছত্রাক|ব্লাইট|স্ক্যান|চিকিৎসা|লক্ষণ|ফসল|টমেটো|ধান|আলু|মরিচ/i;
-
 export function buildChatPrompt(
   userTextBn: string,
   extraContext: string[] = [],
   intentLabel?: string,
+  liveLines: string[] = [],
 ): string {
-  const name = currentUserFirstName();
-  const facts = Array.from(new Set(extraContext.filter(Boolean))).slice(0, 6);
+  const knowledge = Array.from(new Set(extraContext.filter(Boolean))).slice(0, 5);
+  const live = Array.from(new Set(liveLines.filter(Boolean))).slice(0, 8);
 
   return [
     "তুমি আরণ্য। বাংলায় ২–৩টি সহজ বাক্যে উত্তর দাও। প্রশ্ন কপি করবে না।",
+    "«অ্যাপ ডেটা» ফোনের ঘড়ি, আবহাওয়া, প্রোফাইল, সাম্প্রতিক স্ক্যান ও আগের চ্যাট থেকে নেওয়া। প্রশ্ন এগুলো নিয়ে হলে সংখ্যা ও নাম হুবহু বলো। অন্য প্রশ্নে এই তালিকা আউড়ে বলবে না। জ্ঞানভাণ্ডারে না থাকলে ওষুধের মাত্রা বা দাম বানাবে না।",
     intentLabel ? `বিষয়: ${intentLabel}` : "",
-    name ? `কৃষক: ${name}` : "",
-    facts.length ? `তথ্য:\n- ${facts.join("\n- ")}` : "",
+    live.length ? `অ্যাপ ডেটা:\n- ${live.join("\n- ")}` : "",
+    knowledge.length ? `জ্ঞান:\n- ${knowledge.join("\n- ")}` : "",
     `প্রশ্ন: ${userTextBn.trim()}`,
   ]
     .filter(Boolean)
@@ -135,54 +128,64 @@ export async function runLlmTurn(
     await setSessionTopic(intentHit.topic, sessionId).catch(() => undefined);
   }
 
-  const wantScan = WANT_SCAN_RE.test(cleaned);
-  const wantsSessionContext = WANTS_SESSION_CONTEXT_RE.test(cleaned);
+  await ensureCachedWeather().catch(() => null);
+  const live = liveSnapshot();
+  const instant = directLiveAnswer(cleaned, live);
+  if (instant && shouldContinue()) {
+    emitAll(instant, onTextChunk, shouldContinue);
+    end("live-data");
+    return instant;
+  }
 
   const [scans, history] = await Promise.all([
-    wantScan
-      ? recentScansForPrompt().catch(() => [] as string[])
-      : Promise.resolve([] as string[]),
-    sessionId && wantsSessionContext
-      ? recentChatHistoryTurns(6, sessionId).catch(() => [] as LlmHistoryTurn[])
+    recentScansForPrompt().catch(() => [] as string[]),
+    sessionId
+      ? recentChatHistoryTurns(4, sessionId).catch(() => [] as LlmHistoryTurn[])
       : Promise.resolve([] as LlmHistoryTurn[]),
   ]);
 
   const online = await fetchIsOnline();
+  const asked = cleaned.slice(0, 40);
 
-  // 2) RAG + live app data. Cloud Gemma can use a wider slice of the knowledge base.
-  const rag = retrieveContext(cleaned, online ? 8 : 4);
-  const weather =
-    !intentHit || intentHit.intent !== "weather"
-      ? WANTS_WEATHER_CONTEXT_RE.test(cleaned)
-        ? cachedWeather()
-        : null
-      : null;
-  const appData = weather
-    ? [
-        `অ্যাপের বর্তমান ডেটা — স্থান: ${weather.locationBn || "অজানা"}; তাপমাত্রা: ${weather.tempC}°সে; অবস্থা: ${weather.conditionBn}; আর্দ্রতা: ${weather.humidity}%; বাতাস: ${weather.windKph} কিমি/ঘণ্টা; বৃষ্টিপাত: ${weather.precipitationMm} মিমি; বৃষ্টির সম্ভাবনা: ${weather.precipProb}%. এই ডেটার সংখ্যাগুলোই ব্যবহার করুন।`,
-      ]
-    : [];
-
-  // 3) Merge: intent facts first (precise), then RAG, scans, history
-  const facts = [
-    ...(intentHit?.facts ?? []),
-    ...appData,
-    ...rag,
-    ...scans,
-    ...(wantsSessionContext && recentLines.length
-      ? [`আগের আলোচনা:\n${recentLines.slice(-2).join("\n")}`]
+  // 2) Knowledge-base RAG. Live clock/weather/profile always travel separately.
+  const rag = retrieveContext(cleaned, online ? 6 : 4);
+  const latestScan = scans[scans.length - 1];
+  const prior = recentLines
+    .filter((line) => !line.includes(asked))
+    .slice(-2)
+    .map((line) => line.replace(/\s+/g, " ").trim().slice(0, 160))
+    .filter(Boolean);
+  const earlierTurns = history.filter(
+    (turn, index) =>
+      !(
+        index === history.length - 1 &&
+        turn.role === "user" &&
+        turn.text.startsWith(asked)
+      ),
+  );
+  const liveLines = [
+    ...live.lines,
+    ...(latestScan ? [latestScan] : []),
+    ...(prior.length
+      ? [`আগের কথা (শুধু ধারাবাহিক প্রশ্নে ব্যবহার করো): ${prior.join(" | ")}`]
       : []),
   ];
+
+  const knowledge = [...(intentHit?.facts ?? []), ...rag];
 
   if (online) {
     onStatus?.("ক্লাউড জেমা উত্তর দিচ্ছে…");
     const market = await marketFacts(cleaned).catch(() => [] as string[]);
-    const cloud = await cloudReply(cleaned, history, [
-      ...buildSessionFacts(),
-      ...facts,
+    const cloud = await cloudReply(cleaned, earlierTurns, [
+      ...liveLines,
+      ...knowledge,
       ...market,
     ]).catch(() => "");
-    const cloudText = sanitizeAssistantReply(cloud);
+    const cloudText = preferGrounded(
+      cleaned,
+      sanitizeAssistantReply(cloud),
+      live,
+    );
     if (cloudText && !isUnusableModelText(cloudText, cleaned)) {
       emitAll(cloudText, onTextChunk, shouldContinue);
       end("cloud");
@@ -196,7 +199,10 @@ export async function runLlmTurn(
     const loaded = await ensureLlmLoaded().catch(() => null);
     if (!loaded || !isLlmReady()) {
       const spoken =
-        socialFallback(cleaned) || spokenFromFacts(facts) || LOAD_FAIL_REPLY;
+        directLiveAnswer(cleaned, live) ||
+        socialFallback(cleaned) ||
+        spokenFromFacts(knowledge) ||
+        LOAD_FAIL_REPLY;
       emitAll(spoken, onTextChunk, shouldContinue);
       end("llm-missing");
       return spoken;
@@ -209,7 +215,12 @@ export async function runLlmTurn(
     return "";
   }
 
-  const prompt = buildChatPrompt(cleaned, facts, intentHit?.intent);
+  const prompt = buildChatPrompt(
+    cleaned,
+    knowledge,
+    intentHit?.intent,
+    liveLines,
+  );
   let full = "";
   onStatus?.("জেমা উত্তর লিখছে…");
 
@@ -218,15 +229,19 @@ export async function runLlmTurn(
       full += token;
     }, {
       userText: cleaned,
-      history,
+      history: earlierTurns,
     });
   } catch (err) {
     end(err instanceof Error ? err.message : "stream-fail");
   }
 
-  let reply = sanitizeAssistantReply(full);
+  let reply = preferGrounded(cleaned, sanitizeAssistantReply(full), live);
   if (!reply || isUnusableModelText(reply, cleaned)) {
-    reply = socialFallback(cleaned) || spokenFromFacts(facts) || LOAD_FAIL_REPLY;
+    reply =
+      directLiveAnswer(cleaned, live) ||
+      socialFallback(cleaned) ||
+      spokenFromFacts(knowledge) ||
+      LOAD_FAIL_REPLY;
   }
   emitAll(reply, onTextChunk, shouldContinue);
   end(intentHit ? `ok:${intentHit.intent}` : "ok");
@@ -295,6 +310,33 @@ function socialFallback(text: string): string | null {
     return "বলুন — কী জানতে চান?";
   }
   return null;
+}
+
+/** Keep a model reply unless a pure clock/weather question missed the live numbers. */
+function preferGrounded(
+  question: string,
+  reply: string,
+  live: LiveSnapshot,
+): string {
+  const direct = directLiveAnswer(question, live);
+  if (!direct) return reply;
+  if (!reply) return direct;
+  const temp = live.tempC;
+  const hasTemp =
+    temp == null ||
+    reply.includes(String(temp)) ||
+    reply.includes(temp.toLocaleString("bn-BD"));
+  const hasTime =
+    reply.includes(live.spokenTime.slice(0, 8)) ||
+    /টা/.test(reply);
+  if (/আবহাওয়া|বৃষ্টি|তাপমাত্রা|weather/i.test(question) && !hasTemp) {
+    return direct;
+  }
+  if (/কয়টা|সময়|what\s*time/i.test(question) && !hasTime) return direct;
+  if (/তারিখ|কোন\s*বার|date/i.test(question) && !reply.includes(live.spokenDate.slice(0, 6))) {
+    return direct;
+  }
+  return reply;
 }
 
 function isUnusableModelText(reply: string, question: string): boolean {

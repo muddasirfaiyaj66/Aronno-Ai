@@ -36,7 +36,7 @@ export type LiveConversationHandle = {
   stop: () => void;
 };
 
-const POST_SPEECH_MS = 700;
+const POST_SPEECH_MS = 380;
 
 export function startLiveConversation(
   handlers: LiveConversationHandlers,
@@ -128,6 +128,9 @@ export function startLiveConversation(
 
       handlers.onPhase("thinking");
       const assistantId = handlers.onAssistantStart();
+      const ttsWarm = import("@/lib/offlineVoice/ttsEngine").then((m) =>
+        m.initTTS(),
+      );
       let reply = "";
       try {
         // Gemma loads here on first need — not together with sherpa at start.
@@ -155,6 +158,7 @@ export function startLiveConversation(
         await persistTurn("assistant", reply, sessionId);
         handlers.onPhase("speaking");
         try {
+          await ttsWarm.catch(() => undefined);
           await speakOffline(reply);
         } catch {
           // keep going

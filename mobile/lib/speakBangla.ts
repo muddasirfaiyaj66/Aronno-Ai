@@ -165,23 +165,12 @@ function speakOnce(
     Speech.speak(text, {
       language,
       voice,
-      // Slightly slower + steady pitch = clearer Bangla on device TTS.
-      rate: 0.86,
-      pitch: 1.02,
+      rate: 1,
+      pitch: 1,
       onDone: () => resolve(),
       onStopped: () => resolve(),
       onError: (err) => reject(err instanceof Error ? err : new Error("tts")),
     });
-  });
-}
-
-function pause(ms: number, signal: { stopped: boolean }) {
-  return new Promise<void>((resolve) => {
-    if (signal.stopped) {
-      resolve();
-      return;
-    }
-    setTimeout(resolve, ms);
   });
 }
 
@@ -191,11 +180,14 @@ export async function speakBangla(
   text: string,
   handlers?: { onDone?: () => void; onStopped?: () => void; onError?: () => void },
 ) {
-  const chunks = splitSpeechChunks(text);
-  if (!chunks.length) {
+  const prepared = prepareSpeechText(text);
+  if (!prepared) {
     handlers?.onDone?.();
     return;
   }
+  // One continuous utterance. Splitting with pauses is what made replies sound laggy.
+  const chunks =
+    prepared.length > 700 ? splitSpeechChunks(prepared) : [prepared];
 
   await Speech.stop();
   const signal = { stopped: false };
@@ -221,8 +213,6 @@ export async function speakBangla(
         // Retry chunk without a pinned voice id (some identifiers are flaky).
         await speakOnce(chunks[i], pick.language, undefined, signal);
       }
-      // Breath between sentences — makes speech feel fluent, not robotic dump.
-      if (i < chunks.length - 1) await pause(140, signal);
     }
     if (signal.stopped) handlers?.onStopped?.();
     else handlers?.onDone?.();

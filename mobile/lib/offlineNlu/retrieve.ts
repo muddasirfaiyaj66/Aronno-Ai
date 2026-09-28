@@ -124,15 +124,155 @@ export function weatherReplyBn(): string | null {
   return `এখন প্রায় ${w.tempC} ডিগ্রি, ${w.conditionBn}। বৃষ্টির সম্ভাবনা ${w.precipProb} শতাংশ।`;
 }
 
+const BN_DIGITS = "০১২৩৪৫৬৭৮৯";
+const WEEKDAYS = [
+  "রবিবার",
+  "সোমবার",
+  "মঙ্গলবার",
+  "বুধবার",
+  "বৃহস্পতিবার",
+  "শুক্রবার",
+  "শনিবার",
+];
+const MONTHS = [
+  "জানুয়ারি",
+  "ফেব্রুয়ারি",
+  "মার্চ",
+  "এপ্রিল",
+  "মে",
+  "জুন",
+  "জুলাই",
+  "আগস্ট",
+  "সেপ্টেম্বর",
+  "অক্টোবর",
+  "নভেম্বর",
+  "ডিসেম্বর",
+];
+
+function toBn(n: number | string) {
+  return String(n).replace(/\d/g, (d) => BN_DIGITS[Number(d)] ?? d);
+}
+
+function formatClockBn(now: Date) {
+  const h24 = now.getHours();
+  const part =
+    h24 < 4
+      ? "রাত"
+      : h24 < 6
+        ? "ভোর"
+        : h24 < 12
+          ? "সকাল"
+          : h24 < 16
+            ? "দুপুর"
+            : h24 < 18
+              ? "বিকেল"
+              : h24 < 20
+                ? "সন্ধ্যা"
+                : "রাত";
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  const m = now.getMinutes();
+  return `${part} ${toBn(h12)}টা${m ? ` ${toBn(m)} মিনিট` : ""}`;
+}
+
+function formatDateBn(now: Date) {
+  return `${WEEKDAYS[now.getDay()]}, ${toBn(now.getDate())} ${MONTHS[now.getMonth()]} ${toBn(now.getFullYear())}`;
+}
+
+export type LiveSnapshot = {
+  lines: string[];
+  spokenTime: string;
+  spokenDate: string;
+  tempC: number | null;
+  weatherSpoken: string | null;
+};
+
+const TIME_ASK =
+  /কয়টা|কটা\s*বাজে|সময়\s*(?:কত|কী|কি|বলো)|what\s*time|current\s*time|koyta|kota\s*baj|somoy\s*kot/i;
+const DATE_ASK =
+  /তারিখ|কোন\s*বার|কী\s*বার|কি\s*বার|আজকের\s*(?:তারিখ|বার)|\bdate\b|what\s*(?:day|date)|ajker\s*tarikh/i;
+const WEATHER_ASK =
+  /আবহাওয়া|বৃষ্টি|তাপমাত্রা|টেম্প|গরম\s*কত|ঠান্ডা\s*কত|আর্দ্রতা|weather|forecast|humidity|temperature/i;
+const ADVICE_ASK = /স্প্রে|সার|রোগ|কী\s*করব|কি\s*করব|চাষ|চিকিৎসা|সেচ/i;
+
+/** Clock, profile, season, and cached weather — always safe to put in a prompt. */
+export function liveSnapshot(now = new Date()): LiveSnapshot {
+  const spokenTime = formatClockBn(now);
+  const spokenDate = formatDateBn(now);
+  const user = store.getState().auth.user;
+  const first = user?.displayName?.trim().split(/\s+/)[0];
+  const district = user?.district?.nameBn;
+  const w = cachedWeather();
+  const lines = [
+    `এখন সময়: ${spokenTime}`,
+    `আজকের তারিখ: ${spokenDate}`,
+    `ঋতু: ${seasonTipBn()}`,
+  ];
+  if (first) lines.push(`কৃষকের নাম: ${first}`);
+  if (district) lines.push(`জেলা: ${district}`);
+
+  let weatherSpoken: string | null = null;
+  if (w) {
+    const place = w.locationBn || district || "আপনার এলাকা";
+    const temp = toBn(Math.round(w.tempC));
+    weatherSpoken = `${place} এ এখন ${temp} ডিগ্রি, ${w.conditionBn}। আর্দ্রতা ${toBn(Math.round(w.humidity))} শতাংশ, বৃষ্টির সম্ভাবনা ${toBn(Math.round(w.precipProb))} শতাংশ, বাতাস ${toBn(Math.round(w.windKph))} কিলোমিটার প্রতি ঘণ্টা।`;
+    lines.push(
+      `আবহাওয়া: ${place}; ${temp}°সে; ${w.conditionBn}; আর্দ্রতা ${toBn(Math.round(w.humidity))}%; বৃষ্টি ${toBn(Math.round(w.precipProb))}%; বৃষ্টিপাত ${w.precipitationMm} মিমি; বাতাস ${toBn(Math.round(w.windKph))} কিমি/ঘণ্টা`,
+    );
+  } else {
+    lines.push("লাইভ আবহাওয়া এখনো লোড হয়নি। ডিগ্রি বা বৃষ্টির সংখ্যা বানাবেন না।");
+  }
+
+  return {
+    lines,
+    spokenTime,
+    spokenDate,
+    tempC: w ? Math.round(w.tempC) : null,
+    weatherSpoken,
+  };
+}
+
+/**
+ * Pure clock / date / weather questions get the phone's data verbatim.
+ * Mixed advice questions stay with the model, which still sees these lines.
+ */
+export function directLiveAnswer(
+  question: string,
+  live: LiveSnapshot,
+): string | null {
+  const q = question.trim();
+  if (!q || q.length > 90 || ADVICE_ASK.test(q)) return null;
+  const time = TIME_ASK.test(q);
+  const date = DATE_ASK.test(q);
+  const weather = WEATHER_ASK.test(q);
+  if (weather && live.weatherSpoken && !time && !date) return live.weatherSpoken;
+  if (time && date) return `আজ ${live.spokenDate}। এখন ${live.spokenTime}।`;
+  if (time && !weather) return `এখন ${live.spokenTime}।`;
+  if (date && !weather) return `আজ ${live.spokenDate}।`;
+  if (weather && live.weatherSpoken) return live.weatherSpoken;
+  return null;
+}
+
+/** Fill the weather cache when home has not loaded it yet. */
+export async function ensureCachedWeather(): Promise<CurrentWeather | null> {
+  const hit = cachedWeather();
+  if (hit) return hit;
+  try {
+    const { fetchIsOnline } = await import("@/hooks/useIsOnline");
+    if (!(await fetchIsOnline())) return null;
+    const { api } = await import("@/services/api");
+    const data = await Promise.race([
+      store.dispatch(api.endpoints.getWeather.initiate(undefined)).unwrap(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2200)),
+    ]);
+    return data ?? cachedWeather();
+  } catch {
+    return cachedWeather();
+  }
+}
+
 /** Current clock time in Bangla digits. */
 export function timeReplyBn(): string {
-  const now = new Date();
-  const time = now.toLocaleTimeString("bn-BD", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-  return `এখন বেলা ${time}।`;
+  return `এখন ${formatClockBn(new Date())}।`;
 }
 
 /** First name of the logged-in user, if any — for reply sanitizing. */

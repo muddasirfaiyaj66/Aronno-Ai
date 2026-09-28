@@ -218,7 +218,11 @@ function VoiceOrb({
     inputRange: [0, 1],
     outputRange: [1, phase === "hearing" ? 1.18 : 1.08],
   });
-  const micScale = breathe;
+  const levelScale = level.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.08],
+  });
+  const micScale = Animated.multiply(breathe, levelScale);
   const haloOpacity = pulse.interpolate({
     inputRange: [0, 1],
     outputRange: [0.18, 0.42],
@@ -315,6 +319,7 @@ export default function AssistantScreen() {
   const [loadHint, setLoadHint] = useState("");
   const [sttReady, setSttReady] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [liveNotice, setLiveNotice] = useState("");
   const [sessions, setSessions] = useState<LocalChatSessionRow[]>([]);
   const [activeSessionId, setActiveSessionIdState] = useState<string | null>(
     null,
@@ -417,6 +422,7 @@ export default function AssistantScreen() {
         liveRef.current?.stop();
         liveRef.current = null;
         setLivePhase("idle");
+        setLiveNotice("");
         setTyping(false);
         setLoadHint("");
         void import("@/lib/offlineVoice/ttsEngine")
@@ -458,6 +464,7 @@ export default function AssistantScreen() {
     voiceCancelRef.current?.();
     voiceCancelRef.current = null;
     setLivePhase("idle");
+    setLiveNotice("");
     setTyping(false);
     setLoadHint("");
   }
@@ -471,43 +478,38 @@ export default function AssistantScreen() {
     append("user", cleaned);
     const assistantId = append("assistant", "");
     setTyping(true);
-    // First Gemma load can take 30–90s on phones.
-    const unlock = setTimeout(() => {
-      if (stillThisChat()) setTyping(false);
-    }, 120000);
     try {
       await replyToText(cleaned, {
         shouldContinue: stillThisChat,
         onStatus: (msg) => {
           if (!stillThisChat()) return;
-          if (msg) setLoadHint(msg);
-          else setLoadHint("");
+          setLoadHint(msg || "");
         },
         onTextChunk: (token) => {
           if (stillThisChat()) appendToBubble(assistantId, token);
         },
         onDone: () => {
-          clearTimeout(unlock);
           if (!stillThisChat()) return;
           setTyping(false);
           setLoadHint("");
+          setBubbles((prev) =>
+            prev.filter((b) => b.id !== assistantId || b.text.trim().length > 0),
+          );
           void refreshSessions();
           void import("@/lib/modelManager/llmEngine")
             .then((m) => setLlmReady(m.isLlmReady()))
             .catch(() => undefined);
         },
         onError: (err) => {
-          if (stillThisChat()) {
-            append("notice", userFacingError(err, "chat"));
-          }
+          if (!stillThisChat()) return;
+          setBubbleText(assistantId, userFacingError(err, "chat"));
         },
       });
     } catch (err) {
-      clearTimeout(unlock);
       if (!stillThisChat()) return;
       setTyping(false);
       setLoadHint("");
-      append("notice", userFacingError(err, "chat"));
+      setBubbleText(assistantId, userFacingError(err, "chat"));
     }
   }
 
@@ -517,6 +519,8 @@ export default function AssistantScreen() {
     liveRef.current?.stop();
     liveRef.current = null;
     setLivePhase("idle");
+    setLiveNotice("");
+    setLoadHint("");
   }
 
   async function toggleVoiceInput() {
@@ -526,13 +530,24 @@ export default function AssistantScreen() {
     }
     if (typing) return;
     Keyboard.dismiss();
+    setLiveNotice("");
+    setLivePhase("thinking");
+    setLoadHint("কণ্ঠ প্রস্তুত হচ্ছে…");
     try {
       const { startLiveConversation } = await import(
         "@/lib/offlineChat/liveConversation"
       );
       liveRef.current = startLiveConversation({
         greet: false,
-        onPhase: setLivePhase,
+        onPhase: (phase) => {
+          setLivePhase(phase);
+          if (phase === "idle") {
+            setLoadHint("");
+            setBubbles((prev) =>
+              prev.filter((b) => b.role !== "assistant" || b.text.trim().length > 0),
+            );
+          }
+        },
         onLevel: (v) =>
           Animated.timing(level, {
             toValue: v,
@@ -543,7 +558,16 @@ export default function AssistantScreen() {
         onAssistantStart: () => append("assistant", ""),
         onAssistantChunk: appendToBubble,
         onAssistantSet: setBubbleText,
-        onError: (err) => append("notice", userFacingError(err, "chat")),
+        onStatus: (msg) => setLoadHint(msg),
+        onNotice: (text) => {
+          setLiveNotice(text);
+          append("notice", text);
+        },
+        onError: (err) => {
+          const message = userFacingError(err, "chat");
+          setLiveNotice(message);
+          append("notice", message);
+        },
       });
     } catch (err) {
       stopLive();
@@ -628,7 +652,7 @@ export default function AssistantScreen() {
       <SafeAreaView className="flex-1" edges={["top"]}>
         {/* Header — high contrast, clear actions */}
         <View
-          className="flex-row items-center gap-1 px-2 py-1.5"
+          className="flex-row items-center gap-2 border-b border-border bg-white px-3 py-2.5"
           accessibilityRole="header"
         >
           <Pressable
@@ -636,26 +660,35 @@ export default function AssistantScreen() {
             accessibilityLabel="আগের আলোচনা"
             onPress={() => void openHistory()}
             hitSlop={6}
-            className="h-11 w-11 items-center justify-center rounded-full"
+            className="h-11 w-11 items-center justify-center rounded-2xl bg-neutral"
           >
-            <Ionicons name="menu" size={24} color={colors.ink} />
+            <Ionicons name="menu" size={22} color={colors.ink} />
           </Pressable>
           <View className="min-w-0 flex-1">
             <AppText variant="bodyLg" className="font-bengali-bold text-ink">
               আরণ্য
             </AppText>
-            <AppText variant="caption" className="text-muted" numberOfLines={1}>
-              {loadHint || (llmReady ? "জেমা চালু" : hasModel ? "অফলাইন প্রস্তুত" : "সহকারী")}
-            </AppText>
+            <View className="mt-0.5 flex-row items-center gap-1.5">
+              <View
+                className="h-2 w-2 rounded-full"
+                style={{
+                  backgroundColor: llmReady ? colors.tertiary : colors.harvest,
+                }}
+              />
+              <AppText variant="caption" className="flex-1" numberOfLines={1}>
+                {loadHint ||
+                  (llmReady ? "জেমা চালু" : hasModel ? "অফলাইন প্রস্তুত" : "সহকারী")}
+              </AppText>
+            </View>
           </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="নতুন আলোচনা"
             onPress={() => void newChat()}
             hitSlop={6}
-            className="h-11 w-11 items-center justify-center rounded-full"
+            className="h-11 w-11 items-center justify-center rounded-2xl bg-secondary"
           >
-            <Ionicons name="create-outline" size={22} color={colors.ink} />
+            <Ionicons name="create-outline" size={20} color={colors.primary} />
           </Pressable>
         </View>
 
@@ -698,7 +731,7 @@ export default function AssistantScreen() {
                 {liveCopy?.title}
               </AppText>
               <AppText variant="body" className="mt-2 text-center text-muted">
-                {liveCopy?.hint}
+                {loadHint || liveCopy?.hint}
               </AppText>
             </View>
 
@@ -707,10 +740,18 @@ export default function AssistantScreen() {
             <View className="w-full items-center gap-3">
               {lastUser ? (
                 <View className="w-full rounded-2xl bg-primary px-4 py-3">
-                  <AppText variant="caption" className="mb-1 text-white/80">
+                  <AppText
+                    variant="caption"
+                    className="mb-1"
+                    style={{ color: "rgba(255,255,255,0.82)" }}
+                  >
                     আপনি
                   </AppText>
-                  <AppText variant="body" numberOfLines={2} className="text-white">
+                  <AppText
+                    variant="body"
+                    numberOfLines={2}
+                    style={{ color: colors.white }}
+                  >
                     {lastUser.text}
                   </AppText>
                 </View>
@@ -726,7 +767,7 @@ export default function AssistantScreen() {
                 </View>
               ) : (
                 <AppText variant="caption" className="text-center text-muted">
-                  কথা বলুন — শোনা শেষ হলে উত্তর এখানে দেখাবে
+                  {liveNotice || "কথা বলুন — শোনা শেষ হলে উত্তর এখানে দেখাবে"}
                 </AppText>
               )}
 
@@ -769,23 +810,34 @@ export default function AssistantScreen() {
               showsVerticalScrollIndicator={false}
               accessibilityLabel="আলোচনার বার্তা"
               ListEmptyComponent={
-                <View className="flex-1 items-center justify-center px-6 py-10">
-                  <AppText variant="display" className="text-center text-ink">
+                <View className="flex-1 items-center justify-center px-5 py-8">
+                  <View
+                    className="mb-4 h-16 w-16 items-center justify-center rounded-3xl"
+                    style={{ backgroundColor: colors.secondary }}
+                  >
+                    <Ionicons name="leaf" size={30} color={colors.primary} />
+                  </View>
+                  <AppText variant="display" className="text-center">
                     {firstName ? `${greet}, ${firstName}` : greet}
                   </AppText>
                   <AppText variant="body" className="mt-2 text-center text-muted">
-                    ফসল, রোগ, সার বা আবহাওয়া জিজ্ঞাসা করুন
+                    ফসল, রোগ, সার বা আবহাওয়া — লিখে বা বলে জিজ্ঞাসা করুন
                   </AppText>
-                  <View className="mt-8 w-full gap-2">
+                  <View className="mt-8 w-full gap-2.5">
                     {SUGGESTIONS.map((s) => (
                       <Pressable
                         key={s}
                         accessibilityRole="button"
                         accessibilityLabel={`প্রশ্ন: ${s}`}
                         onPress={() => void sendText(s)}
-                        className="rounded-full border border-border bg-white px-4 py-3"
+                        className="flex-row items-center gap-3 rounded-2xl border border-border bg-white px-4 py-3.5"
                       >
-                        <AppText variant="body" className="text-ink">
+                        <Ionicons
+                          name="chatbubble-ellipses-outline"
+                          size={18}
+                          color={colors.primary}
+                        />
+                        <AppText variant="body" className="flex-1 text-ink">
                           {s}
                         </AppText>
                       </Pressable>
@@ -812,11 +864,15 @@ export default function AssistantScreen() {
                 if (item.role === "user") {
                   return (
                     <View
-                      className="max-w-[85%] self-end rounded-3xl px-4 py-2.5"
-                      style={{ backgroundColor: colors.secondary }}
+                      className="max-w-[85%] self-end rounded-3xl rounded-br-md px-4 py-3"
+                      style={{ backgroundColor: colors.primary }}
                       accessibilityLabel={`আপনি: ${item.text}`}
                     >
-                      <AppText variant="body" className="leading-6 text-ink">
+                      <AppText
+                        variant="body"
+                        className="leading-6"
+                        style={{ color: colors.white }}
+                      >
                         {item.text}
                       </AppText>
                     </View>
@@ -837,7 +893,7 @@ export default function AssistantScreen() {
                     >
                       <Ionicons name="sparkles" size={15} color={colors.white} />
                     </View>
-                    <View className="min-w-0 flex-1 pt-1">
+                    <View className="min-w-0 flex-1 rounded-3xl rounded-tl-md border border-border bg-white px-4 py-3">
                       {waiting ? (
                         <TypingDots />
                       ) : (
@@ -852,16 +908,18 @@ export default function AssistantScreen() {
             />
 
             <View
-              className="px-3 pt-1"
-              style={{
-                paddingBottom: Math.max(
-                  keyboardLift > 0 ? 8 : insets.bottom,
-                  8,
-                ),
-              }}
+              className="bg-neutral px-3 pt-1"
+              style={{ paddingBottom: keyboardLift > 0 ? 10 : 12 }}
             >
               <View
-                className="flex-row items-end gap-1 rounded-full border border-border bg-white px-2 py-1.5"
+                className="flex-row items-end gap-1 rounded-3xl border border-border bg-white px-2 py-1.5"
+                style={{
+                  shadowColor: colors.forest900,
+                  shadowOpacity: 0.06,
+                  shadowRadius: 12,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: 2,
+                }}
               >
                 <Pressable
                   accessibilityRole="button"

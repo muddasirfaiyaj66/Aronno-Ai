@@ -26,6 +26,7 @@ export type LiveConversationHandlers = {
   onAssistantChunk: (id: string, token: string) => void;
   onAssistantSet?: (id: string, text: string) => void;
   onNotice?: (textBn: string) => void;
+  onStatus?: (textBn: string) => void;
   onError?: (err: unknown) => void;
   /** Spoken welcome removed — it delayed listen and fought the mic. */
   greet?: boolean;
@@ -53,9 +54,13 @@ export function startLiveConversation(
 
   void (async () => {
     logMetric("chat.live.start");
+    handlers.onPhase("thinking");
+    handlers.onStatus?.("কণ্ঠ প্রস্তুত হচ্ছে…");
 
     const engine = await warmSttForLive();
+    if (stopped) return;
     if (engine === "none") {
+      handlers.onStatus?.("");
       handlers.onNotice?.(
         "কণ্ঠ চালু যায়নি। বাংলা কণ্ঠ মডেল আছে কিনা দেখুন, অথবা ইন্টারনেট চালু করুন।",
       );
@@ -64,7 +69,9 @@ export function startLiveConversation(
     }
 
     // Gemma loads on first answer (runLlmTurn) — not together with sherpa warm.
+    handlers.onStatus?.("");
     handlers.onPhase("listening");
+    let silentStreak = 0;
 
     while (!stopped) {
       handlers.onPhase("listening");
@@ -74,14 +81,46 @@ export function startLiveConversation(
         discardOnCancel: true,
       });
       cancelListen = session.cancel;
-      const { text, micSilent } = await session.done;
+      const { text, micSilent, error } = await session.done;
       cancelListen = null;
       if (stopped) break;
 
-      if (micSilent) continue;
+      if (error === "permission") {
+        handlers.onNotice?.(
+          "মাইকের অনুমতি দিন, তারপর আবার কণ্ঠ চালু করুন।",
+        );
+        break;
+      }
+      if (error === "no-engine") {
+        handlers.onNotice?.(
+          "কণ্ঠ চালু যায়নি। বাংলা কণ্ঠ মডেল আছে কিনা দেখুন, অথবা ইন্টারনেট চালু করুন।",
+        );
+        break;
+      }
+      if (error === "record") {
+        handlers.onNotice?.("মাইক চালু করা যায়নি। ফোনের সেটিংস দেখুন।");
+        break;
+      }
+
+      if (micSilent) {
+        silentStreak += 1;
+        if (silentStreak >= 2) {
+          handlers.onNotice?.(
+            "মাইক থেকে শব্দ আসছে না। ফোনের মাইক চেক করুন, অথবা লিখে জিজ্ঞাসা করুন।",
+          );
+          break;
+        }
+        handlers.onStatus?.("শব্দ পাওয়া যায়নি। আরেকবার বলুন।");
+        continue;
+      }
 
       const heard = cleanSttTranscript(text).trim();
-      if (!heard || heard.length < 2) continue;
+      if (!heard || heard.length < 2) {
+        handlers.onStatus?.("কথা বোঝা যায়নি। আরেকটু স্পষ্ট করে বলুন।");
+        continue;
+      }
+      silentStreak = 0;
+      handlers.onStatus?.("");
 
       handlers.onUserFinal(heard);
       const sessionId = await getActiveSessionId();
@@ -97,12 +136,15 @@ export function startLiveConversation(
           (token) => handlers.onAssistantChunk(assistantId, token),
           () => !stopped,
           (msg) => {
-            if (msg) handlers.onNotice?.(msg);
+            handlers.onStatus?.(msg);
           },
           sessionId,
         );
-      } catch (err) {
-        handlers.onError?.(err);
+      } catch {
+        handlers.onAssistantSet?.(
+          assistantId,
+          "এখন উত্তর তৈরি করা যায়নি। আবার বলুন, অথবা লিখে জিজ্ঞাসা করুন।",
+        );
         if (stopped) break;
         continue;
       }

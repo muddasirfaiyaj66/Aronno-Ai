@@ -376,14 +376,13 @@ export async function replyToText(
       await persistTurn("assistant", reply, sessionId);
     }
   } catch (err) {
-    if (shouldContinue()) handlers.onError?.(err);
     try {
       if (shouldContinue()) handlers.onTextChunk(LOAD_FAIL_REPLY);
       if (await getChatSession(sessionId)) {
         await persistTurn("assistant", LOAD_FAIL_REPLY, sessionId);
       }
     } catch {
-      // ignore
+      if (shouldContinue()) handlers.onError?.(err);
     }
   } finally {
     handlers.onDone();

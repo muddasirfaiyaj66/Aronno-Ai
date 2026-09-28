@@ -37,7 +37,7 @@ export function reportHtml(input: {
     <style>
       @page { margin: 28px; }
       body { font-family: "Noto Sans Bengali", "Nirmala UI", "Bangla Sangam MN", sans-serif; color: #1C2B24; }
-      .banner { background: #1B5E4A; color: #fff; padding: 22px 20px; border-radius: 16px; }
+      .banner { background: #0F766E; color: #fff; padding: 22px 20px; border-radius: 16px; }
       h1 { margin: 0; font-size: 26px; }
       .sub { margin-top: 6px; opacity: 0.9; }
       .row { margin-top: 16px; padding-bottom: 10px; border-bottom: 1px solid #D5DDD8; }

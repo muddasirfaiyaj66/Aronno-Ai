@@ -25,6 +25,7 @@ export type VoiceInputWidgetProps = {
   doneLabel?: string;
   className?: string;
   preferTyping?: boolean;
+  disabled?: boolean;
 };
 
 export function VoiceInputWidget({
@@ -39,6 +40,7 @@ export function VoiceInputWidget({
   doneLabel = "ঠিক আছে",
   className = "",
   preferTyping = false,
+  disabled = false,
 }: VoiceInputWidgetProps) {
   const [editing, setEditing] = useState(preferTyping);
 
@@ -77,25 +79,30 @@ export function VoiceInputWidget({
             <Animated.View
               style={[
                 styles.ring,
-                { borderColor: isRecording ? "#B42318" : colors.primary },
+                { borderColor: isRecording ? colors.harvest : colors.primary },
                 ring2Style,
               ]}
             />
             <Animated.View
               style={[
                 styles.ring,
-                { borderColor: isRecording ? "#B42318" : colors.tertiary },
+                { borderColor: isRecording ? colors.tertiary : colors.primary },
                 ringStyle,
               ]}
             />
             <Pressable
               onPress={onToggleRecording}
+              disabled={disabled}
               accessibilityRole="button"
               accessibilityLabel={isRecording ? "রেকর্ডিং থামান" : "কথা বলুন"}
-              className={`h-20 w-20 items-center justify-center rounded-full ${
-                isRecording ? "bg-severity-high" : "bg-primary"
-              }`}
-              style={styles.micShadow}
+              className="h-20 w-20 items-center justify-center rounded-full"
+              style={[
+                styles.micShadow,
+                {
+                  backgroundColor: isRecording ? colors.forest900 : colors.primary,
+                  opacity: disabled ? 0.55 : 1,
+                },
+              ]}
             >
               <Ionicons
                 name={isRecording ? "stop" : "mic"}
@@ -110,7 +117,7 @@ export function VoiceInputWidget({
           <Animated.View entering={FadeIn.duration(220)}>
             <AppText
               variant="body"
-              className="font-bengali-semibold text-severity-high"
+              className="font-bengali-semibold text-primary"
             >
               {listeningLabel}
             </AppText>
@@ -173,7 +180,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     paddingHorizontal: 20,
     paddingVertical: 22,
-    shadowColor: "#064E3B",
+    shadowColor: "#115E59",
     shadowOpacity: 0.08,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
@@ -187,7 +194,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   micShadow: {
-    shadowColor: "#064E3B",
+    shadowColor: "#0F766E",
     shadowOpacity: 0.28,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },

@@ -189,7 +189,7 @@ function SvgHeatMap({
           <Path
             d={outlinePath(width, height)}
             fill="url(#bdFill)"
-            stroke="#1B5E4A"
+            stroke="#0F766E"
             strokeWidth={1.5}
             opacity={0.95}
           />
@@ -203,7 +203,7 @@ function SvgHeatMap({
                 r={selected ? m.r + 3 : m.r}
                 fill={m.color}
                 fillOpacity={selected ? 0.78 : 0.58}
-                stroke={selected ? "#143F33" : "#FFFFFF"}
+                stroke={selected ? "#115E59" : "#FFFFFF"}
                 strokeWidth={selected ? 3 : 1.5}
                 onPress={() => onSelect(m.location.slug)}
               />

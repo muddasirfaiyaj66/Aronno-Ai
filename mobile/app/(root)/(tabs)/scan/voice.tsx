@@ -44,11 +44,17 @@ export default function VoiceCaptureScreen() {
   }>();
   const content = FLOW_CONTENT[flow ?? "disease"] ?? FLOW_CONTENT.disease;
   const [mode, setMode] = useState<Mode>(modeParam === "text" ? "text" : "voice");
+  const modeRef = useRef<Mode>(modeParam === "text" ? "text" : "voice");
+  const chooseMode = (next: Mode) => {
+    modeRef.current = next;
+    setMode(next);
+  };
   const [isRecording, setIsRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [offlineStt, setOfflineStt] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const stopOfflineRef = useRef<(() => void) | null>(null);
   const startedAtRef = useRef(0);
@@ -91,9 +97,12 @@ export default function VoiceCaptureScreen() {
         setIsRecording(false);
         return;
       }
+      setPreparing(true);
       const engine = await warmSttForLive();
+      setPreparing(false);
+      if (modeRef.current !== "voice") return;
       if (engine === "none") {
-        setMode("text");
+        chooseMode("text");
         setError(
           "বাংলা কণ্ঠ মডেল চালু হয়নি। মডেল ম্যানেজার থেকে আবার ডাউনলোড করুন, অথবা লিখে জানান।",
         );
@@ -103,11 +112,20 @@ export default function VoiceCaptureScreen() {
       logMetric("voice.offline.stt");
       stopOfflineRef.current = startListening(
         (partial) => setTranscript(partial),
-        (finalText) => {
-          const cleaned = cleanSttTranscript(finalText).trim();
-          setTranscript(cleaned);
+        (finalText, sttError) => {
           setIsRecording(false);
           stopOfflineRef.current = null;
+          if (sttError === "permission") {
+            setError("মাইকের অনুমতি দিন, তারপর আবার চাপুন।");
+            return;
+          }
+          if (sttError === "record" || sttError === "no-engine") {
+            chooseMode("text");
+            setError("মাইক চালু করা যায়নি। এখানে লিখে জানান।");
+            return;
+          }
+          const cleaned = cleanSttTranscript(finalText).trim();
+          setTranscript(cleaned);
           if (!cleaned) {
             setError("কথা বোঝা যায়নি। আরেকটু স্পষ্ট করে বলুন, অথবা লিখে জানান।");
           }
@@ -145,13 +163,13 @@ export default function VoiceCaptureScreen() {
         }).unwrap();
         const cleaned = cleanSttTranscript(transcriptBn).trim();
         if (!cleaned) {
-          setMode("text");
+          chooseMode("text");
           setError("কথা পরিষ্কার শোনা যায়নি। এখানে লিখে দিন।");
         } else {
           setTranscript(cleaned);
         }
       } catch (err) {
-        setMode("text");
+        chooseMode("text");
         setError(userFacingError(err, "generic", "কথা লেখা যায়নি। এখানে লিখে দিন।"));
       } finally {
         setTranscribing(false);
@@ -160,7 +178,7 @@ export default function VoiceCaptureScreen() {
     }
 
     if (!online) {
-      setMode("text");
+      chooseMode("text");
       setError(
         "অফলাইনে বাংলা কণ্ঠ মডেল নেই। মডেল ম্যানেজার থেকে এটি ডাউনলোড করুন, অথবা লিখে জানান।",
       );
@@ -233,8 +251,11 @@ export default function VoiceCaptureScreen() {
               <Pressable
                 key={item.id}
                 onPress={() => {
-                  setMode(item.id);
-                  if (item.id === "text") setIsRecording(false);
+                  if (item.id === mode || preparing) return;
+                  modeRef.current = item.id;
+                  if (isRecording) void handleToggleRecording();
+                  chooseMode(item.id);
+                  setError(null);
                 }}
                 className={`min-h-touch flex-1 items-center justify-center rounded-xl ${
                   active ? "bg-primary" : ""
@@ -255,16 +276,20 @@ export default function VoiceCaptureScreen() {
 
         <VoiceInputWidget
           isRecording={isRecording}
+          disabled={preparing || transcribing}
           transcript={transcript}
           onToggleRecording={() => {
+            if (preparing) return;
             void handleToggleRecording();
           }}
           onChangeTranscript={setTranscript}
           preferTyping={mode === "text"}
           listeningLabel={
-            transcribing
-              ? t("কথা লেখা হচ্ছে…", "Writing your words…")
-              : t("শুনছি… কথা বলুন", "Listening… speak now")
+            preparing
+              ? t("কণ্ঠ প্রস্তুত হচ্ছে…", "Getting the mic ready…")
+              : transcribing
+                ? t("কথা লেখা হচ্ছে…", "Writing your words…")
+                : t("শুনছি… কথা বলুন", "Listening… speak now")
           }
           placeholder={
             mode === "text"
@@ -273,7 +298,11 @@ export default function VoiceCaptureScreen() {
           }
         />
 
-        {error ? (
+        {preparing ? (
+          <AppText variant="caption" className="text-center text-primary">
+            {t("কণ্ঠ প্রস্তুত হচ্ছে…", "Getting the mic ready…")}
+          </AppText>
+        ) : error ? (
           <AppText variant="caption" className="text-center text-severity-high">
             {error}
           </AppText>
@@ -289,7 +318,7 @@ export default function VoiceCaptureScreen() {
         <PrimaryButton
           label={transcribing ? t("লেখা হচ্ছে…", "Writing…") : t("জমা দিন", "Submit")}
           onPress={handleSubmit}
-          disabled={!transcript.trim() || transcribing || isRecording}
+          disabled={!transcript.trim() || transcribing || isRecording || preparing}
           loading={transcribing}
         />
       </ScrollView>

@@ -54,6 +54,7 @@ const METER_POLL_MS = 90;
 export type ListenResult = {
   text: string;
   micSilent: boolean;
+  error?: "permission" | "no-engine" | "record";
 };
 
 function nativePath(uri: string) {
@@ -258,11 +259,12 @@ export function cleanSttTranscript(raw: string): string {
   s = s.replace(/([।!?]){2,}/g, "$1");
   s = s.replace(/\s+/g, " ").trim();
 
-  // Drop single isolated characters or noise filler words
-  if (/^(?:[a-zA-Z]|[\u0980-\u09FF]|[।!?.,;:\-\s])+$/.test(s) && s.length <= 2) {
+  // Drop single isolated characters or noise filler words.
+  // Keep short real replies such as «হ্যাঁ», «না», and «hello».
+  if (/^(?:[a-zA-Z]|[\u0980-\u09FF]|[।!?.,;:\-\s])+$/.test(s) && s.length <= 1) {
     return "";
   }
-  if (/^(?:হ্যাঁ|আহ|উম|ও|এই|ওই|হুম|আচ্ছা|হ্যালো|hello|hi)[।.!?\s]*$/i.test(s) && s.length < 5) {
+  if (/^(?:আহ|উম|উঁ|হুম|এই|ওই)[।.!?\s]*$/i.test(s)) {
     return "";
   }
 
@@ -375,9 +377,11 @@ export function listenUntilSilence(handlers?: {
     const mode = await prepareEngine();
     if (mode === "none") {
       logMetric("stt.live.start", undefined, "no-engine");
-      return empty;
+      return { ...empty, error: "no-engine" };
     }
-    if (!(await ensureMicPermission())) return empty;
+    if (!(await ensureMicPermission())) {
+      return { ...empty, error: "permission" };
+    }
 
     let rec: Audio.Recording;
     try {
@@ -385,7 +389,7 @@ export function listenUntilSilence(handlers?: {
       handlers?.onListening?.();
       logMetric("stt.live.start", undefined, mode);
     } catch {
-      return empty;
+      return { ...empty, error: "record" };
     }
 
     const startedAt = Date.now();
@@ -501,13 +505,13 @@ export function listenUntilSilence(handlers?: {
  */
 export function startListening(
   onPartial: (text: string) => void,
-  onFinal: (text: string) => void,
+  onFinal: (text: string, error?: ListenResult["error"]) => void,
 ): () => void {
   let finished = false;
-  const finish = (text: string) => {
+  const finish = (text: string, error?: ListenResult["error"]) => {
     if (finished) return;
     finished = true;
-    onFinal(text);
+    onFinal(text, error);
   };
 
   const session = listenUntilSilence({
@@ -517,7 +521,7 @@ export function startListening(
   });
 
   void session.done.then((result) => {
-    finish(result.text);
+    finish(result.text, result.error);
   });
 
   return () => {

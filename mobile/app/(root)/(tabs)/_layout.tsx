@@ -216,6 +216,11 @@ function CenteredTabBar({ state, navigation, insets }: BottomTabBarProps) {
         backgroundColor: colors.white,
         borderTopColor: colors.border,
         borderTopWidth: 1,
+        shadowColor: colors.forest900,
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: -4 },
+        elevation: 8,
       }}
     >
       {/* Equal-width sides keep Scan geometrically centered */}

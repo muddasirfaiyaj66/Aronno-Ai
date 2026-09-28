@@ -20,11 +20,11 @@ import type { CurrentWeather } from "@/types/weather";
 import type { FarmLocationStatus } from "@/hooks/useFarmLocation";
 
 const SKY: Record<CurrentWeather["kind"], [string, string, string]> = {
-  sunny: ["#E8F2EE", "#FFFFFF", "#F4F6F4"],
-  partly: ["#E8F2EE", "#FFFFFF", "#D4E8E0"],
-  cloudy: ["#EEF1EF", "#FFFFFF", "#E8ECE9"],
-  rainy: ["#E4EFE9", "#FFFFFF", "#C5DCD0"],
-  storm: ["#D4E8E0", "#FFFFFF", "#C5DCD0"],
+  sunny: ["#E7F5F2", "#FFFFFF", "#F4F7F6"],
+  partly: ["#E7F5F2", "#FFFFFF", "#D5F3EC"],
+  cloudy: ["#EEF2F1", "#FFFFFF", "#E7EEEB"],
+  rainy: ["#E7F5F2", "#FFFFFF", "#C5E4DB"],
+  storm: ["#D5F3EC", "#FFFFFF", "#C5E4DB"],
 };
 
 export function DateWeatherCard({

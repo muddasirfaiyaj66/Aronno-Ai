@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 export type GatewaySessionInput = {
@@ -29,6 +29,8 @@ const SSL_HOSTS = new Set(['sandbox.sslcommerz.com', 'securepay.sslcommerz.com']
 
 @Injectable()
 export class SslCommerzService {
+  private readonly logger = new Logger(SslCommerzService.name);
+
   constructor(private readonly config: ConfigService) {}
 
   private credentials() {
@@ -73,6 +75,11 @@ export class SslCommerzService {
       product_name: input.productName.slice(0, 200),
       product_category: 'general',
       product_profile: 'general',
+      ship_name: input.customerName.slice(0, 50),
+      ship_add1: input.address.slice(0, 200) || 'Bangladesh',
+      ship_city: input.city.slice(0, 50) || 'Dhaka',
+      ship_postcode: '1000',
+      ship_country: 'Bangladesh',
       value_a: input.orderId,
       value_b: input.method,
     });
@@ -86,9 +93,16 @@ export class SslCommerzService {
       body,
       signal: AbortSignal.timeout(20_000),
     });
-    const payload = (await response.json()) as { status?: string; GatewayPageURL?: string };
+    const payload = (await response.json()) as {
+      status?: string;
+      failedreason?: string;
+      GatewayPageURL?: string;
+    };
     const page = payload.GatewayPageURL ?? '';
     if (payload.status !== 'SUCCESS' || !this.isGatewayUrl(page, isLive)) {
+      this.logger.warn(
+        `SSLCommerz session rejected: ${payload.failedreason || payload.status || 'missing gateway url'}`,
+      );
       throw new BadRequestException('Could not start the payment session.');
     }
     return page;

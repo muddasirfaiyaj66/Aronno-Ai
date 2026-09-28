@@ -30,4 +30,10 @@ export type NotificationDraft = {
   params?: Record<string, string>;
   priority?: NotificationPriority;
   popup?: boolean;
+  email?:
+    | boolean
+    | {
+        details?: { label: string; value: string }[];
+        note?: string;
+      };
 };

@@ -56,16 +56,25 @@ export class SslCommerzController {
     const outcome = await this.payments.handleCallback(kind, payload);
     const result =
       outcome.result === 'paid' ? 'paid' : outcome.result === 'pending' ? 'pending' : 'failed';
-    const target = `aronno://payment?orderId=${encodeURIComponent(outcome.orderId ?? '')}&result=${result}`;
+    const query = `orderId=${encodeURIComponent(outcome.orderId ?? '')}&result=${result}`;
+    const target = `aronno://payment?${query}`;
+    const intent = `intent://payment?${query}#Intent;scheme=aronno;package=app.aronno.mobile;end`;
     const title =
       result === 'paid' ? 'পেমেন্ট হয়েছে' : result === 'pending' ? 'পেমেন্ট যাচাই হচ্ছে' : 'পেমেন্ট হয়নি';
+    const href = escapeAttr(target);
     res.status(200).type('html').send(`<!doctype html>
 <html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${title}</title></head>
 <body style="font-family:sans-serif;padding:32px;text-align:center">
 <p>${title}</p>
 <p>অ্যাপে ফিরে যাচ্ছি…</p>
-<script>location.replace(${JSON.stringify(target)})</script>
+<p><a id="back" href="${href}">অ্যাপে ফিরে যান</a></p>
+<script>
+  var appUrl = ${JSON.stringify(target)};
+  var intentUrl = ${JSON.stringify(intent)};
+  window.location.href = appUrl;
+  setTimeout(function () { window.location.href = intentUrl; }, 300);
+</script>
 </body></html>`);
   }
 }
@@ -76,4 +85,8 @@ function bodyOf(req: Request): Record<string, unknown> {
     return body as Record<string, unknown>;
   }
   return {};
+}
+
+function escapeAttr(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }

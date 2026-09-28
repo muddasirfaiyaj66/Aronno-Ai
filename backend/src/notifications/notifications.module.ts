@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { MailModule } from '../mail/mail.module';
 import { MarketModule } from '../market/market.module';
 import { WeatherModule } from '../weather/weather.module';
 import { NotificationHub } from './notification-hub';
@@ -8,7 +9,7 @@ import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 
 @Module({
-  imports: [JwtModule.register({}), MarketModule, WeatherModule],
+  imports: [JwtModule.register({}), MailModule, MarketModule, WeatherModule],
   controllers: [NotificationsController],
   providers: [NotificationHub, NotificationsService, NotificationLiveServer],
   exports: [NotificationsService],

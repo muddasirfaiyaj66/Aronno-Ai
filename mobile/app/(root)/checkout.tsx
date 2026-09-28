@@ -1,11 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  TextInput,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -646,6 +640,25 @@ export default function CheckoutScreen() {
     };
   }, [step, cart?.shopId, form.districtId, quoteOrder]);
 
+  const settleGateway = async (order: { id: string; orderNumber: string }) => {
+    let status = "pending";
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const fresh = await fetchOrder(order.id).unwrap();
+      status = fresh.paymentStatus;
+      if (status === "paid" || status === "failed") break;
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+    if (status === "paid") {
+      setCompletedOrder({ orderNumber: order.orderNumber });
+      return;
+    }
+    setCheckoutError(
+      status === "failed"
+        ? "পেমেন্ট হয়নি। অর্ডার বাতিল হয়েছে এবং স্টক ফিরিয়ে দেওয়া হয়েছে।"
+        : "পেমেন্ট এখনো নিশ্চিত হয়নি। অর্ডার তালিকায় অবস্থা দেখুন।",
+    );
+  };
+
   const handleConfirm = async () => {
     if (isLoading || !quote) return;
     if (!cart?.shopId) {
@@ -665,23 +678,11 @@ export default function CheckoutScreen() {
       }).unwrap();
 
       if (result.gatewayUrl) {
-        await WebBrowser.openAuthSessionAsync(result.gatewayUrl, "aronno://payment");
-        let status = result.paymentStatus;
-        for (let attempt = 0; attempt < 4; attempt += 1) {
-          const fresh = await fetchOrder(result.id).unwrap();
-          status = fresh.paymentStatus;
-          if (status === "paid" || status === "failed") break;
-          await new Promise((resolve) => setTimeout(resolve, 1200));
-        }
-        if (status === "paid") {
-          setCompletedOrder({ orderNumber: result.orderNumber });
-          return;
-        }
-        setCheckoutError(
-          status === "failed"
-            ? "পেমেন্ট হয়নি। অর্ডার বাতিল হয়েছে এবং স্টক ফিরিয়ে দেওয়া হয়েছে।"
-            : "পেমেন্ট এখনো নিশ্চিত হয়নি। অর্ডার তালিকায় অবস্থা দেখুন।",
-        );
+        await WebBrowser.openAuthSessionAsync(result.gatewayUrl, "aronno://payment", {
+          createTask: false,
+          showInRecents: false,
+        });
+        await settleGateway({ id: result.id, orderNumber: result.orderNumber });
         return;
       }
 

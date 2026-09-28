@@ -3,7 +3,6 @@ import { Pressable, View } from "react-native";
 import { Link, useRouter, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { AuthScaffold } from "@/components/auth/AuthScaffold";
-import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { AppText, FieldInput, PrimaryButton } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import { getApiError, useLoginMutation } from "@/services/api";
@@ -101,11 +100,6 @@ export default function LoginScreen() {
           onPress={handleSubmit}
           icon={<Ionicons name="arrow-forward" size={20} color={colors.white} />}
         />
-
-        <AppText variant="caption" className="text-center text-muted">
-          অথবা
-        </AppText>
-        <GoogleSignInButton />
       </View>
     </AuthScaffold>
   );

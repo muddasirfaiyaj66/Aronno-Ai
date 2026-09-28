@@ -31,7 +31,9 @@ const GROUPS = [
   },
 ] as const;
 
-const NAV = GROUPS.flatMap((group) => group.items);
+type NavItem = (typeof GROUPS)[number]["items"][number];
+
+const NAV: readonly NavItem[] = GROUPS.flatMap((group) => [...group.items]);
 
 const THEME_KEY = "aronno.admin.theme";
 const SIDE_KEY = "aronno.admin.sidebar";

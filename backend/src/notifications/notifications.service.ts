@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { HeatmapService } from '../market/heatmap.service';
 import { WEATHER } from '../ai/ai.tokens';
@@ -52,6 +53,7 @@ export class NotificationsService {
     private readonly prisma: PrismaService,
     private readonly hub: NotificationHub,
     private readonly heatmap: HeatmapService,
+    private readonly mail: MailService,
     @Inject(WEATHER) private readonly weather: WeatherPort,
   ) {}
 
@@ -284,13 +286,51 @@ export class NotificationsService {
     status: string;
   }) {
     const label = ORDER_LABEL[input.status] ?? input.status;
+    const order = await this.prisma.order.findUnique({
+      where: { id: input.orderId },
+      select: {
+        orderNumber: true,
+        totalBdt: true,
+        shop: { select: { name: true } },
+        buyer: { select: { displayName: true } },
+      },
+    });
+    const buyerBody = order
+      ? `${order.shop.name} থেকে অর্ডার ${order.orderNumber}। ${label}। মোট ${toBn(order.totalBdt)} টাকা।`
+      : label;
+    const sellerBody = order
+      ? `${order.buyer.displayName} এর অর্ডার ${order.orderNumber}। ${label}। মোট ${toBn(order.totalBdt)} টাকা।`
+      : label;
+    const buyerEmail = order
+      ? {
+          details: [
+            { label: 'অর্ডার নম্বর', value: order.orderNumber },
+            { label: 'দোকান', value: order.shop.name },
+            { label: 'অবস্থা', value: label },
+            { label: 'মোট', value: `${toBn(order.totalBdt)} টাকা` },
+          ],
+          note: 'অর্ডারের সর্বশেষ অবস্থা আরণ্য অ্যাপের অর্ডার তালিকায় দেখুন।',
+        }
+      : true;
+    const sellerEmail = order
+      ? {
+          details: [
+            { label: 'অর্ডার নম্বর', value: order.orderNumber },
+            { label: 'ক্রেতা', value: order.buyer.displayName },
+            { label: 'অবস্থা', value: label },
+            { label: 'মোট', value: `${toBn(order.totalBdt)} টাকা` },
+          ],
+          note: 'অর্ডারটি আরণ্য অ্যাপের দোকানের তালিকা থেকে এগিয়ে নিন।',
+        }
+      : true;
     await this.emit({
       userId: input.buyerUserId,
       dedupeKey: `order:${input.orderId}:${input.status}:buyer`,
       kind: 'order',
       title: 'আপনার অর্ডার',
-      body: label,
+      body: buyerBody,
       pathname: '/(root)/orders',
+      email: buyerEmail,
     });
     if (input.sellerUserId === input.buyerUserId) return;
     await this.emit({
@@ -298,8 +338,9 @@ export class NotificationsService {
       dedupeKey: `order:${input.orderId}:${input.status}:seller`,
       kind: 'order',
       title: 'দোকানের অর্ডার',
-      body: label,
+      body: sellerBody,
       pathname: '/(root)/seller-orders',
+      email: sellerEmail,
     });
   }
 
@@ -332,6 +373,14 @@ export class NotificationsService {
           : `আপনার এলাকায় ${toBn(area.caseCount)}টি রোগের রিপোর্ট।`,
         pathname: '/(root)/(tabs)/market',
         params: { tab: 'heatmap' },
+        email: {
+          details: [
+            { label: 'জেলা', value: area.location.nameBn },
+            { label: 'রিপোর্ট', value: `${toBn(area.caseCount)}টি` },
+            ...(top ? [{ label: 'বেশি দেখা যাচ্ছে', value: top }] : []),
+          ],
+          note: 'আক্রান্ত পাতা তুলে ফেলুন এবং স্প্রে করার আগে অ্যাপে স্ক্যান করে নিন।',
+        },
       });
     }
   }
@@ -410,9 +459,33 @@ export class NotificationsService {
             },
           });
       this.hub.push(draft.userId, this.toDto(row));
+      if (draft.email) void this.emailCopy(draft);
     } catch (error) {
       this.logger.warn(
         `Notification ${draft.dedupeKey} was not saved: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
+    }
+  }
+
+  private async emailCopy(draft: NotificationDraft) {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: draft.userId },
+        select: { email: true, isActive: true },
+      });
+      if (!user?.isActive || !user.email) return;
+      const extra = typeof draft.email === 'object' ? draft.email : undefined;
+      await this.mail.send({
+        to: user.email,
+        subject: `আরণ্য — ${draft.title}`,
+        title: draft.title,
+        intro: draft.body,
+        details: extra?.details,
+        note: extra?.note,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Email for ${draft.userId} was not sent: ${error instanceof Error ? error.message : 'unknown'}`,
       );
     }
   }

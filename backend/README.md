@@ -1,6 +1,6 @@
 # Aronno Backend
 
-Nest.js 11 API for the Aronno mobile app. Cookies-only JWT auth, Prisma + MongoDB, Zod validation, role-based access.
+Nest.js 11 API for the Aronno phone app and website. Cookies-only JWT auth, Prisma + MongoDB, Zod validation, role-based access. Checkout prices, delivery fees, and SSLCommerz amounts are decided here, not in the app or the website.
 
 ## Stack
 
@@ -23,6 +23,8 @@ npm run start:dev
 
 On boot the API upserts roles, professions, districts, crops, demo heat-map reports (unless `SEED_HEATMAP_DEMO=false`), and seeds a **SUPERADMIN** if none exists (from `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` in `.env`). Superadmin and admin can `POST /api/admin/users` to create more verified admins.
 
+Copy `SSLCOMMERZ_STORE_ID`, `SSLCOMMERZ_STORE_PASSWORD`, and `SSLCOMMERZ_IS_LIVE` from `.env.example`. `API_PUBLIC_URL` is the public `https` origin of this server (no `/api`, no trailing slash). SSLCommerz calls `{API_PUBLIC_URL}/api/marketplace/payments/sslcommerz/{success|fail|cancel|ipn}`. Cash on delivery does not need those values. Online and mobile-banking checkout cannot finish while the API is only on localhost.
+
 API base: `http://localhost:3000/api`
 
 ## Auth
@@ -43,7 +45,15 @@ Tokens are **never** accepted as `Authorization: Bearer`. The client must send c
 | GET | `/admin/users` | ADMIN+ | List users |
 | POST | `/admin/users` | ADMIN+ | Create a verified ADMIN |
 
-Feature routes (cookie auth): `/diagnoses`, `/treatment-plans`, `/cost-estimates`, `/history`, `/reports`, `/tts`, `/tools`, `/receipts`, `/fertilizer`, `/crop-plans`, `/market` (incl. `/market/heatmap`), `/weather`.
+Feature routes (cookie auth unless noted): `/diagnoses`, `/treatment-plans`, `/cost-estimates`, `/history`, `/reports`, `/tts`, `/tools`, `/receipts`, `/fertilizer`, `/crop-plans`, `/weather`, `/notifications`.
+
+Public reads: `GET /market/prices`, `GET /market/heatmap`, `GET /marketplace/products`, `GET /marketplace/shops`.
+
+Marketplace (cookie): `/marketplace/cart`, `/marketplace/orders` (`POST /quote` then checkout), `/marketplace/wallet` (summary and payout requests).
+
+SSLCommerz callbacks are public and are **not** wrapped in the JSON envelope: `/marketplace/payments/sslcommerz/*`.
+
+Admin (ADMIN+): `/admin/overview`, `/admin/commerce`, `/admin/delivery`, `/admin/payouts`, `/admin/reports`, `/admin/notifications`, `/admin/users`. Delivery defaults are 60 BDT in the shop's district and 120 BDT elsewhere. A payout stays pending until an admin posts `paid` or `rejected`. The API does not send the money.
 
 ## Scripts
 

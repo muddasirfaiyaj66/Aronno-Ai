@@ -1,6 +1,8 @@
 # Aronno web (`/web`)
 
-Next.js promotional site + admin-only dashboard. Talks to the Nest API via a same-origin BFF at `/api/[...path]` (cookies + CSRF).
+Next.js site for the public Bangla pages and the English admin monitor. The browser talks to the Nest API through a same-origin proxy at `/api/[...path]` (cookies and CSRF).
+
+The public pages stay in Bangla. The monitor is English. Staff can collapse the sidebar and switch light and dark; both choices are stored in the browser (`aronno.admin.sidebar`, `aronno.admin.theme`).
 
 ## Run locally
 
@@ -30,12 +32,21 @@ Admin: [http://localhost:3001/admin/login](http://localhost:3001/admin/login) â€
 ARONNO_API_ORIGIN=http://localhost:3000
 ```
 
+Online checkout is configured on the **API**, not here. `API_PUBLIC_URL` in `backend/.env` must be the public `https` Nest origin.
+
 ## Routes
 
 | Path | Purpose |
 |------|---------|
-| `/` | Bangla marketing landing |
+| `/` | Bangla landing (field hero, capabilities, soil-meter preview) |
+| `/heatmap` | Public disease heat map |
+| `/market` | Public prices, products, and shops. Buying stays in the app |
 | `/admin/login` | Staff login |
-| `/admin` | Overview stats |
-| `/admin/users` | List / activate / role |
-| `/admin/create` | Create admin user |
+| `/admin` | Operations monitor, attention counts, refresh |
+| `/admin/market` | Shops and orders |
+| `/admin/reports` | Seller reports |
+| `/admin/payouts` | Mark seller payout requests paid or rejected |
+| `/admin/delivery` | Same-city and other-city delivery fees |
+| `/admin/users` | List, activate, and change role |
+| `/admin/notifications` | Broadcast an alert |
+| `/admin/create` | Create an admin user |

@@ -16,6 +16,8 @@ npx expo run:android
 # or: eas build --profile development --platform android
 ```
 
+Checkout and the website are documented in the repository README. This folder is only the native audio bridge.
+
 The Bangla STT model downloads from Hugging Face as **individual files** (no
 tar.bz2 on device) via the Model Manager screen. Gemma GGUF models download
 there too; the 4B pack includes its vision projector.

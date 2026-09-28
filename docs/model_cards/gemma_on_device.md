@@ -10,6 +10,8 @@
 | Sizes | 270M Instruct Q8 (~300 MB); **1B Instruct Q4 recommended** (~690 MB); **4B Instruct Q4_K_M + mmproj-F16** (~3.3 GB — text + vision) |
 | License | Google Gemma Terms — free for commercial use; keep notice in-app |
 
+Shopping, delivery, and the website admin monitor are in the repository README. This card is only the on-device model.
+
 ## Honest expectations
 
 - **270M:** fast, simpler Bangla — OK for short grounded Q&A; may struggle with nuance.

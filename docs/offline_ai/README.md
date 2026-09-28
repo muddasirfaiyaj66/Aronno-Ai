@@ -9,6 +9,7 @@ Related:
 - Model honesty cards: [`docs/model_cards/`](../model_cards/)
 - ML training: [`ml/README.md`](../../ml/README.md)
 - Short pointer: [`docs/offline_ai_setup.md`](../offline_ai_setup.md)
+- Shopping, payments, and the website: [`README.md`](../../README.md) and [`SETUP.md`](../../SETUP.md)
 
 ---
 

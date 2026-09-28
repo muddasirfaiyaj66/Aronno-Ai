@@ -5,6 +5,8 @@ Firmware should follow this document so app testing is plug-and-play.
 
 App screen: **Home → মাটি** (`scan/soil-sensor`).
 
+The public website shows a branding photo of the meter (moisture, pH, NPK on the display). That section is a preview. The device is not for sale, and the photo is not a live reading. Live values still come from this protocol.
+
 | Mode | When to use |
 |------|-------------|
 | **ডেমো টেস্ট** | No hardware — mock BLE devices / mock Wi‑Fi readings + crop list |

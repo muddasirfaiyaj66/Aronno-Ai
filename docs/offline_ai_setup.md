@@ -14,3 +14,5 @@ eas build --platform android --profile development
 Hot-reload shell only: `--profile dev-client`.
 
 Mobile quick start: [mobile/README.md](../mobile/README.md).
+
+Payments, delivery fees, and the website admin monitor: [SETUP.md](../SETUP.md).

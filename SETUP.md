@@ -8,6 +8,7 @@ This document is written so someone who is **not a developer** can clone the pro
 |--------|------------|
 | `backend/` | Nest.js API (the server). Runs on `http://localhost:3000/api` |
 | `mobile/` | Expo / React Native app (the farmer-facing phone UI) |
+| `web/` | Next.js public site and English admin monitor. Runs on `http://localhost:3001` |
 
 ---
 
@@ -40,7 +41,9 @@ This document is written so someone who is **not a developer** can clone the pro
 - Photograph a crop (or speak) and get a **disease diagnosis**
 - Open a **treatment plan**, **cost estimate**, and a **report**
 - Identify a **tool**, scan a **receipt**, get **fertilizer** advice and a **crop plan** with cost
-- See **market prices** and the disease **heat map**, post a **listing**
+- See **market prices** and the disease **heat map**, post a **listing**, and buy from a shop
+- Pay **cash on delivery**, or by **card / mobile banking** when SSLCommerz is configured
+- Open the **website** for the public heat map and market, and an English admin monitor
 
 **Honest status:** the screens and APIs are connected. Disease, treatment, tools, receipts, and crop-plan wording call **gemini-3.5-flash-lite** (free). If the key is missing or Gemini fails, the API returns `AI_UNAVAILABLE` — it does **not** invent mock answers. Crop plans use the **Open-Meteo** seasonal forecast (no key); fertilizer advice and cost estimates are local rules. TTS is still a stub. Photos **are** uploaded for real: the phone sends them to **Cloudinary**, then the API stores the HTTPS URL.
 
@@ -230,7 +233,7 @@ Open `backend/.env` in any text editor. Fill it like this (replace the JWT lines
 ```env
 NODE_ENV=development
 PORT=3000
-CORS_ORIGIN=http://localhost:8081,http://localhost:19006,http://localhost:8082,http://localhost:3000
+CORS_ORIGIN=http://localhost:8081,http://localhost:19006,http://localhost:8082,http://localhost:3000,http://localhost:3001
 DATABASE_URL=mongodb://localhost:27017/aronno
 JWT_ACCESS_SECRET=PASTE_FIRST_NODE_SECRET_HERE
 JWT_REFRESH_SECRET=PASTE_SECOND_NODE_SECRET_HERE
@@ -254,6 +257,10 @@ SMTP_SECURE=false
 SMTP_USER=
 SMTP_PASS=
 SMTP_FROM=Aronno <noreply@aronno.local>
+SSLCOMMERZ_STORE_ID=
+SSLCOMMERZ_STORE_PASSWORD=
+SSLCOMMERZ_IS_LIVE=false
+API_PUBLIC_URL=
 ```
 
 | Key | Meaning |
@@ -261,6 +268,8 @@ SMTP_FROM=Aronno <noreply@aronno.local>
 | `COOKIE_SECURE=false` | Required on `http://localhost`. Set `true` only behind HTTPS. |
 | `CORS_ORIGIN` | Comma-separated Expo / web origins. Add `http://192.168.x.x:8081` if the phone is on Wi‑Fi. |
 | `SUPERADMIN_*` | First boot creates this **already verified** superadmin from `backend/.env`. Do not commit those values. After login they can create admins; admins can create more admins. |
+| `SSLCOMMERZ_*` | Store id and password from SSLCommerz. Keep `SSLCOMMERZ_IS_LIVE=false` on the sandbox. |
+| `API_PUBLIC_URL` | Public `https` origin of **this API**, with no `/api` and no trailing slash. SSLCommerz calls `{API_PUBLIC_URL}/api/marketplace/payments/sslcommerz/...`. It is not the website URL. `localhost` cannot complete online payment. |
 
 Password rules for **new** farmer accounts: at least 10 characters, with upper, lower, number, and a symbol (example: `FarmHelp_2026!`).
 
@@ -349,6 +358,16 @@ A QR code appears.
 | Web browser | Press `w` |
 
 The first screen is **onboarding**, then **login**.
+
+### Website (terminal 4)
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Open [http://localhost:3001](http://localhost:3001). Put `ARONNO_API_ORIGIN=http://localhost:3000` in `web/.env.local`. Staff sign in at [http://localhost:3001/admin/login](http://localhost:3001/admin/login). The public pages are Bangla. The monitor is English, and its sidebar and light/dark choice are remembered in the browser.
 
 ---
 
@@ -453,11 +472,16 @@ iOS installable builds need a Mac and an Apple Developer account. This repo is d
 | Tools / receipts | Photo or voice tool ID; receipt scan from image URL, then farmer review |
 | Fertilizer / plan | Recommend, generate crop plan with cultivation cost |
 | Market | Prices, listings (optional image URL), share, disease heat map |
+| Marketplace | Shops, products, cart, orders. The server prices the cart and rejects a total sent by the phone or website |
+| Payments | Cash on delivery. Card and bKash / Nagad / Rocket go through SSLCommerz; the API accepts a payment only after SSLCommerz validation matches the order amount in BDT |
+| Delivery | Same city as the shop starts at 60 BDT, another city at 120 BDT. Change both from the website admin **Delivery** page |
+| Wallet | Profile shows spent, earned, and available. A shop owner can request a bank, bKash, or Nagad payout (minimum 100 BDT). An admin marks it paid after sending the money |
+| Website | Bangla landing, heat map, and market. English monitor for overview, users, alerts, market, reports, delivery, and payouts |
 | Images | Phone → Cloudinary → `{ imageUrl }` JSON to API |
 
 ### Still mocked or local
 
-TTS (WAV stub) and PDF generation stay mocked. Cost estimates and fertilizer advice are local rules (not Gemini). Crop plans use Open-Meteo data; Gemini writes the per-month priorities, with a rule-based fallback. If Gemini is down or `GEMINI_API_KEY` is empty, disease / treatment / tools / receipts return `AI_UNAVAILABLE` instead of fake data.
+TTS (WAV stub) and PDF generation stay mocked. Cost estimates and fertilizer advice are local rules (not Gemini). Crop plans use Open-Meteo data; Gemini writes the per-month priorities, with a rule-based fallback. If Gemini is down or `GEMINI_API_KEY` is empty, disease / treatment / tools / receipts return `AI_UNAVAILABLE` instead of fake data. Online payment stays unavailable until `API_PUBLIC_URL` is a public `https` API origin and the SSLCommerz store credentials are set. Payout requests do not call bKash or a bank.
 
 ### Intentionally not on Vercel disk
 
@@ -475,6 +499,10 @@ flowchart LR
     Jar[SecureStore cookie jar]
     CL[Cloudinary unsigned upload]
   end
+  subgraph site [Next.js site]
+    Public[Landing heat map market]
+    Admin[English monitor]
+  end
   subgraph cloud [Free / optional cloud]
     CDN[Cloudinary]
     SMTP[Gmail or Mailtrap]
@@ -488,6 +516,8 @@ flowchart LR
   UI --> RTK
   RTK --> Jar
   RTK -->|JSON + cookies + CSRF| Auth
+  Public -->|public GET| Feat
+  Admin -->|cookies + CSRF| Auth
   UI -->|photo file| CL
   CL --> CDN
   CDN -->|secure_url| RTK
@@ -539,6 +569,19 @@ MongoDB via **Prisma**. Independent facts live in their own collections (3NF-sty
 - `Market` → District ; `MarketPrice` → Market + Crop
 - `Listing` → User (seller), Crop, District
 - `WeatherCache` — seasonal outlook cache keyed by area
+
+### 14.4 Marketplace and alerts
+
+- `Shop` → User (owner), District
+- `Product` → Shop ; stock and price live here. Checkout never trusts a price from the phone
+- `Cart` → User
+- `Order` → buyer, shop, payment method (`cash_on_delivery`, `online`, `mobile_banking`), payment status, SSLCommerz transaction id
+- `DeliveryRate` — singleton settings row (`sameCityBdt`, `otherCityBdt`)
+- `Payout` → User, Shop, channel (`bank`, `bkash`, `nagad`), status (`pending`, `paid`, `rejected`)
+- `Review` → Order / Product
+- `SellerReport` → Shop
+- `Notification` → User
+- `AdminBroadcast` — staff alerts by place
 
 Legacy collections from retired features (`LoanPurpose`, `LoanApplication`, `YieldEstimate`, `HeatMapStat`) stay in the schema only so existing rows remain readable; no API or screen uses them.
 
@@ -640,7 +683,21 @@ Public POSTs do not need CSRF. Logged-in POSTs/PATCHes need cookie + `X-CSRF-Tok
 | GET | `/market/prices` | cookie | |
 | GET | `/market/listings` | cookie | |
 | POST | `/market/listings` | cookie | JSON + optional `imageUrl` |
-| GET | `/market/heatmap` | cookie | `?days=` (default 60) → `{ entries, areas }` by district |
+| GET | `/market/heatmap` | public | `?days=` (default 60) → district areas |
+| GET | `/marketplace/products` | public list | Product detail is public; create and edit need a cookie |
+| GET | `/marketplace/shops` | public list | Creating a shop needs a cookie |
+| GET/POST | `/marketplace/cart` | cookie | |
+| POST | `/marketplace/orders/quote` | cookie | `{ shopId, districtId }` → server delivery fee |
+| POST | `/marketplace/orders` | cookie | Server prices the cart. Client totals are rejected |
+| GET | `/marketplace/wallet` | cookie | Spent, earned, available |
+| POST | `/marketplace/wallet/payouts` | cookie | Bank, bKash, or Nagad request |
+| GET/POST | `/marketplace/payments/sslcommerz/*` | public callbacks | SSLCommerz success, fail, cancel, and IPN. Not wrapped in the JSON envelope |
+| GET/PATCH | `/admin/delivery` | ADMIN+ | Same-city and other-city fees |
+| GET | `/admin/payouts` | ADMIN+ | |
+| POST | `/admin/payouts/:id` | ADMIN+ | `{ action: "paid" \| "rejected" }` from pending only |
+| GET | `/admin/overview` | ADMIN+ | Monitor totals |
+| GET | `/admin/notifications` | ADMIN+ | |
+| POST | `/admin/notifications` | ADMIN+ | Broadcast |
 
 ---
 
@@ -658,6 +715,8 @@ Public POSTs do not need CSRF. Logged-in POSTs/PATCHes need cookie + `X-CSRF-Tok
 | Password rejected | 10+ chars, upper, lower, digit, symbol |
 | APK cannot log in | APK is not using `localhost`; set EAS secrets to the public API URL |
 | CSRF / 403 after login | Restart API and app so cookies match; do not mix `localhost` and `127.0.0.1` |
+| Online payment never finishes | `API_PUBLIC_URL` must be the public `https` API origin. A local API can still take cash on delivery |
+| Website admin is blank | Start the API, set `ARONNO_API_ORIGIN`, and sign in with an admin account |
 
 ---
 
@@ -675,6 +734,11 @@ npm run start:dev
 cd mobile
 pnpm install
 pnpm start
+
+# Website
+cd web
+npm install
+npm run dev
 
 # JWT secrets
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"

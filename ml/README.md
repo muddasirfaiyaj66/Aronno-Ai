@@ -4,6 +4,8 @@ Training code for on-device crop-disease classification and farm-tool detection.
 Models export to TFLite (INT8) and ship into `mobile/assets/models/vision/`.
 Gemini remains the online high-accuracy path; these are the **offline fallback**.
 
+Shopping, SSLCommerz, and the website are documented in the repository [README](../README.md), not in this training guide.
+
 ## Layout
 
 | Path | Purpose |

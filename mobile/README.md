@@ -1,6 +1,8 @@
 # Aronno Mobile
 
-Expo SDK 54 app for **আরণ্য** — Bangla agriculture assistant with online Gemini APIs and a full **offline** path (on-device Gemma, Bangla STT, TFLite vision).
+Expo SDK 54 app for **আরণ্য** — Bangla agriculture assistant with online Gemini APIs, a marketplace checkout, and a full **offline** path (on-device Gemma, Bangla STT, TFLite vision).
+
+Checkout offers cash on delivery, card, and mobile banking. The API prices the cart. Card and bKash / Nagad / Rocket open an SSLCommerz session with `expo-web-browser` and return through `aronno://payment`. The profile tab shows money spent, money earned, and what a shop owner can request as a payout. The public site and English admin monitor live in [`web/`](../web/).
 
 ## Documentation
 

@@ -11,3 +11,5 @@
 | Known limits | Lab-photo accuracy ≠ field-phone accuracy; BD crops (jute, rice BLB) need local data |
 
 Fill accuracy / confusion-matrix numbers after first `evaluate.py` run.
+
+Online diagnosis still uses Gemini through the API. This card is only the offline classifier. Product payments and the website are in the repository README.

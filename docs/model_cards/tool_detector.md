@@ -11,3 +11,5 @@
 | License note | Ultralytics YOLOv8 is AGPL-3.0 — confirm distribution model with the team |
 
 Fill mAP / per-class AP after first validation run.
+
+Online tool identification still uses Gemini through the API. This card is only the offline detector.

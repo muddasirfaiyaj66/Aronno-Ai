@@ -4,8 +4,9 @@
 
 | Folder | Responsibility | Primary stack |
 |--------|----------------|---------------|
-| [`backend/`](backend/) | REST API, auth, persistence, AI & weather adapters | Nest.js 11 · Prisma 6 · MongoDB |
+| [`backend/`](backend/) | REST API, auth, persistence, payments, AI & weather adapters | Nest.js 11 · Prisma 6 · MongoDB |
 | [`mobile/`](mobile/) | Farmer-facing Android / iOS UI | Expo SDK 54 · React Native · Redux Toolkit + RTK Query |
+| [`web/`](web/) | Bangla public site and English admin monitor | Next.js 15 |
 
 **Clone → configure → run → APK → ERD:** see **[SETUP.md](SETUP.md)** (written for non-developers as well as engineers).
 
@@ -32,7 +33,7 @@ Aronno helps farmers and agri stakeholders in Bangladesh:
 - Receive a **treatment plan**, **cost estimate**, and a **Bangla PDF report**
 - Identify farm **tools**, scan shop **receipts**, get **context-aware fertilizer** advice
 - Plan crops with a **6-month weather outlook** across **64 districts**
-- Browse **market prices** and post **listings**
+- Browse **market prices**, open a **shop**, and check out with cash, card, or mobile banking
 - Chat with an on-device / online **Bangla assistant** (text + voice when models are installed)
 - Use a Bangla-first UI with on-device **listen** (text-to-speech)
 
@@ -50,14 +51,20 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
 │  Screens · Redux / RTK Query        │
 │  SecureStore cookie jar             │
 │  Camera / mic · Cloudinary upload   │
+│  Checkout · SSLCommerz session      │
 │  Online: Gemini via API             │
 │  Offline: Gemma · sherpa · TFLite   │
-│  (see docs/offline_ai/README.md)    │
+└─────────────────┬───────────────────┘
+┌─────────────────┴───────────────────┐
+│  Next.js site (web/)                │
+│  Bangla landing, heat map, market   │
+│  English admin monitor (staff only) │
 └─────────────────┬───────────────────┘
                   │ HTTPS + cookies + CSRF (when online)
 ┌─────────────────▼───────────────────┐
 │  Nest.js API (backend/)             │
-│  Auth · RBAC · Feature modules      │
+│  Auth · RBAC · Marketplace          │
+│  Prices and SSLCommerz checks       │
 │  Gemini Flash-Lite · Open-Meteo     │
 │  Nodemailer (OTP / password reset)  │
 │  pdf-lib (Bangla PDF reports)       │
@@ -97,8 +104,9 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
 |------------|--------|---------|-----------------|
 | Profile update (name, phone, profession, district) | Done | Users module, Prisma | Profile tab |
 | Lookups: professions, crops, **64 BD districts** | Done | Seed on boot, Lookups module | Chips / selectors |
-| Admin: list users, roles, activate/deactivate | Done | Admin module + audit log | Admin screen (`আমি → অ্যাডমিন`) |
-| Create verified admins | Done | `POST /api/admin/users` | Admin UI |
+| Admin: list users, roles, activate/deactivate | Done | Admin module + audit log | Phone admin screen and website monitor |
+| Create verified admins | Done | `POST /api/admin/users` | Website **New admin** and phone admin UI |
+| English operations monitor | Done | Overview, commerce, reports, alerts | Website `/admin` — sidebar can collapse; light and dark themes are remembered |
 
 ### Crop diagnosis (photo & voice)
 
@@ -136,10 +144,17 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
 
 | Capability | Status | Backend | Mobile / client |
 |------------|--------|---------|-----------------|
-| Market prices by district / crop | Done | Market module, Prisma | Market tab |
+| Market prices by district / crop | Done | Public `GET /market/prices` | Market tab and website `/market` |
 | Create listing (optional photo) | Done | Listings + Cloudinary URL | Market UI |
-| Full marketplace (orders, buyer/seller roles) | Planned | — | See [product corrections](docs/product_corrections.md) |
-| Disease outbreak heat map | Done | `GET /market/heatmap` aggregates diagnoses by district | Market → হিট ম্যাপ (Leaflet + OpenStreetMap) |
+| Shops, products, cart, orders | Done | Marketplace module; stock reserved with a single availability service | Shop and checkout screens |
+| Checkout amounts | Done | Server prices the cart from the database and rejects client totals | Checkout does not send a total |
+| Cash on delivery | Done | Order stays unpaid until delivery marks it paid | Checkout option |
+| Card and mobile banking | Done | SSLCommerz session; amount, currency, and transaction id checked on the validation API before the order is paid | `expo-web-browser` returns to `aronno://payment` |
+| Delivery fee | Done | Same district as the shop defaults to 60 BDT, another district to 120 BDT | Website **Delivery** can change both (0–5000) |
+| Seller wallet and payout requests | Done | Earned amount is product subtotal of settled orders; delivery fees are excluded | Profile shows spent, earned, and available; bank, bKash, or Nagad request (minimum 100 BDT) |
+| Payout settlement | Done (manual) | Admin marks a pending request paid or rejected. The API does not send money to a bank or wallet | Website **Payouts** |
+| Disease outbreak heat map | Done | Public `GET /market/heatmap` | App map (Esri tiles) and website `/heatmap` (Leaflet + OpenStreetMap) |
+| Live alerts | Done | Heat radius, weather, scans, orders, admin broadcasts | In-app notifications |
 
 ### Home, UX & platform
 
@@ -150,6 +165,7 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
 | Offline / retry affordances | Done | Bangla error envelope | `OfflineBanner`, `RetryCard`, `@react-native-community/netinfo` |
 | Health check | Done | `GET /api/health` | — |
 | Dev client / branded app | Done | — | `expo-dev-client`, Expo Router file routes |
+| Public website | Done | — | Next.js landing, heat map, and market in Bangla |
 
 ### Known stubs / non-Gemini paths
 
@@ -159,6 +175,7 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
 | Cost estimates / fertilizer | Deterministic local tables and rules, not Gemini |
 | Crop plans | **Open-Meteo** seasonal outlook + Gemini (rule-based fallback) |
 | Gemini outage / missing key | `AI_UNAVAILABLE` — no fake disease/treatment/tool/receipt data |
+| Online or mobile-banking payment | Needs `SSLCOMMERZ_*` and a public `https` `API_PUBLIC_URL`. Cash on delivery still works on localhost. A payout request does not move money until an admin marks it paid |
 | File uploads to API | Not supported — always Cloudinary (or other) `https://` URLs |
 
 ---
@@ -181,7 +198,16 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
 | AI | Google Gemini API (`gemini-3.5-flash-lite` / Flash-Lite family) |
 | Weather | [Open-Meteo](https://open-meteo.com) forecast & seasonal APIs |
 | PDF | `pdf-lib`, `@pdf-lib/fontkit`, Noto Sans Bengali |
+| Payments | SSLCommerz (sandbox until `SSLCOMMERZ_IS_LIVE=true`) |
 | Testing | Jest, Supertest |
+
+### Website (`web/`)
+
+| Concern | Package / service |
+|---------|-------------------|
+| Framework | Next.js 15 (App Router) |
+| Admin UI | English monitor, collapsible sidebar, light and dark themes stored in the browser |
+| Public pages | Bangla landing, `/heatmap`, `/market` |
 
 ### Mobile (`mobile/`)
 
@@ -231,7 +257,7 @@ Generate distinct JWT secrets (do not reuse sample strings in production):
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Set `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`, and optionally `GEMINI_API_KEY`, SMTP, and Google client IDs in `backend/.env`.
+Set `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`, and optionally `GEMINI_API_KEY`, SMTP, Google client IDs, and SSLCommerz settings in `backend/.env`. `API_PUBLIC_URL` is the public `https` origin of this API (no `/api`, no trailing slash), not the website URL.
 
 Health check: [http://localhost:3000/api/health](http://localhost:3000/api/health)
 
@@ -244,7 +270,7 @@ pnpm install
 pnpm start
 ```
 
-Configure Cloudinary (`EXPO_PUBLIC_CLOUDINARY_*`) and `EXPO_PUBLIC_API_URL` before using the camera. Full environment reference: [SETUP.md](SETUP.md).
+Configure Cloudinary (`EXPO_PUBLIC_CLOUDINARY_*`) and `EXPO_PUBLIC_API_URL` before using the camera. The website runs from `web/` on port **3001** (`ARONNO_API_ORIGIN=http://localhost:3000`). Full environment reference: [SETUP.md](SETUP.md).
 
 ---
 
@@ -255,7 +281,7 @@ Configure Cloudinary (`EXPO_PUBLIC_CLOUDINARY_*`) and `EXPO_PUBLIC_API_URL` befo
 | Demo farmer (seeded, verified) | `demo@gmail.com` / `demo1234` |
 | Superadmin | From `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` in `backend/.env` |
 
-After superadmin login, create more admins from **আমি → অ্যাডমিন তৈরি**. Admins can create further admins.
+After superadmin login, create more admins from the phone (**আমি → অ্যাডমিন তৈরি**) or the website (**New admin**). The website monitor is in English. The public site stays in Bangla. Admins can create further admins.
 
 ---
 
@@ -270,6 +296,7 @@ After superadmin login, create more admins from **আমি → অ্যাড�
 | [docs/model_cards/](docs/model_cards/) | Per-model accuracy, limits, licenses |
 | [ml/README.md](ml/README.md) | Train disease / tool TFLite models |
 | [backend/README.md](backend/README.md) | API auth model, route overview, scripts |
+| [web/README.md](web/README.md) | Public site and English admin monitor |
 | [mobile/](mobile/) | Expo app source (`app/` file-based routes) |
 | [LICENSE](LICENSE) | MIT |
 

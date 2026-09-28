@@ -36,7 +36,7 @@ export function SegmentedTabs<T extends string>({
             accessibilityState={{ selected }}
             accessibilityLabel={option.label}
             className={`min-h-touch items-center justify-center rounded-full px-4 ${
-              selected ? "bg-primary" : "bg-transparent"
+              selected ? "bg-forest-700" : "bg-transparent"
             }`}
           >
             <AppText

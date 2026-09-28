@@ -77,7 +77,7 @@ export default function OrderDetailsScreen() {
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-        <View className="border-b border-border bg-white px-5 py-3.5 flex-row items-center gap-3">
+        <View className="border-b border-border bg-card px-5 py-3.5 flex-row items-center gap-3">
           <Pressable onPress={() => router.back()} className="h-10 w-10 items-center justify-center rounded-full bg-neutral">
             <Ionicons name="arrow-back" size={20} color={colors.ink} />
           </Pressable>
@@ -95,7 +95,7 @@ export default function OrderDetailsScreen() {
   if (isError || !order) {
     return (
       <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-        <View className="border-b border-border bg-white px-5 py-3.5 flex-row items-center gap-3">
+        <View className="border-b border-border bg-card px-5 py-3.5 flex-row items-center gap-3">
           <Pressable onPress={() => router.back()} className="h-10 w-10 items-center justify-center rounded-full bg-neutral">
             <Ionicons name="arrow-back" size={20} color={colors.ink} />
           </Pressable>
@@ -118,7 +118,7 @@ export default function OrderDetailsScreen() {
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       {/* Top Header */}
-      <View className="border-b border-border bg-white px-5 py-3.5 flex-row items-center justify-between">
+      <View className="border-b border-border bg-card px-5 py-3.5 flex-row items-center justify-between">
         <View className="flex-row items-center gap-3">
           <Pressable
             onPress={() => router.back()}
@@ -181,8 +181,8 @@ export default function OrderDetailsScreen() {
                         isPassed
                           ? "bg-emerald-600 border-emerald-600"
                           : isCurrent
-                          ? "bg-primary border-primary"
-                          : "bg-white border-neutral-300"
+                          ? "bg-forest-700 border-primary"
+                          : "bg-card border-neutral-300"
                       }`}
                     >
                       {isPassed ? (
@@ -414,7 +414,7 @@ export default function OrderDetailsScreen() {
         onRequestClose={() => setConfirmCancelVisible(false)}
       >
         <View className="flex-1 bg-black/50 items-center justify-center px-5">
-          <View className="w-full rounded-3xl bg-white p-6 gap-4">
+          <View className="w-full rounded-3xl bg-card p-6 gap-4">
             <View className="h-12 w-12 rounded-full bg-red-100 items-center justify-center self-center">
               <Ionicons name="warning" size={24} color="#D92D20" />
             </View>

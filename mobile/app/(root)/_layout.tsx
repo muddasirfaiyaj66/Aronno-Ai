@@ -16,7 +16,7 @@ function BootPlaceholder() {
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: colors.sand,
+        backgroundColor: colors.neutral,
       }}
     >
       <ActivityIndicator size="large" color={colors.primary} />
@@ -65,5 +65,12 @@ export default function RootGroupLayout() {
     return <Redirect href="/login" />;
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.neutral },
+      }}
+    />
+  );
 }

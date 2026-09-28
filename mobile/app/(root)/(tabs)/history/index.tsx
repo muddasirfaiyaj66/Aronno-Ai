@@ -34,7 +34,7 @@ function RowShell({
   children: ReactNode;
 }) {
   return (
-    <View className="flex-row items-center gap-2 rounded-2xl border border-border bg-white p-3">
+    <View className="flex-row items-center gap-2 rounded-2xl border border-border bg-card p-3">
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
@@ -106,7 +106,7 @@ function TimelineItem({
   return (
     <View className="flex-row gap-3">
       <View className="items-center">
-        <View className="mt-6 h-3 w-3 rounded-full bg-primary" />
+        <View className="mt-6 h-3 w-3 rounded-full bg-forest-700" />
         {!isLast ? <View className="w-px flex-1 bg-neutral-200" /> : null}
       </View>
       <View className="flex-1 pb-4">
@@ -250,7 +250,7 @@ export default function CropHealthHistoryScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-border bg-white px-5 py-3.5">
+      <View className="border-b border-border bg-card px-5 py-3.5">
         <AppText variant="title">ইতিহাস</AppText>
         <AppText variant="caption" className="mt-0.5">
           স্ক্যান ও রোগ শনাক্তের রেকর্ড — মুছুন চাপলে মুছে যাবে

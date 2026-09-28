@@ -49,7 +49,7 @@ export function ReviewModal({
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View className="flex-1 bg-black/50 items-center justify-center px-5">
-        <View className="w-full rounded-3xl bg-white p-6 gap-4">
+        <View className="w-full rounded-3xl bg-card p-6 gap-4">
           <View className="flex-row items-center justify-between border-b border-border pb-3">
             <View>
               <AppText variant="subtitle" className="font-bengali-bold text-ink">

@@ -12,7 +12,7 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-neutral-200 bg-white px-5 py-4">
+      <View className="border-b border-neutral-200 bg-card px-5 py-4">
         <AppText variant="title">বিজ্ঞপ্তি</AppText>
         <AppText variant="caption" className="mt-1">
           আপনার সাম্প্রতিক বিজ্ঞপ্তি

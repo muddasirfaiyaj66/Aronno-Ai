@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { View } from "react-native";
+import { useTheme } from "@/context/theme";
 import type { HeatmapArea } from "@/types/market";
 import { heatmapHtml } from "./heatmapHtml";
 
@@ -7,10 +8,16 @@ export type HeatMapViewProps = {
   areas: HeatmapArea[];
   onSelect: (slug: string) => void;
   height?: number;
+  onGestureStart?: () => void;
+  onGestureEnd?: () => void;
 };
 
-export function HeatMapView({ areas, onSelect, height = 380 }: HeatMapViewProps) {
-  const html = useMemo(() => heatmapHtml(areas, "iframe"), [areas]);
+export function HeatMapView({ areas, onSelect, height = 460 }: HeatMapViewProps) {
+  const { scheme } = useTheme();
+  const html = useMemo(
+    () => heatmapHtml(areas, "iframe", scheme),
+    [areas, scheme],
+  );
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {

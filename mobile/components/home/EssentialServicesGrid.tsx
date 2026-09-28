@@ -52,7 +52,10 @@ function ServiceTile({
         onPress={item.onPress}
         accessibilityRole="button"
         accessibilityLabel={`${item.title}. ${item.subtitle}`}
-        contentStyle={styles.tile}
+        contentStyle={[
+          styles.tile,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
       >
         <View
           className="h-11 w-11 items-center justify-center rounded-2xl"

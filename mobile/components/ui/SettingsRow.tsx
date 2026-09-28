@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "./AppText";
 import { colors } from "@/constants/theme";
+import { useTheme } from "@/context/theme";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -36,6 +37,7 @@ export function SettingsRow({
   right,
   last = false,
 }: SettingsRowProps) {
+  const { scheme } = useTheme();
   const content = (
     <View
       className={`min-h-[56px] flex-row items-center gap-3 px-4 py-3 ${
@@ -45,7 +47,13 @@ export function SettingsRow({
       {icon ? (
         <View
           className="h-9 w-9 items-center justify-center rounded-xl"
-          style={{ backgroundColor: destructive ? "#FEE4E2" : iconBg }}
+          style={{
+            backgroundColor: destructive
+              ? scheme === "dark"
+                ? "#3A2220"
+                : "#FEE4E2"
+              : iconBg,
+          }}
         >
           <Ionicons
             name={icon}

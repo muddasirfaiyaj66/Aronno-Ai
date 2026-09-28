@@ -46,7 +46,7 @@ export function ListenButton({ textBn, label, className = "" }: ListenButtonProp
       accessibilityRole="button"
       accessibilityLabel={playing ? pauseLabel : playLabel}
       className={`min-h-touch-lg flex-row items-center justify-center gap-2 rounded-2xl px-5 active:opacity-90 ${
-        playing ? "bg-primary-800" : "bg-primary"
+        playing ? "bg-primary-800" : "bg-forest-700"
       } ${className}`}
       style={{
         shadowColor: colors.primary,

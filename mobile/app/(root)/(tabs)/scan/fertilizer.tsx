@@ -135,7 +135,7 @@ function ChipRow<T extends string | number>({
             accessibilityState={{ selected }}
             accessibilityLabel={option.label}
             className={`min-h-touch items-center justify-center rounded-full border px-4 ${
-              selected ? "border-primary bg-primary" : "border-border bg-white"
+              selected ? "border-primary bg-forest-700" : "border-border bg-card"
             }`}
           >
             <AppText
@@ -243,7 +243,7 @@ export default function FertilizerRecommendationScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-neutral-200 bg-white px-5 py-4">
+      <View className="border-b border-neutral-200 bg-card px-5 py-4">
         <AppText variant="title">সার সুপারিশ</AppText>
         <AppText variant="caption" className="mt-1">
           জমির পরিমাণ, ফসলের বয়স ও রোগের তথ্য দিয়ে মাত্রা ঠিক করুন
@@ -293,7 +293,7 @@ export default function FertilizerRecommendationScreen() {
             placeholder="অথবা লিখুন, যেমন: ৩৮"
             placeholderTextColor={colors.muted}
             accessibilityLabel="ফসলের বয়স, দিন"
-            className="min-h-touch-lg rounded-2xl bg-white px-4 font-bengali-medium text-body-lg text-ink"
+            className="min-h-touch-lg rounded-2xl bg-card px-4 font-bengali-medium text-body-lg text-ink"
           />
         </View>
 
@@ -336,7 +336,7 @@ export default function FertilizerRecommendationScreen() {
 
           {hasDisease === "yes" ? (
             latestDiagnosis ? (
-              <View className="gap-3 rounded-2xl border border-border bg-white p-4">
+              <View className="gap-3 rounded-2xl border border-border bg-card p-4">
                 <View className="flex-row items-center gap-3">
                   <Ionicons name="time-outline" size={20} color={colors.primary} />
                   <View className="flex-1">
@@ -359,7 +359,7 @@ export default function FertilizerRecommendationScreen() {
                 />
               </View>
             ) : (
-              <View className="gap-3 rounded-2xl border border-border bg-white p-4">
+              <View className="gap-3 rounded-2xl border border-border bg-card p-4">
                 <AppText variant="body" className="text-ink">
                   সাম্প্রতিক কোনো স্ক্যান পাওয়া যায়নি। রোগটি নিশ্চিত হতে পাতার ছবি
                   স্ক্যান করতে পারেন।

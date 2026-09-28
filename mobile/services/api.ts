@@ -6,6 +6,7 @@ import {
   type FetchBaseQueryError,
 } from "@reduxjs/toolkit/query/react";
 import { Platform } from "react-native";
+import { deviceLabel } from "@/lib/deviceLabel";
 import {
   clearCookies,
   getCookie,
@@ -84,6 +85,7 @@ const rawBaseQuery = fetchBaseQuery({
       const cookie = await getCookieHeader();
       if (cookie) headers.set("Cookie", cookie);
     }
+    headers.set("X-Device-Name", deviceLabel());
     const csrf = await getCookie("aronno_csrf");
     if (csrf && type === "mutation") {
       headers.set("X-CSRF-Token", csrf);
@@ -163,6 +165,7 @@ export const api = createApi({
     "Product",
     "Cart",
     "Order",
+    "Session",
   ],
   endpoints: (builder) => ({
     getProfessions: builder.query<{ slug: string; nameBn: string; nameEn: string }[], void>({
@@ -258,6 +261,20 @@ export const api = createApi({
           dispatch(clearUser());
         }
       },
+    }),
+    getSessions: builder.query<
+      { sessions: { id: string; deviceName: string; createdAt: string; current: boolean }[] },
+      void
+    >({
+      query: () => "/auth/sessions",
+      transformResponse: (r) =>
+        unwrap<{ sessions: { id: string; deviceName: string; createdAt: string; current: boolean }[] }>(r),
+      providesTags: ["Session"],
+    }),
+    revokeSession: builder.mutation<{ ok: true }, string>({
+      query: (id) => ({ url: `/auth/sessions/${id}/revoke`, method: "POST" }),
+      transformResponse: (r) => unwrap<{ ok: true }>(r),
+      invalidatesTags: ["Session"],
     }),
     patchMe: builder.mutation<
       AuthUser,
@@ -914,6 +931,8 @@ export const {
   useResetPasswordMutation,
   useLogoutMutation,
   useGetMeQuery,
+  useGetSessionsQuery,
+  useRevokeSessionMutation,
   usePatchMeMutation,
   useCreatePhotoDiagnosisMutation,
   useTranscribeMutation,

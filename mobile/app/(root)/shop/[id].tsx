@@ -61,7 +61,7 @@ export default function PublicShopScreen() {
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       {/* Header Bar */}
-      <View className="flex-row items-center gap-3 border-b border-border bg-white px-5 py-3.5">
+      <View className="flex-row items-center gap-3 border-b border-border bg-card px-5 py-3.5">
         <Pressable
           onPress={() => router.back()}
           className="h-10 w-10 items-center justify-center rounded-full bg-neutral"
@@ -110,7 +110,7 @@ export default function PublicShopScreen() {
                 </View>
                 <Pressable
                   onPress={() => setAddProductModalVisible(true)}
-                  className="rounded-xl bg-primary px-3 py-1.5 flex-row items-center gap-1"
+                  className="rounded-xl bg-forest-700 px-3 py-1.5 flex-row items-center gap-1"
                 >
                   <Ionicons name="add" size={16} color={colors.white} />
                   <AppText variant="caption" className="font-bengali-bold text-white">
@@ -253,7 +253,7 @@ export default function PublicShopScreen() {
                             params: { id: product.id },
                           } as any)
                         }
-                        className="w-[47%] overflow-hidden rounded-3xl bg-white shadow-sm border border-border/50"
+                        className="w-[47%] overflow-hidden rounded-3xl bg-card shadow-sm border border-border/50"
                       >
                         {/* Image */}
                         <View className="h-36 w-full overflow-hidden bg-neutral">

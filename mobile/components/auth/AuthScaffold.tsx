@@ -70,7 +70,7 @@ export function AuthScaffold({
           </View>
 
           <View
-            className="rounded-[28px] border border-border bg-white px-5 py-6"
+            className="rounded-[28px] border border-border bg-card px-5 py-6"
             style={{
               shadowColor: colors.ink,
               shadowOpacity: 0.06,

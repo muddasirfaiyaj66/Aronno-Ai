@@ -15,6 +15,7 @@ import {
 import { OfflineBanner } from "@/components/ui";
 import { OfflineAiBootstrap } from "@/components/OfflineAiBootstrap";
 import { LocaleProvider } from "@/context/locale";
+import { ThemeProvider, useTheme } from "@/context/theme";
 import { store } from "@/store";
 import { useGetMeQuery } from "@/services/api";
 
@@ -23,6 +24,11 @@ SplashScreen.preventAutoHideAsync();
 function SessionHydrator() {
   useGetMeQuery();
   return null;
+}
+
+function ThemedStatusBar() {
+  const { scheme } = useTheme();
+  return <StatusBar style={scheme === "dark" ? "light" : "dark"} />;
 }
 
 export default function RootLayout() {
@@ -46,13 +52,20 @@ export default function RootLayout() {
   return (
     <Provider store={store}>
       <SafeAreaProvider>
-        <LocaleProvider>
-          <SessionHydrator />
-          <OfflineAiBootstrap />
-          <StatusBar style="dark" />
-          <OfflineBanner />
-          <Stack screenOptions={{ headerShown: false }} />
-        </LocaleProvider>
+        <ThemeProvider>
+          <LocaleProvider>
+            <SessionHydrator />
+            <OfflineAiBootstrap />
+            <ThemedStatusBar />
+            <OfflineBanner />
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: "transparent" },
+              }}
+            />
+          </LocaleProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </Provider>
   );

@@ -72,7 +72,7 @@ export function VoiceInputWidget({
   }));
 
   return (
-    <View style={styles.card} className={className}>
+    <View style={[styles.card, { backgroundColor: colors.card }]} className={className}>
       <View className="items-center gap-5">
         {preferTyping ? null : (
           <View className="h-24 w-24 items-center justify-center">
@@ -99,7 +99,7 @@ export function VoiceInputWidget({
               style={[
                 styles.micShadow,
                 {
-                  backgroundColor: isRecording ? colors.forest900 : colors.primary,
+                  backgroundColor: isRecording ? colors.forest900 : colors.forest700,
                   opacity: disabled ? 0.55 : 1,
                 },
               ]}

@@ -124,7 +124,7 @@ function FilterChipRow<T extends string>({
               accessibilityState={{ selected }}
               accessibilityLabel={option.label}
               className={`min-h-touch items-center justify-center rounded-full px-4 ${
-                selected ? "bg-primary" : "bg-white"
+                selected ? "bg-forest-700" : "bg-card"
               }`}
             >
               <AppText
@@ -177,6 +177,7 @@ export default function MarketScreen() {
 
   // Heat Map
   const [heatSlug, setHeatSlug] = useState<string | null>(null);
+  const [mapTouching, setMapTouching] = useState(false);
 
   const [shopModalVisible, setShopModalVisible] = useState(false);
   const [addProductModalVisible, setAddProductModalVisible] = useState(false);
@@ -188,6 +189,7 @@ export default function MarketScreen() {
     data: productsData,
     isLoading: productsLoading,
     isError: productsError,
+    isUninitialized: productsIdle,
     refetch: refetchProducts,
   } = useGetProductsQuery(
     {
@@ -206,6 +208,7 @@ export default function MarketScreen() {
     data: shopsData,
     isLoading: shopsLoading,
     isError: shopsError,
+    isUninitialized: shopsIdle,
     refetch: refetchShops,
   } = useGetShopsQuery(
     {
@@ -236,14 +239,23 @@ export default function MarketScreen() {
   const { data: districts = [], refetch: refetchDistricts } = useGetDistrictsQuery();
 
   const refreshMarket = useCallback(async () => {
-    await Promise.all([
-      refetchProducts(),
-      refetchShops(),
+    const tasks: Promise<unknown>[] = [
       refetchHeatmap(),
       refetchDistricts(),
       refetchMyShop(),
-    ]);
-  }, [refetchProducts, refetchShops, refetchHeatmap, refetchDistricts, refetchMyShop]);
+    ];
+    if (!productsIdle) tasks.push(refetchProducts());
+    if (!shopsIdle) tasks.push(refetchShops());
+    await Promise.all(tasks);
+  }, [
+    productsIdle,
+    shopsIdle,
+    refetchProducts,
+    refetchShops,
+    refetchHeatmap,
+    refetchDistricts,
+    refetchMyShop,
+  ]);
 
   const { refreshControl } = usePullToRefresh(refreshMarket);
 
@@ -264,7 +276,7 @@ export default function MarketScreen() {
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       {/* Header Bar */}
-      <View className="border-b border-border bg-white px-5 py-3.5">
+      <View className="border-b border-border bg-card px-5 py-3.5">
         <View className="flex-row items-center justify-between">
           <View>
             <AppText variant="title">কৃষি মার্কেট</AppText>
@@ -279,7 +291,7 @@ export default function MarketScreen() {
             >
               <Ionicons name="cart-outline" size={20} color={colors.ink} />
               {cartItemCount > 0 ? (
-                <View className="absolute -top-1 -right-1 h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 border-2 border-white shadow-xs">
+                <View className="absolute -top-1 -right-1 h-5 min-w-5 items-center justify-center rounded-full bg-forest-700 px-1 border-2 border-white shadow-xs">
                   <AppText
                     variant="caption"
                     className="font-bengali-bold text-white"
@@ -310,13 +322,14 @@ export default function MarketScreen() {
         className="flex-1"
         contentContainerClassName="gap-4 px-5 py-5 pb-24"
         keyboardShouldPersistTaps="handled"
+        scrollEnabled={!mapTouching}
         refreshControl={refreshControl}
         showsVerticalScrollIndicator={false}
       >
         {tab === "marketplace" ? (
           <>
             {/* Mode Switcher: Products vs Shops */}
-            <View className="flex-row rounded-2xl bg-white p-1 border border-border">
+            <View className="flex-row rounded-2xl bg-card p-1 border border-border">
               {SEARCH_MODE_OPTIONS.map((mode) => {
                 const selected = mode.id === searchMode;
                 return (
@@ -327,7 +340,7 @@ export default function MarketScreen() {
                       setPage(1);
                     }}
                     className={`flex-1 flex-row items-center justify-center py-2.5 rounded-xl gap-2 ${
-                      selected ? "bg-primary shadow-xs" : "bg-transparent"
+                      selected ? "bg-forest-700 shadow-xs" : "bg-transparent"
                     }`}
                   >
                     <Ionicons
@@ -349,7 +362,7 @@ export default function MarketScreen() {
             </View>
 
             {/* Search Input Bar */}
-            <View className="flex-row items-center rounded-2xl border border-border bg-white px-3.5 py-2.5 shadow-sm">
+            <View className="flex-row items-center rounded-2xl border border-border bg-card px-3.5 py-2.5 shadow-sm">
               <Ionicons name="search" size={20} color={colors.muted} />
               <TextInput
                 value={searchQuery}
@@ -447,7 +460,7 @@ export default function MarketScreen() {
                                 params: { id: product.id },
                               } as any)
                             }
-                            className="w-[47%] overflow-hidden rounded-3xl bg-white shadow-sm border border-border/50"
+                            className="w-[47%] overflow-hidden rounded-3xl bg-card shadow-sm border border-border/50"
                           >
                             {/* Product image */}
                             <View className="h-36 w-full overflow-hidden bg-neutral">
@@ -530,7 +543,7 @@ export default function MarketScreen() {
                           disabled={page <= 1}
                           onPress={() => setPage((p) => Math.max(1, p - 1))}
                           className={`h-10 rounded-full px-4 items-center justify-center flex-row gap-1 ${
-                            page <= 1 ? "bg-neutral border border-border" : "bg-white border border-primary"
+                            page <= 1 ? "bg-neutral border border-border" : "bg-card border border-primary"
                           }`}
                         >
                           <Ionicons
@@ -558,7 +571,7 @@ export default function MarketScreen() {
                           className={`h-10 rounded-full px-4 items-center justify-center flex-row gap-1 ${
                             page >= productTotalPages
                               ? "bg-neutral border border-border"
-                              : "bg-white border border-primary"
+                              : "bg-card border border-primary"
                           }`}
                         >
                           <AppText
@@ -627,7 +640,7 @@ export default function MarketScreen() {
                                 params: { id: shopItem.id },
                               } as any)
                             }
-                            className="rounded-3xl bg-white p-4 shadow-sm border border-border/50 flex-row items-center gap-3.5"
+                            className="rounded-3xl bg-card p-4 shadow-sm border border-border/50 flex-row items-center gap-3.5"
                           >
                             {/* Logo */}
                             {shopItem.logoUrl ? (
@@ -693,7 +706,7 @@ export default function MarketScreen() {
                           disabled={page <= 1}
                           onPress={() => setPage((p) => Math.max(1, p - 1))}
                           className={`h-10 rounded-full px-4 items-center justify-center flex-row gap-1 ${
-                            page <= 1 ? "bg-neutral border border-border" : "bg-white border border-primary"
+                            page <= 1 ? "bg-neutral border border-border" : "bg-card border border-primary"
                           }`}
                         >
                           <Ionicons
@@ -721,7 +734,7 @@ export default function MarketScreen() {
                           className={`h-10 rounded-full px-4 items-center justify-center flex-row gap-1 ${
                             page >= shopTotalPages
                               ? "bg-neutral border border-border"
-                              : "bg-white border border-primary"
+                              : "bg-card border border-primary"
                           }`}
                         >
                           <AppText
@@ -784,7 +797,12 @@ export default function MarketScreen() {
             ) : heatmapLoading ? (
               <AIGeneratingShimmer label="মানচিত্র তৈরি হচ্ছে" lines={4} className="w-full" />
             ) : (
-              <HeatMapView areas={heatAreas} onSelect={setHeatSlug} />
+              <HeatMapView
+                areas={heatAreas}
+                onSelect={setHeatSlug}
+                onGestureStart={() => setMapTouching(true)}
+                onGestureEnd={() => setMapTouching(false)}
+              />
             )}
 
             <View className="flex-row items-center justify-center gap-4">

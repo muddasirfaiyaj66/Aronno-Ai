@@ -28,7 +28,7 @@ export function ForecastTimelineCard({
   className = "",
 }: ForecastTimelineCardProps) {
   return (
-    <View className={`rounded-3xl border border-neutral-200 bg-white ${className}`}>
+    <View className={`rounded-3xl border border-neutral-200 bg-card ${className}`}>
       <View className="px-5 pt-5">
         <AppText variant="bodyLg" className="font-bengali-bold text-primary">
           {title}
@@ -46,7 +46,7 @@ export function ForecastTimelineCard({
             key={item.id}
             className="flex-row items-start gap-3 rounded-2xl bg-neutral px-3 py-3"
           >
-            <View className="h-14 w-14 items-center justify-center rounded-2xl bg-white">
+            <View className="h-14 w-14 items-center justify-center rounded-2xl bg-card">
               <WeatherMood kind={weatherKindFromIcon(String(item.weatherIcon))} size={22} />
             </View>
             <View className="min-w-0 flex-1">
@@ -58,7 +58,7 @@ export function ForecastTimelineCard({
               </AppText>
               <View className="mt-2 flex-row flex-wrap gap-2">
                 {item.tempC != null ? (
-                  <View className="flex-row items-center gap-1 rounded-full bg-white px-2.5 py-1">
+                  <View className="flex-row items-center gap-1 rounded-full bg-card px-2.5 py-1">
                     <Ionicons name="thermometer-outline" size={14} color={colors.primary} />
                     <AppText variant="caption" className="font-bengali-semibold text-ink">
                       {item.tempC}°
@@ -66,7 +66,7 @@ export function ForecastTimelineCard({
                   </View>
                 ) : null}
                 {item.precipMm != null ? (
-                  <View className="flex-row items-center gap-1 rounded-full bg-white px-2.5 py-1">
+                  <View className="flex-row items-center gap-1 rounded-full bg-card px-2.5 py-1">
                     <Ionicons name="water-outline" size={14} color={colors.primary} />
                     <AppText variant="caption" className="font-bengali-semibold text-ink">
                       {item.precipMm} মিমি

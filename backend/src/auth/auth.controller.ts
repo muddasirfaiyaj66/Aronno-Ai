@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
@@ -27,6 +27,7 @@ export class AuthController {
     return {
       userAgent: req.header('user-agent'),
       ip: req.ip,
+      deviceName: req.header('x-device-name')?.slice(0, 80),
     };
   }
 
@@ -117,5 +118,20 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: AuthUser) {
     return this.auth.me(user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('sessions')
+  sessions(@CurrentUser() user: AuthUser, @Req() req: Request) {
+    return this.auth.listSessions(user.id, this.meta(req));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('sessions/:id/revoke')
+  revokeSession(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+  ) {
+    return this.auth.revokeSession(user.id, id);
   }
 }

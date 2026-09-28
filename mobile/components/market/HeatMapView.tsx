@@ -1,319 +1,227 @@
-import { useMemo, useState } from "react";
-import {
-  Linking,
-  NativeModules,
-  Pressable,
-  TurboModuleRegistry,
-  View,
-} from "react-native";
-import Svg, {
-  Circle,
-  Defs,
-  LinearGradient,
-  Path,
-  Rect,
-  Stop,
-  Text as SvgText,
-} from "react-native-svg";
+import { useMemo, useRef, useState } from "react";
+import { PanResponder, Pressable, View } from "react-native";
+import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "@/components/ui";
+import { colors } from "@/constants/theme";
 import type { HeatmapArea } from "@/types/market";
-import { heatmapHtml, HEAT_COLORS } from "./heatmapHtml";
+import { HEAT_COLORS } from "./heatmapHtml";
 
 export type HeatMapViewProps = {
   areas: HeatmapArea[];
   onSelect: (slug: string) => void;
   height?: number;
+  /** Parent scroll should pause so the map can pan. */
+  onGestureStart?: () => void;
+  onGestureEnd?: () => void;
 };
 
-const WEB_HEATMAP_URL =
-  process.env.EXPO_PUBLIC_WEB_URL
-    ? `${process.env.EXPO_PUBLIC_WEB_URL.replace(/\/$/, "")}/heatmap`
-    : "https://aronnoaibd.vercel.app/heatmap";
+const TILE = 256;
+const MIN_ZOOM = 6;
+const MAX_ZOOM = 16;
+const BD = { lat: 23.7, lon: 90.35 };
 
-/** Geographic frame used for lat/lon → SVG projection. */
-const BD = {
-  south: 20.55,
-  north: 26.75,
-  west: 88.0,
-  east: 92.7,
-};
-
-/**
- * Simplified Bangladesh land outline (lon, lat rings) — enough for a clear
- * national silhouette behind district heat bubbles.
- */
-const BD_OUTLINE: [number, number][] = [
-  [88.1, 21.5],
-  [88.05, 21.9],
-  [88.15, 22.5],
-  [88.35, 22.95],
-  [88.55, 23.55],
-  [88.75, 24.15],
-  [88.5, 24.7],
-  [88.15, 25.2],
-  [88.1, 25.75],
-  [88.35, 26.35],
-  [88.7, 26.55],
-  [89.25, 26.65],
-  [89.85, 26.4],
-  [90.35, 26.15],
-  [90.65, 25.85],
-  [91.1, 25.35],
-  [91.55, 25.05],
-  [92.05, 24.85],
-  [92.35, 24.4],
-  [92.45, 23.7],
-  [92.25, 23.1],
-  [92.05, 22.55],
-  [92.15, 21.85],
-  [92.05, 21.35],
-  [91.85, 21.05],
-  [91.45, 21.2],
-  [91.0, 21.55],
-  [90.55, 21.75],
-  [90.15, 21.85],
-  [89.75, 21.95],
-  [89.35, 21.85],
-  [88.95, 21.7],
-  [88.55, 21.55],
-  [88.25, 21.45],
-];
-
-type WebViewComponent = React.ComponentType<{
-  originWhitelist?: string[];
-  source: { html: string; baseUrl?: string };
-  onMessage?: (e: { nativeEvent: { data: string } }) => void;
-  nestedScrollEnabled?: boolean;
-  setSupportMultipleWindows?: boolean;
-  style?: object;
-}>;
-
-function nativeWebViewAvailable(): boolean {
-  try {
-    const turbo = TurboModuleRegistry.get?.("RNCWebViewModule");
-    if (turbo) return true;
-    if (NativeModules.RNCWebViewModule) return true;
-    if (NativeModules.RNCWebView) return true;
-  } catch {
-    // ignore
-  }
-  return false;
+function lonToX(lon: number, zoom: number) {
+  return ((lon + 180) / 360) * 2 ** zoom;
 }
 
-function loadWebView(): WebViewComponent | null {
-  if (!nativeWebViewAvailable()) return null;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require("react-native-webview") as {
-      WebView?: WebViewComponent;
-    };
-    return mod.WebView ?? null;
-  } catch {
-    return null;
-  }
+function latToY(lat: number, zoom: number) {
+  const rad = (lat * Math.PI) / 180;
+  const merc = Math.log(Math.tan(rad) + 1 / Math.cos(rad));
+  return ((1 - merc / Math.PI) / 2) * 2 ** zoom;
 }
 
-function project(
-  lon: number,
-  lat: number,
-  w: number,
-  h: number,
-  pad = 12,
-): { x: number; y: number } {
-  const usableW = w - pad * 2;
-  const usableH = h - pad * 2;
-  const x = pad + ((lon - BD.west) / (BD.east - BD.west)) * usableW;
-  const y = pad + ((BD.north - lat) / (BD.north - BD.south)) * usableH;
-  return { x, y };
+function xToLon(x: number, zoom: number) {
+  return (x / 2 ** zoom) * 360 - 180;
 }
 
-function outlinePath(w: number, h: number): string {
-  return (
-    BD_OUTLINE.map((pt, i) => {
-      const { x, y } = project(pt[0], pt[1], w, h);
-      return `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
-    }).join(" ") + " Z"
-  );
+function yToLat(y: number, zoom: number) {
+  const n = Math.PI - (2 * Math.PI * y) / 2 ** zoom;
+  return (180 / Math.PI) * Math.atan(Math.sinh(n));
 }
 
-function bubbleRadius(caseCount: number, mapH: number): number {
-  const base = Math.max(10, Math.min(28, 9 + Math.sqrt(caseCount) * 3.2));
-  return Math.min(base, mapH * 0.07);
-}
-
-function SvgHeatMap({
-  areas,
-  onSelect,
-  height = 380,
-  selectedSlug,
-}: HeatMapViewProps & { selectedSlug?: string | null }) {
-  const [width, setWidth] = useState(0);
-
-  const markers = useMemo(() => {
-    if (width <= 0) return [];
-    return areas.map((a) => {
-      const { x, y } = project(a.location.lon, a.location.lat, width, height);
-      return {
-        ...a,
-        x,
-        y,
-        r: bubbleRadius(a.caseCount, height),
-        color: HEAT_COLORS[a.level] ?? HEAT_COLORS.low,
-      };
-    });
-  }, [areas, width, height]);
-
-  return (
-    <View
-      className="overflow-hidden rounded-3xl border border-border bg-white"
-      style={{ height }}
-      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-    >
-      {width > 0 ? (
-        <Svg width={width} height={height}>
-          <Defs>
-            <LinearGradient id="bdFill" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor="#D8E8DE" stopOpacity="1" />
-              <Stop offset="1" stopColor="#B7D4C4" stopOpacity="1" />
-            </LinearGradient>
-          </Defs>
-          <Rect x={0} y={0} width={width} height={height} fill="#EEF4F0" />
-          <Rect
-            x={0}
-            y={height * 0.72}
-            width={width}
-            height={height * 0.28}
-            fill="#C9DDE8"
-            opacity={0.55}
-          />
-          <Path
-            d={outlinePath(width, height)}
-            fill="url(#bdFill)"
-            stroke="#0F766E"
-            strokeWidth={1.5}
-            opacity={0.95}
-          />
-          {markers.map((m) => {
-            const selected = m.location.slug === selectedSlug;
-            return (
-              <Circle
-                key={m.location.slug}
-                cx={m.x}
-                cy={m.y}
-                r={selected ? m.r + 3 : m.r}
-                fill={m.color}
-                fillOpacity={selected ? 0.78 : 0.58}
-                stroke={selected ? "#115E59" : "#FFFFFF"}
-                strokeWidth={selected ? 3 : 1.5}
-                onPress={() => onSelect(m.location.slug)}
-              />
-            );
-          })}
-          {markers
-            .filter(
-              (m) =>
-                m.location.slug === selectedSlug ||
-                m.level === "high" ||
-                m.caseCount >= 5,
-            )
-            .map((m) => (
-              <SvgText
-                key={`${m.location.slug}-label`}
-                x={m.x}
-                y={m.y + m.r + 12}
-                fill="#1C2B24"
-                fontSize={10}
-                fontWeight="700"
-                textAnchor="middle"
-                onPress={() => onSelect(m.location.slug)}
-              >
-                {m.location.nameBn}
-              </SvgText>
-            ))}
-        </Svg>
-      ) : null}
-
-      <Pressable
-        onPress={() => {
-          void Linking.openURL(WEB_HEATMAP_URL);
-        }}
-        className="absolute bottom-3 right-3 rounded-full bg-white/95 px-3 py-1.5 active:opacity-80"
-        style={{
-          borderWidth: 1,
-          borderColor: "#D5DDD8",
-        }}
-      >
-        <AppText
-          variant="caption"
-          className="font-bengali-semibold text-primary"
-        >
-          OSM পূর্ণ মানচিত্র →
-        </AppText>
-      </Pressable>
-    </View>
-  );
-}
-
-function OsmWebHeatMap({
-  WebView,
-  areas,
-  onSelect,
-  height,
-}: HeatMapViewProps & { WebView: WebViewComponent }) {
-  const html = useMemo(() => heatmapHtml(areas, "native"), [areas]);
-
-  return (
-    <View
-      className="overflow-hidden rounded-3xl border border-border"
-      style={{ height }}
-    >
-      <WebView
-        originWhitelist={["*"]}
-        source={{ html, baseUrl: "https://aronno.app/" }}
-        onMessage={(e) => onSelect(e.nativeEvent.data)}
-        nestedScrollEnabled
-        setSupportMultipleWindows={false}
-        style={{ flex: 1, backgroundColor: "transparent" }}
-      />
-    </View>
-  );
+function clamp(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n));
 }
 
 /**
- * Disease heat map for Market tab.
- * Prefer OSM WebView when the native module is in the binary; otherwise render
- * an SVG Bangladesh map (works without RNCWebViewModule).
+ * Real street map from free OpenStreetMap tiles (CARTO). No WebView and no API key.
  */
 export function HeatMapView({
   areas,
   onSelect,
-  height = 380,
+  height = 460,
+  onGestureStart,
+  onGestureEnd,
 }: HeatMapViewProps) {
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
-  const WebView = useMemo(() => loadWebView(), []);
+  const [width, setWidth] = useState(0);
+  const [zoom, setZoom] = useState(6);
+  const [center, setCenter] = useState(BD);
+  const [drag, setDrag] = useState({ x: 0, y: 0 });
+  const [selected, setSelected] = useState<string | null>(null);
 
-  const handleSelect = (slug: string) => {
-    setSelectedSlug(slug);
-    onSelect(slug);
+  const live = useRef({ zoom, center, onGestureStart, onGestureEnd });
+  live.current = { zoom, center, onGestureStart, onGestureEnd };
+
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3,
+      onPanResponderGrant: () => {
+        live.current.onGestureStart?.();
+      },
+      onPanResponderMove: (_, g) => {
+        setDrag({ x: g.dx, y: g.dy });
+      },
+      onPanResponderRelease: (_, g) => {
+        const { zoom: z, center: c } = live.current;
+        const x = lonToX(c.lon, z) - g.dx / TILE;
+        const y = latToY(c.lat, z) - g.dy / TILE;
+        setCenter({
+          lon: xToLon(x, z),
+          lat: clamp(yToLat(y, z), -80, 80),
+        });
+        setDrag({ x: 0, y: 0 });
+        live.current.onGestureEnd?.();
+      },
+      onPanResponderTerminate: () => {
+        setDrag({ x: 0, y: 0 });
+        live.current.onGestureEnd?.();
+      },
+    }),
+  ).current;
+
+  const tiles = useMemo(() => {
+    if (width <= 0) return [];
+    const n = 2 ** zoom;
+    const left = lonToX(center.lon, zoom) - width / 2 / TILE;
+    const top = latToY(center.lat, zoom) - height / 2 / TILE;
+    const x0 = Math.floor(left) - 1;
+    const y0 = Math.floor(top) - 1;
+    const x1 = Math.floor(left + width / TILE) + 1;
+    const y1 = Math.floor(top + height / TILE) + 1;
+    const list: { key: string; uri: string; left: number; top: number }[] = [];
+    for (let ty = y0; ty <= y1; ty += 1) {
+      if (ty < 0 || ty >= n) continue;
+      for (let tx = x0; tx <= x1; tx += 1) {
+        const wrapped = ((tx % n) + n) % n;
+        list.push({
+          key: `${zoom}-${wrapped}-${ty}`,
+          uri: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${zoom}/${ty}/${wrapped}`,
+          left: (tx - left) * TILE,
+          top: (ty - top) * TILE,
+        });
+      }
+    }
+    return list;
+  }, [width, height, zoom, center.lat, center.lon]);
+
+  const markers = useMemo(() => {
+    if (width <= 0) return [];
+    const left = lonToX(center.lon, zoom) - width / 2 / TILE;
+    const top = latToY(center.lat, zoom) - height / 2 / TILE;
+    return areas.map((area) => {
+      const x = (lonToX(area.location.lon, zoom) - left) * TILE;
+      const y = (latToY(area.location.lat, zoom) - top) * TILE;
+      const r = Math.round(
+        Math.max(8, Math.min(18, 7 + Math.sqrt(area.caseCount) * 2)),
+      );
+      return { area, x, y, r, color: HEAT_COLORS[area.level] };
+    });
+  }, [areas, width, height, zoom, center.lat, center.lon]);
+
+  const zoomBy = (delta: number) => {
+    setZoom((z) => clamp(z + delta, MIN_ZOOM, MAX_ZOOM));
   };
 
-  if (WebView) {
-    return (
-      <OsmWebHeatMap
-        WebView={WebView}
-        areas={areas}
-        onSelect={handleSelect}
-        height={height}
-      />
-    );
-  }
-
   return (
-    <SvgHeatMap
-      areas={areas}
-      onSelect={handleSelect}
-      height={height}
-      selectedSlug={selectedSlug}
-    />
+    <View
+      className="overflow-hidden rounded-3xl border border-border bg-neutral"
+      style={{ height }}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+    >
+      <View
+        style={{ flex: 1, transform: [{ translateX: drag.x }, { translateY: drag.y }] }}
+        {...pan.panHandlers}
+      >
+        {tiles.map((tile) => (
+          <Image
+            key={tile.key}
+            source={{ uri: tile.uri }}
+            style={{
+              position: "absolute",
+              left: tile.left,
+              top: tile.top,
+              width: TILE,
+              height: TILE,
+            }}
+            cachePolicy="memory-disk"
+            recyclingKey={tile.key}
+          />
+        ))}
+        {markers.map((m) => {
+          const active = selected === m.area.location.slug;
+          return (
+            <Pressable
+              key={m.area.location.slug}
+              onPress={() => {
+                setSelected(m.area.location.slug);
+                onSelect(m.area.location.slug);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={m.area.location.nameBn}
+              style={{
+                position: "absolute",
+                left: m.x - m.r,
+                top: m.y - m.r,
+                width: m.r * 2,
+                height: m.r * 2,
+                borderRadius: m.r,
+                backgroundColor: m.color,
+                borderWidth: active ? 3 : 2,
+                borderColor: active ? colors.ink : "#FFFFFF",
+                opacity: 0.92,
+              }}
+            />
+          );
+        })}
+      </View>
+
+      <View className="absolute right-3 top-3 gap-2">
+        <Pressable
+          onPress={() => zoomBy(1)}
+          accessibilityRole="button"
+          accessibilityLabel="বড় করুন"
+          className="h-10 w-10 items-center justify-center rounded-xl border border-border bg-card"
+        >
+          <Ionicons name="add" size={22} color={colors.ink} />
+        </Pressable>
+        <Pressable
+          onPress={() => zoomBy(-1)}
+          accessibilityRole="button"
+          accessibilityLabel="ছোট করুন"
+          className="h-10 w-10 items-center justify-center rounded-xl border border-border bg-card"
+        >
+          <Ionicons name="remove" size={22} color={colors.ink} />
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            setZoom(6);
+            setCenter(BD);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="বাংলাদেশ দেখুন"
+          className="h-10 w-10 items-center justify-center rounded-xl border border-border bg-card"
+        >
+          <Ionicons name="locate-outline" size={18} color={colors.ink} />
+        </Pressable>
+      </View>
+
+      <View className="absolute bottom-2 left-2 rounded-md bg-card/90 px-1.5 py-0.5">
+        <AppText variant="caption" className="text-muted" style={{ fontSize: 10 }}>
+          © Esri © OpenStreetMap
+        </AppText>
+      </View>
+    </View>
   );
 }

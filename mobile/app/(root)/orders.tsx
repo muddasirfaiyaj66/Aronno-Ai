@@ -85,7 +85,7 @@ export default function OrdersScreen() {
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       {/* Header Bar */}
-      <View className="border-b border-border bg-white px-5 py-3.5">
+      <View className="border-b border-border bg-card px-5 py-3.5">
         <View className="flex-row items-center gap-3">
           <Pressable
             onPress={() => router.back()}
@@ -230,7 +230,7 @@ export default function OrdersScreen() {
           <View className="gap-4">
             <Pressable
               onPress={() => router.push("/(root)/seller-orders")}
-              className="rounded-2xl border border-border bg-white p-5 shadow-sm flex-row items-center gap-4"
+              className="rounded-2xl border border-border bg-card p-5 shadow-sm flex-row items-center gap-4"
               style={{ elevation: 2 }}
             >
               <View className="h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
@@ -268,7 +268,7 @@ export default function OrdersScreen() {
         onRequestClose={() => setCancelTargetId(null)}
       >
         <View className="flex-1 bg-black/50 items-center justify-center px-5">
-          <View className="w-full rounded-3xl bg-white p-6 gap-4">
+          <View className="w-full rounded-3xl bg-card p-6 gap-4">
             <View className="h-12 w-12 rounded-full bg-red-100 items-center justify-center self-center">
               <Ionicons name="warning" size={24} color="#D92D20" />
             </View>

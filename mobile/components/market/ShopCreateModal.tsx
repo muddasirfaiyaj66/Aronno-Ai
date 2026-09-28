@@ -126,7 +126,7 @@ export function ShopCreateModal({
             </AppText>
             <Pressable
               onPress={onClose}
-              className="h-9 w-9 items-center justify-center rounded-full bg-white"
+              className="h-9 w-9 items-center justify-center rounded-full bg-card"
             >
               <Ionicons name="close" size={20} color={colors.ink} />
             </Pressable>
@@ -147,7 +147,7 @@ export function ShopCreateModal({
                 onChangeText={setName}
                 placeholder="যেমনঃ সবুজ বাংলা এগ্রো ট্রেডার্স"
                 placeholderTextColor={colors.muted}
-                className="min-h-touch-lg rounded-2xl bg-white px-4 font-bengali-medium text-body-lg text-ink"
+                className="min-h-touch-lg rounded-2xl bg-card px-4 font-bengali-medium text-body-lg text-ink"
               />
             </View>
 
@@ -164,7 +164,7 @@ export function ShopCreateModal({
                 textAlignVertical="top"
                 placeholder="আপনার দোকান ও কৃষি পণ্যের তথ্য লিখুন..."
                 placeholderTextColor={colors.muted}
-                className="min-h-[90px] rounded-2xl bg-white p-4 font-bengali-medium text-body text-ink"
+                className="min-h-[90px] rounded-2xl bg-card p-4 font-bengali-medium text-body text-ink"
               />
             </View>
 
@@ -198,7 +198,7 @@ export function ShopCreateModal({
                 onChangeText={setUpazila}
                 placeholder="যেমনঃ ধামরাই"
                 placeholderTextColor={colors.muted}
-                className="min-h-touch-lg rounded-2xl bg-white px-4 font-bengali-medium text-body-lg text-ink"
+                className="min-h-touch-lg rounded-2xl bg-card px-4 font-bengali-medium text-body-lg text-ink"
               />
             </View>
 
@@ -215,7 +215,7 @@ export function ShopCreateModal({
                 textAlignVertical="top"
                 placeholder="যেমনঃ ধামরাই বাজার রোড, দোকান নং ৪"
                 placeholderTextColor={colors.muted}
-                className="min-h-[70px] rounded-2xl bg-white p-4 font-bengali-medium text-body-lg text-ink"
+                className="min-h-[70px] rounded-2xl bg-card p-4 font-bengali-medium text-body-lg text-ink"
               />
             </View>
 
@@ -230,7 +230,7 @@ export function ShopCreateModal({
                 keyboardType="phone-pad"
                 placeholder="যেমনঃ 01700000000"
                 placeholderTextColor={colors.muted}
-                className="min-h-touch-lg rounded-2xl bg-white px-4 font-bengali-medium text-body-lg text-ink"
+                className="min-h-touch-lg rounded-2xl bg-card px-4 font-bengali-medium text-body-lg text-ink"
               />
             </View>
 

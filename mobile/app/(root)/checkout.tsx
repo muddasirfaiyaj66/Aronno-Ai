@@ -46,7 +46,7 @@ function StepIndicator({ current }: { current: Step }) {
             <View
               className={`h-8 w-8 items-center justify-center rounded-full border-2 ${
                 active
-                  ? "border-primary bg-primary"
+                  ? "border-primary bg-forest-700"
                   : done
                     ? "border-primary bg-primary/20"
                     : "border-border bg-neutral"
@@ -65,7 +65,7 @@ function StepIndicator({ current }: { current: Step }) {
             </View>
             {i < steps.length - 1 && (
               <View
-                className={`h-0.5 w-10 mx-1 ${done ? "bg-primary" : "bg-border"}`}
+                className={`h-0.5 w-10 mx-1 ${done ? "bg-forest-700" : "bg-border"}`}
               />
             )}
           </View>
@@ -126,7 +126,7 @@ function AddressStep({
               onChangeText={(v) => onChange({ buyerName: v })}
               placeholder="আপনার পুরো নাম লিখুন"
               placeholderTextColor={colors.muted}
-              className="rounded-xl border border-border bg-white px-4 py-3 text-ink"
+              className="rounded-xl border border-border bg-card px-4 py-3 text-ink"
               style={{ fontFamily: "NotoSerifBengali_400Regular", fontSize: 15 }}
             />
             {errors.buyerName ? (
@@ -147,7 +147,7 @@ function AddressStep({
               placeholder="01XXXXXXXXX"
               placeholderTextColor={colors.muted}
               keyboardType="phone-pad"
-              className="rounded-xl border border-border bg-white px-4 py-3 text-ink"
+              className="rounded-xl border border-border bg-card px-4 py-3 text-ink"
               style={{ fontFamily: "NotoSerifBengali_400Regular", fontSize: 15 }}
             />
             {errors.phone ? (
@@ -164,7 +164,7 @@ function AddressStep({
             </AppText>
             <Pressable
               onPress={() => setDistrictOpen((o) => !o)}
-              className="flex-row items-center justify-between rounded-xl border border-border bg-white px-4 py-3"
+              className="flex-row items-center justify-between rounded-xl border border-border bg-card px-4 py-3"
             >
               <AppText
                 variant="body"
@@ -180,7 +180,7 @@ function AddressStep({
             </Pressable>
 
             {districtOpen && (
-              <View className="max-h-48 rounded-xl border border-border bg-white overflow-hidden">
+              <View className="max-h-48 rounded-xl border border-border bg-card overflow-hidden">
                 <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
                   {districts.map((d) => (
                     <Pressable
@@ -223,7 +223,7 @@ function AddressStep({
               onChangeText={(v) => onChange({ upazila: v })}
               placeholder="উপজেলার নাম লিখুন"
               placeholderTextColor={colors.muted}
-              className="rounded-xl border border-border bg-white px-4 py-3 text-ink"
+              className="rounded-xl border border-border bg-card px-4 py-3 text-ink"
               style={{ fontFamily: "NotoSerifBengali_400Regular", fontSize: 15 }}
             />
           </View>
@@ -241,7 +241,7 @@ function AddressStep({
               multiline
               numberOfLines={3}
               textAlignVertical="top"
-              className="rounded-xl border border-border bg-white px-4 py-3 text-ink"
+              className="rounded-xl border border-border bg-card px-4 py-3 text-ink"
               style={{
                 fontFamily: "NotoSerifBengali_400Regular",
                 fontSize: 15,
@@ -430,7 +430,7 @@ function PaymentStep({
                 পণ্য পাওয়ার সময় নগদ পরিশোধ করুন
               </AppText>
             </View>
-            <View className="h-5 w-5 items-center justify-center rounded-full border-2 border-primary bg-primary">
+            <View className="h-5 w-5 items-center justify-center rounded-full border-2 border-primary bg-forest-700">
               <View className="h-2 w-2 rounded-full bg-white" />
             </View>
           </View>
@@ -609,7 +609,7 @@ export default function CheckoutScreen() {
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       {/* Header */}
-      <View className="flex-row items-center border-b border-border bg-white px-5 py-3.5 gap-3">
+      <View className="flex-row items-center border-b border-border bg-card px-5 py-3.5 gap-3">
         <Pressable
           onPress={() => {
             if (step === 1) router.back();
@@ -630,7 +630,7 @@ export default function CheckoutScreen() {
       </View>
 
       {/* Step indicator */}
-      <View className="bg-white border-b border-border px-5">
+      <View className="bg-card border-b border-border px-5">
         <StepIndicator current={step} />
       </View>
 

@@ -38,7 +38,7 @@ export default function CartScreen() {
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       {/* Header Bar */}
-      <View className="flex-row items-center justify-between border-b border-border bg-white px-5 py-3.5">
+      <View className="flex-row items-center justify-between border-b border-border bg-card px-5 py-3.5">
         <Pressable
           onPress={() => router.back()}
           className="h-10 w-10 items-center justify-center rounded-full bg-neutral"
@@ -143,7 +143,7 @@ export default function CartScreen() {
                               });
                             }
                           }}
-                          className="h-7 w-7 items-center justify-center rounded-lg bg-white shadow-xs"
+                          className="h-7 w-7 items-center justify-center rounded-lg bg-card shadow-xs"
                         >
                           <Ionicons
                             name={item.quantity <= minQty ? "trash-outline" : "remove"}
@@ -165,7 +165,7 @@ export default function CartScreen() {
                             })
                           }
                           className={`h-7 w-7 items-center justify-center rounded-lg ${
-                            isAtMaxStock ? "bg-neutral opacity-50" : "bg-white shadow-xs"
+                            isAtMaxStock ? "bg-neutral opacity-50" : "bg-card shadow-xs"
                           }`}
                         >
                           <Ionicons
@@ -193,7 +193,7 @@ export default function CartScreen() {
 
       {/* Bottom Sticky Total & Checkout Bar */}
       {cartItems.length > 0 ? (
-        <View className="absolute bottom-0 left-0 right-0 border-t border-border bg-white px-5 py-4 shadow-lg gap-3">
+        <View className="absolute bottom-0 left-0 right-0 border-t border-border bg-card px-5 py-4 shadow-lg gap-3">
           <View className="flex-row items-center justify-between">
             <AppText variant="body" className="font-bengali-medium text-muted">
               মোট ({toBn(cartItems.length)}টি পণ্য)

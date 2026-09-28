@@ -87,27 +87,23 @@ function cleanBubbleText(role: Bubble["role"], text: string) {
 
 const PHASE_COPY: Record<
   Exclude<LivePhase, "idle">,
-  { title: string; hint: string; tone: string }
+  { title: string; hint: string }
 > = {
   listening: {
     title: "শুনছি",
     hint: "স্বাভাবিক গলায় বাংলায় বলুন",
-    tone: colors.primary,
   },
   hearing: {
     title: "শুনছি…",
     hint: "থামলেই উত্তর দেওয়া হবে",
-    tone: colors.leaf400,
   },
   thinking: {
     title: "প্রস্তুত হচ্ছে",
     hint: "একটু অপেক্ষা করুন",
-    tone: colors.harvest,
   },
   speaking: {
     title: "বলছি",
     hint: "শেষ হলে আবার শোনা যাবে",
-    tone: colors.tertiary,
   },
 };
 
@@ -210,9 +206,13 @@ function VoiceOrb({
   }, [active, phase, pulse, ring]);
 
   const tone =
-    phase === "idle"
-      ? colors.primary
-      : PHASE_COPY[phase as Exclude<LivePhase, "idle">].tone;
+    phase === "hearing"
+      ? colors.leaf400
+      : phase === "thinking"
+        ? colors.harvest
+        : phase === "speaking"
+          ? colors.tertiary
+          : colors.primary;
 
   const breathe = pulse.interpolate({
     inputRange: [0, 1],
@@ -652,7 +652,7 @@ export default function AssistantScreen() {
       <SafeAreaView className="flex-1" edges={["top"]}>
         {/* Header — high contrast, clear actions */}
         <View
-          className="flex-row items-center gap-2 border-b border-border bg-white px-3 py-2.5"
+          className="flex-row items-center gap-2 border-b border-border bg-card px-3 py-2.5"
           accessibilityRole="header"
         >
           <Pressable
@@ -694,7 +694,7 @@ export default function AssistantScreen() {
 
         {!llmLoading && !llmReady && !hasModel ? (
           <View
-            className="mx-3 mt-3 flex-row items-center gap-3 rounded-2xl border border-border bg-white px-4 py-3"
+            className="mx-3 mt-3 flex-row items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3"
           >
             <Ionicons
               name="information-circle-outline"
@@ -709,7 +709,7 @@ export default function AssistantScreen() {
               accessibilityRole="button"
               accessibilityLabel="মডেল ম্যানেজার খুলুন"
               onPress={() => router.push("/(root)/(tabs)/models")}
-              className="min-h-touch items-center justify-center rounded-xl bg-primary px-3"
+              className="min-h-touch items-center justify-center rounded-xl bg-forest-700 px-3"
             >
               <AppText
                 variant="caption"
@@ -739,7 +739,7 @@ export default function AssistantScreen() {
 
             <View className="w-full items-center gap-3">
               {lastUser ? (
-                <View className="w-full rounded-2xl bg-primary px-4 py-3">
+                <View className="w-full rounded-2xl bg-forest-700 px-4 py-3">
                   <AppText
                     variant="caption"
                     className="mb-1"
@@ -757,7 +757,7 @@ export default function AssistantScreen() {
                 </View>
               ) : null}
               {lastAssistant ? (
-                <View className="w-full rounded-2xl border border-border bg-white px-5 py-4">
+                <View className="w-full rounded-2xl border border-border bg-card px-5 py-4">
                   <AppText variant="caption" className="mb-1 text-muted">
                     উত্তর
                   </AppText>
@@ -830,7 +830,7 @@ export default function AssistantScreen() {
                         accessibilityRole="button"
                         accessibilityLabel={`প্রশ্ন: ${s}`}
                         onPress={() => void sendText(s)}
-                        className="flex-row items-center gap-3 rounded-2xl border border-border bg-white px-4 py-3.5"
+                        className="flex-row items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5"
                       >
                         <Ionicons
                           name="chatbubble-ellipses-outline"
@@ -865,7 +865,7 @@ export default function AssistantScreen() {
                   return (
                     <View
                       className="max-w-[85%] self-end rounded-3xl rounded-br-md px-4 py-3"
-                      style={{ backgroundColor: colors.primary }}
+                      style={{ backgroundColor: colors.forest700 }}
                       accessibilityLabel={`আপনি: ${item.text}`}
                     >
                       <AppText
@@ -889,11 +889,11 @@ export default function AssistantScreen() {
                   >
                     <View
                       className="mt-0.5 h-8 w-8 items-center justify-center rounded-full"
-                      style={{ backgroundColor: colors.primary }}
+                      style={{ backgroundColor: colors.forest700 }}
                     >
                       <Ionicons name="sparkles" size={15} color={colors.white} />
                     </View>
-                    <View className="min-w-0 flex-1 rounded-3xl rounded-tl-md border border-border bg-white px-4 py-3">
+                    <View className="min-w-0 flex-1 rounded-3xl rounded-tl-md border border-border bg-card px-4 py-3">
                       {waiting ? (
                         <TypingDots />
                       ) : (
@@ -912,7 +912,7 @@ export default function AssistantScreen() {
               style={{ paddingBottom: keyboardLift > 0 ? 10 : 12 }}
             >
               <View
-                className="flex-row items-end gap-1 rounded-3xl border border-border bg-white px-2 py-1.5"
+                className="flex-row items-end gap-1 rounded-3xl border border-border bg-card px-2 py-1.5"
                 style={{
                   shadowColor: colors.forest900,
                   shadowOpacity: 0.06,
@@ -986,7 +986,7 @@ export default function AssistantScreen() {
             onPress={() => setHistoryOpen(false)}
           />
           <View
-            className="rounded-t-3xl bg-white px-4 pt-3"
+            className="rounded-t-3xl bg-card px-4 pt-3"
             style={{
               maxHeight: "78%",
               paddingBottom: Math.max(insets.bottom, 16),
@@ -1006,7 +1006,7 @@ export default function AssistantScreen() {
                   setHistoryOpen(false);
                   void newChat();
                 }}
-                className="min-h-touch flex-row items-center gap-1 rounded-xl bg-primary px-3"
+                className="min-h-touch flex-row items-center gap-1 rounded-xl bg-forest-700 px-3"
               >
                 <Ionicons name="add" size={18} color={colors.white} />
                 <AppText

@@ -78,7 +78,7 @@ function ScanFab({
               height: 64,
               width: 64,
               borderRadius: 32,
-              backgroundColor: colors.primary,
+              backgroundColor: colors.forest700,
             },
             ringStyle,
           ]}
@@ -90,14 +90,14 @@ function ScanFab({
             borderRadius: 32,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: focused ? colors.primary : colors.tertiary,
+            backgroundColor: focused ? colors.forest700 : colors.tertiary,
             shadowColor: colors.primary,
             shadowOpacity: 0.35,
             shadowRadius: 12,
             shadowOffset: { width: 0, height: 6 },
             elevation: 8,
             borderWidth: 4,
-            borderColor: colors.white,
+            borderColor: colors.card,
           }}
         >
           <Ionicons name="camera" size={28} color={colors.white} />
@@ -108,7 +108,7 @@ function ScanFab({
           marginTop: 4,
           fontFamily: "NotoSansBengali_700Bold",
           fontSize: tabBar.labelSize,
-          color: focused ? colors.primary : colors.muted,
+          color: colors.muted,
         }}
       >
         স্ক্যান
@@ -130,8 +130,6 @@ function SideTab({
 }) {
   const meta = TAB_META[routeName];
   if (!meta) return null;
-
-  const color = focused ? colors.primary : colors.muted;
 
   const onPress = () => {
     const event = navigation.emit({
@@ -162,16 +160,14 @@ function SideTab({
         style={{
           height: 32,
           minWidth: 46,
-          borderRadius: 16,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: focused ? colors.secondary : "transparent",
         }}
       >
         <Ionicons
           name={focused ? meta.iconFocused : meta.icon}
           size={tabBar.iconSize}
-          color={color}
+          color={focused ? colors.primary : colors.muted}
         />
       </View>
       <Text
@@ -182,8 +178,10 @@ function SideTab({
           marginTop: 2,
           marginBottom: 2,
           width: "100%",
-          color,
-          fontFamily: "NotoSansBengali_700Bold",
+          color: colors.muted,
+          fontFamily: focused
+            ? "NotoSansBengali_700Bold"
+            : "NotoSansBengali_500Medium",
           fontSize: tabBar.labelSize,
           textAlign: "center",
         }}
@@ -231,7 +229,7 @@ function CenteredTabBar({ state, navigation, insets }: BottomTabBarProps) {
         flexDirection: "row",
         alignItems: "flex-end",
         height: 74,
-        backgroundColor: colors.white,
+        backgroundColor: colors.card,
         borderRadius: 28,
         borderWidth: 1,
         borderColor: colors.border,
@@ -287,6 +285,7 @@ export default function TabLayout() {
       tabBar={(props) => <CenteredTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        sceneStyle: { backgroundColor: colors.neutral },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
       }}

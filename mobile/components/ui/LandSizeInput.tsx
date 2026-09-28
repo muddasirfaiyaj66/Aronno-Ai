@@ -38,7 +38,7 @@ export function LandSizeInput({
           placeholder="যেমনঃ ২"
           placeholderTextColor={colors.muted}
           accessibilityLabel={label}
-          className="min-h-touch-lg flex-1 rounded-2xl bg-white px-4 font-bengali-medium text-body-lg text-ink"
+          className="min-h-touch-lg flex-1 rounded-2xl bg-card px-4 font-bengali-medium text-body-lg text-ink"
         />
         <SegmentedTabs options={UNIT_OPTIONS} value={unit} onChange={onUnitChange} />
       </View>

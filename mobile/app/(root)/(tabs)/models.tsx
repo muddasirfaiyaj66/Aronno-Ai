@@ -44,7 +44,7 @@ function ProgressBar({ progress }: { progress: number }) {
   return (
     <View className="mt-2 h-2 overflow-hidden rounded-full bg-border">
       <View
-        className="h-full rounded-full bg-primary"
+        className="h-full rounded-full bg-forest-700"
         style={{ width: `${pct}%` }}
       />
     </View>
@@ -66,7 +66,7 @@ function ActionChip({
 }) {
   const bg =
     tone === "primary"
-      ? "bg-primary"
+      ? "bg-forest-700"
       : tone === "danger"
         ? "bg-harvestSoft"
         : "bg-secondary";
@@ -159,7 +159,7 @@ function ModelCard({
   }
 
   return (
-    <View className="mb-3 rounded-2xl border border-border bg-white p-4">
+    <View className="mb-3 rounded-2xl border border-border bg-card p-4">
       <View className="flex-row items-start gap-3">
         <View className="mt-0.5 h-10 w-10 items-center justify-center rounded-2xl bg-secondary">
           <Ionicons
@@ -490,7 +490,7 @@ export default function ModelsScreen() {
         contentContainerClassName="px-5 pb-28"
         showsVerticalScrollIndicator={false}
       >
-        <View className="mb-4 rounded-2xl border border-border bg-white px-4 py-3">
+        <View className="mb-4 rounded-2xl border border-border bg-card px-4 py-3">
           <AppText variant="caption" className="leading-5">
             স্টোরেজ ~{usedMb} MB
             {activeName ? ` · চালু: ${activeName}` : ""}
@@ -534,7 +534,7 @@ export default function ModelsScreen() {
                     onPress={() => void handleSelect(item)}
                     className={`flex-row items-center gap-3 rounded-2xl border px-3 py-3 ${
                       selected
-                        ? "border-primary bg-white"
+                        ? "border-primary bg-card"
                         : "border-border bg-white/80"
                     }`}
                   >
@@ -544,7 +544,7 @@ export default function ModelsScreen() {
                       }`}
                     >
                       {selected ? (
-                        <View className="h-2.5 w-2.5 rounded-full bg-primary" />
+                        <View className="h-2.5 w-2.5 rounded-full bg-forest-700" />
                       ) : null}
                     </View>
                     <View className="flex-1">

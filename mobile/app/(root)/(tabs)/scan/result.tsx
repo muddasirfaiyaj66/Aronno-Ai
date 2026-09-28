@@ -78,7 +78,7 @@ function AdviceBlock({
   body: string;
 }) {
   return (
-    <View className="rounded-2xl border border-border bg-white px-4 py-3.5">
+    <View className="rounded-2xl border border-border bg-card px-4 py-3.5">
       <View className="mb-1.5 flex-row items-center gap-2">
         <Ionicons name={icon} size={18} color={colors.primary} />
         <AppText variant="body" className="font-bengali-bold">
@@ -206,7 +206,7 @@ export default function DiagnosisResultScreen() {
             />
           </View>
         ) : (
-          <View className="rounded-2xl border border-border bg-white px-4 py-3">
+          <View className="rounded-2xl border border-border bg-card px-4 py-3">
             <AppText variant="body" className="text-muted">
               এই রোগের বিস্তারিত পরামর্শ স্থানীয় জ্ঞানভাণ্ডারে নেই। নিচ থেকে
               চিকিৎসা পরিকল্পনা দেখুন বা কৃষি অফিসে যোগাযোগ করুন।

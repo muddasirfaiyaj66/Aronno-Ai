@@ -33,7 +33,7 @@ export function QuickActionCard({
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={label}
-        className="min-h-[128px] justify-between rounded-3xl bg-white p-4 active:opacity-90"
+        className="min-h-[128px] justify-between rounded-3xl bg-card p-4 active:opacity-90"
         style={styles.card}
       >
         <View

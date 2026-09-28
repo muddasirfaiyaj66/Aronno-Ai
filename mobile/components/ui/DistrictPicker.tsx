@@ -38,7 +38,7 @@ export function DistrictPicker({
         onPress={() => setExpanded((prev) => !prev)}
         accessibilityRole="button"
         accessibilityLabel="জেলা নির্বাচন করুন"
-        className="min-h-touch flex-row items-center justify-between rounded-2xl border border-neutral-200 bg-white px-4 py-3"
+        className="min-h-touch flex-row items-center justify-between rounded-2xl border border-neutral-200 bg-card px-4 py-3"
       >
         <View className="flex-row items-center gap-2">
           <Ionicons name="location-outline" size={20} color={colors.primary} />
@@ -54,7 +54,7 @@ export function DistrictPicker({
       </Pressable>
 
       {expanded ? (
-        <View className="gap-2 rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
+        <View className="gap-2 rounded-2xl border border-neutral-200 bg-card p-3 shadow-sm">
           <TextInput
             value={query}
             onChangeText={setQuery}
@@ -90,7 +90,7 @@ export function DistrictPicker({
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
                     className={`min-h-touch justify-center border-b border-neutral-100 px-3 py-2.5 ${
-                      active ? "bg-secondary/40" : "bg-white"
+                      active ? "bg-secondary/40" : "bg-card"
                     }`}
                   >
                     <View className="flex-row items-center justify-between">

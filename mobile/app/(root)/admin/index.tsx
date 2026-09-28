@@ -90,7 +90,7 @@ export default function AdminStaffScreen() {
         contentContainerClassName="gap-5 px-5 py-5"
         keyboardShouldPersistTaps="handled"
       >
-        <View className="gap-4 rounded-3xl bg-white p-4">
+        <View className="gap-4 rounded-3xl bg-card p-4">
           <AppText variant="body" className="font-bengali-bold text-ink">
             নতুন অ্যাডমিন
           </AppText>
@@ -136,7 +136,7 @@ export default function AdminStaffScreen() {
 
         <AppText variant="title">ব্যবহারকারী</AppText>
         {users.map((user) => (
-          <View key={user.id} className="gap-2 rounded-3xl bg-white p-4">
+          <View key={user.id} className="gap-2 rounded-3xl bg-card p-4">
             <AppText variant="bodyLg" className="font-bengali-bold text-ink">
               {user.displayName}
             </AppText>

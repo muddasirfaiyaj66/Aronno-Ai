@@ -1,21 +1,15 @@
 import { useCallback, useMemo } from "react";
-import { Pressable, ScrollView, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import {
-  AppText,
-  HeroChoiceCard,
-  LanguageToggle,
-} from "@/components/ui";
+import { HeroChoiceCard } from "@/components/ui";
 import { HomeSection } from "@/components/home/HomeSection";
 import { EssentialServicesGrid } from "@/components/home/EssentialServicesGrid";
 import { DateWeatherCard } from "@/components/home/DateWeatherCard";
 import { InsightHeroCard, type InsightItem } from "@/components/home/InsightHeroCard";
+import { MarketingHero } from "@/components/home/MarketingHero";
 import { useLocale } from "@/context/locale";
 import { useAppSelector } from "@/store";
-import { colors } from "@/constants/theme";
 import { useFarmLocation } from "@/hooks/useFarmLocation";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import {
@@ -88,49 +82,27 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={refreshControl}
       >
-        <View className="px-5 pb-4 pt-3">
-          <LinearGradient
-            colors={["#134E4A", "#0F766E", "#1AA88A"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ borderRadius: 28, paddingHorizontal: 18, paddingVertical: 18 }}
-          >
-            <View className="flex-row items-start justify-between gap-3">
-              <View className="min-w-0 flex-1">
-                <AppText
-                  variant="caption"
-                  className="font-bengali-semibold"
-                  style={{ color: "rgba(255,255,255,0.8)" }}
-                >
-                  {t("আরণ্য", "Aronno")}
-                </AppText>
-                <AppText variant="title" className="mt-1" style={{ color: colors.white }}>
-                  {name
-                    ? t(`স্বাগতম, ${name.split(/\s+/)[0]}`, `Welcome, ${name.split(/\s+/)[0]}`)
-                    : t("স্বাগতম", "Welcome")}
-                </AppText>
-                <AppText
-                  variant="caption"
-                  className="mt-1"
-                  style={{ color: "rgba(255,255,255,0.82)" }}
-                >
-                  {t("ক্ষেত, আবহাওয়া ও বাজার — এক জায়গায়", "Field, weather, and market in one place")}
-                </AppText>
-              </View>
-              <View className="flex-row items-center gap-2">
-                <LanguageToggle light />
-                <Pressable
-                  onPress={() => router.push("/(root)/notifications")}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("বিজ্ঞপ্তি", "Notifications")}
-                  className="h-12 w-12 items-center justify-center rounded-full"
-                  style={{ backgroundColor: "rgba(255,255,255,0.18)" }}
-                >
-                  <Ionicons name="notifications-outline" size={22} color={colors.white} />
-                </Pressable>
-              </View>
-            </View>
-          </LinearGradient>
+        <View className="px-5 pb-2 pt-3">
+          <MarketingHero
+            greeting={
+              name
+                ? t(`স্বাগতম, ${name.split(/\s+/)[0]}`, `Welcome, ${name.split(/\s+/)[0]}`)
+                : t("স্বাগতম", "Welcome")
+            }
+            notifyLabel={t("বিজ্ঞপ্তি", "Notifications")}
+            onNotify={() => router.push("/(root)/notifications")}
+            scanTitle={t("রোগ চিনুন", "Spot disease")}
+            scanBody={t("পাতা দেখেই পরামর্শ", "Advice from a leaf photo")}
+            marketTitle={t("ফসল বিক্রি", "Sell the harvest")}
+            marketBody={t("কাছের বাজারে দাম", "Prices near your field")}
+            onScan={() =>
+              router.push({
+                pathname: "/(root)/(tabs)/scan/photo",
+                params: { flow: "disease" },
+              })
+            }
+            onMarket={() => router.push("/(root)/(tabs)/market")}
+          />
         </View>
 
         <View className="gap-6 px-5">

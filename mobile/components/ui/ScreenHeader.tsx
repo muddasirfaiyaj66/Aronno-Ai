@@ -11,7 +11,7 @@ export type ScreenHeaderProps = {
 
 export function ScreenHeader({ title, subtitle, onBack }: ScreenHeaderProps) {
   return (
-    <View className="border-b border-border bg-white px-5 pb-3.5 pt-2">
+    <View className="border-b border-border bg-card px-5 pb-3.5 pt-2">
       <View className="flex-row items-center gap-3">
         {onBack ? (
           <Pressable

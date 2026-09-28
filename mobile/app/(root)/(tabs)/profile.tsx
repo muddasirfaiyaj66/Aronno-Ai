@@ -20,22 +20,27 @@ import {
   FormSection,
   IconPickerRow,
   PrimaryButton,
+  SegmentedTabs,
   SettingsGroup,
   SettingsRow,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
+import { useTheme } from "@/context/theme";
 import {
   useGetDistrictsQuery,
   useGetMeQuery,
   useGetProfessionsQuery,
+  useGetSessionsQuery,
   useLogoutMutation,
   usePatchMeMutation,
+  useRevokeSessionMutation,
 } from "@/services/api";
 import { userFacingError } from "@/lib/userFacingError";
 import { validateBdPhoneBn } from "@/lib/authValidation";
 import { matchDistrictSlug, useFarmLocation } from "@/hooks/useFarmLocation";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { uploadImageToCloudinary } from "@/services/cloudinary";
+import { deviceLabel } from "@/lib/deviceLabel";
 import * as ImagePicker from "expo-image-picker";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
@@ -58,7 +63,11 @@ export default function ProfileScreen() {
     useGetDistrictsQuery();
   const [logout] = useLogoutMutation();
   const [patchMe, { isLoading, error }] = usePatchMeMutation();
+  const { preference, setPreference } = useTheme();
+  const { data: sessionData } = useGetSessionsQuery();
+  const [revokeSession, { isLoading: revoking }] = useRevokeSessionMutation();
   const location = useFarmLocation();
+  const [editing, setEditing] = useState(false);
 
   const [displayName, setDisplayName] = useState("");
   const [phone, setPhone] = useState("");
@@ -243,7 +252,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       <View
-        className="border-b border-border bg-white px-5 pb-3 pt-2"
+        className="border-b border-border bg-card px-5 pb-3 pt-2"
         accessibilityRole="header"
       >
         <AppText variant="title" className="text-ink">
@@ -267,7 +276,7 @@ export default function ProfileScreen() {
           refreshControl={refreshControl}
         >
           {/* Identity hero */}
-          <View className="overflow-hidden rounded-3xl border border-border bg-white">
+          <View className="overflow-hidden rounded-3xl border border-border bg-card">
             <View
               className="px-5 pb-6 pt-8"
               style={{ backgroundColor: colors.forest900 }}
@@ -303,7 +312,7 @@ export default function ProfileScreen() {
                   )}
                   <View
                     className="absolute bottom-0 right-0 h-9 w-9 items-center justify-center rounded-full border-2 border-white"
-                    style={{ backgroundColor: colors.primary }}
+                    style={{ backgroundColor: colors.forest700 }}
                     importantForAccessibility="no"
                   >
                     {uploadingPhoto ? (
@@ -380,6 +389,8 @@ export default function ProfileScreen() {
             ) : null}
           </View>
 
+          {editing ? (
+          <>
           <FormSection title="ব্যক্তিগত তথ্য">
             <FieldInput
               label="নাম"
@@ -453,7 +464,7 @@ export default function ProfileScreen() {
               accessibilityRole="button"
               accessibilityState={{ busy: locating }}
               accessibilityLabel="বর্তমান অবস্থান ব্যবহার করুন"
-              className="min-h-touch flex-row items-center justify-center gap-2 rounded-2xl border border-border bg-white px-3 active:bg-secondary"
+              className="min-h-touch flex-row items-center justify-center gap-2 rounded-2xl border border-border bg-card px-3 active:bg-secondary"
             >
               <Ionicons
                 name="navigate-outline"
@@ -504,6 +515,121 @@ export default function ProfileScreen() {
             disabled={!canSave}
             onPress={handleSave}
           />
+          <Pressable onPress={() => setEditing(false)} accessibilityRole="button">
+            <AppText variant="caption" className="text-center text-muted">
+              বন্ধ করুন
+            </AppText>
+          </Pressable>
+          </>
+          ) : (
+          <SettingsGroup
+            title="অ্যাকাউন্ট"
+            footer="নাম, মোবাইল, পেশা ও জেলা এখান থেকে বদলানো যায়।"
+          >
+            <SettingsRow
+              label="নাম"
+              value={me?.displayName || "যোগ করুন"}
+              icon="person-outline"
+            />
+            <SettingsRow
+              label="ইমেইল"
+              value={me?.email}
+              subtitle={me?.emailVerifiedAt ? "যাচাই করা" : "যাচাই বাকি"}
+              icon="mail-outline"
+            />
+            <SettingsRow
+              label="মোবাইল"
+              value={me?.phone || "যোগ করুন"}
+              icon="call-outline"
+            />
+            <SettingsRow
+              label="পেশা"
+              value={professionName || "বেছে নিন"}
+              icon="briefcase-outline"
+            />
+            <SettingsRow
+              label="জেলা"
+              value={districtName || "বেছে নিন"}
+              icon="location-outline"
+            />
+            <SettingsRow
+              label="তথ্য সম্পাদনা"
+              icon="create-outline"
+              last
+              onPress={() => setEditing(true)}
+            />
+          </SettingsGroup>
+          )}
+
+          <SettingsGroup
+            title="লগইন করা ডিভাইস"
+            footer="এই ফোন এবং অন্য জায়গা থেকে খোলা অ্যাকাউন্ট।"
+          >
+            {!sessionData?.sessions.some((s) => s.current) ? (
+              <SettingsRow
+                label={deviceLabel()}
+                subtitle="এখন এই ডিভাইসে লগইন আছে"
+                icon="phone-portrait-outline"
+                last={!sessionData?.sessions.length}
+              />
+            ) : null}
+            {(sessionData?.sessions ?? []).map((session, index, all) => (
+              <SettingsRow
+                key={session.id}
+                label={session.deviceName}
+                subtitle={
+                  session.current
+                    ? "এই ডিভাইস"
+                    : new Date(session.createdAt).toLocaleString("bn-BD", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })
+                }
+                icon={session.current ? "phone-portrait" : "phone-portrait-outline"}
+                last={index === all.length - 1}
+                showChevron={false}
+                right={
+                  session.current ? (
+                    <AppText variant="caption" className="font-bengali-semibold text-primary">
+                      সক্রিয়
+                    </AppText>
+                  ) : (
+                    <Pressable
+                      onPress={() => {
+                        void revokeSession(session.id);
+                      }}
+                      disabled={revoking}
+                      accessibilityRole="button"
+                      accessibilityLabel="এই ডিভাইস থেকে বের করুন"
+                    >
+                      <AppText variant="caption" className="font-bengali-semibold text-severity-high">
+                        বের করুন
+                      </AppText>
+                    </Pressable>
+                  )
+                }
+              />
+            ))}
+          </SettingsGroup>
+
+          <SettingsGroup
+            title="চেহারা"
+            footer="হালকা, গাঢ়, অথবা ফোনের সেটিংস অনুসরণ করুন।"
+          >
+            <View className="px-3 py-3">
+              <SegmentedTabs
+                options={[
+                  { id: "system", label: "ফোন" },
+                  { id: "light", label: "হালকা" },
+                  { id: "dark", label: "গাঢ়" },
+                ]}
+                value={preference}
+                onChange={setPreference}
+              />
+            </View>
+          </SettingsGroup>
 
           <SettingsGroup
             title="অফলাইন সরঞ্জাম"

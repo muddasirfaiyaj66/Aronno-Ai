@@ -239,7 +239,7 @@ export default function VoiceCaptureScreen() {
           </AppText>
         ) : null}
 
-        <View className="flex-row rounded-2xl bg-white p-1">
+        <View className="flex-row rounded-2xl bg-card p-1">
           {(
             [
               { id: "voice" as const, label: t("বলুন", "Speak") },
@@ -258,7 +258,7 @@ export default function VoiceCaptureScreen() {
                   setError(null);
                 }}
                 className={`min-h-touch flex-1 items-center justify-center rounded-xl ${
-                  active ? "bg-primary" : ""
+                  active ? "bg-forest-700" : ""
                 }`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}

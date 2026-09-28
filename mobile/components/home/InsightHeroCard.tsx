@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { AppText } from "@/components/ui/AppText";
 import { colors } from "@/constants/theme";
+import { useTheme } from "@/context/theme";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -32,6 +33,7 @@ export function InsightHeroCard({
   intervalMs = 6000,
   className = "",
 }: InsightHeroCardProps) {
+  const { scheme } = useTheme();
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -50,10 +52,14 @@ export function InsightHeroCard({
       <Pressable onPress={() => onPress?.(active)} accessibilityRole="button">
         <View style={styles.shadow}>
           <LinearGradient
-            colors={["#E7F5F2", "#FFFFFF", "#D5F3EC"]}
+            colors={
+              scheme === "dark"
+                ? ["#132E2A", "#162420", "#1C3330"]
+                : ["#E7F5F2", "#FFFFFF", "#D5F3EC"]
+            }
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.card}
+            style={[styles.card, { borderColor: colors.border }]}
           >
             <Animated.View
               key={active.id}
@@ -61,7 +67,7 @@ export function InsightHeroCard({
               exiting={FadeOut.duration(220)}
             >
               <View className="flex-row items-center gap-3">
-                <View className="h-12 w-12 items-center justify-center rounded-2xl bg-white">
+                <View className="h-12 w-12 items-center justify-center rounded-2xl bg-secondary">
                   <Ionicons name={active.icon} size={24} color={colors.primary} />
                 </View>
                 <AppText variant="bodyLg" className="flex-1 font-bengali-bold text-ink">
@@ -93,7 +99,7 @@ export function InsightHeroCard({
                   <View
                     key={item.id}
                     className={`h-1.5 flex-1 rounded-full ${
-                      i === index ? "bg-primary" : "bg-primary/15"
+                      i === index ? "bg-forest-700" : "bg-primary/15"
                     }`}
                   />
                 ))}

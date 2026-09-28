@@ -66,7 +66,12 @@ export function BentoTile({
         accessibilityState={{ disabled: locked }}
       >
         <Animated.View
-          style={[styles.tile, isLg && styles.tileLg, animatedStyle]}
+          style={[
+            styles.tile,
+            { backgroundColor: colors.card, borderColor: colors.border },
+            isLg && styles.tileLg,
+            animatedStyle,
+          ]}
         >
           {locked ? (
             <View className="absolute right-3 top-3 flex-row items-center gap-1 rounded-full bg-neutral-200 px-2 py-1">

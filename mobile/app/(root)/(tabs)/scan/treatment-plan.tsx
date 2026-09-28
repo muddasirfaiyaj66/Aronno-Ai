@@ -130,7 +130,7 @@ export default function TreatmentPlanScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-neutral-200 bg-white px-5 py-4">
+      <View className="border-b border-neutral-200 bg-card px-5 py-4">
         <AppText variant="title">চিকিৎসা পরিকল্পনা</AppText>
         <AppText variant="caption" className="mt-1">
           {plan.diseaseNameBn} এর জন্য সুপারিশকৃত পরিকল্পনা

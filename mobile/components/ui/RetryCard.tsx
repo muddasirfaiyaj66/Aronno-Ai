@@ -17,7 +17,7 @@ export function RetryCard({
 }: RetryCardProps) {
   return (
     <View
-      className={`items-center rounded-card border border-severity-high-bg bg-white px-5 py-6 ${className}`}
+      className={`items-center rounded-card border border-severity-high-bg bg-card px-5 py-6 ${className}`}
     >
       <View className="mb-3 h-14 w-14 items-center justify-center rounded-full bg-severity-high-bg">
         <Ionicons name="refresh-circle" size={36} color="#B42318" />

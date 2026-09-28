@@ -23,7 +23,7 @@ export function FormSection({
           {title}
         </AppText>
       ) : null}
-      <View className="gap-4 rounded-2xl border border-border bg-white px-4 py-4">
+      <View className="gap-4 rounded-2xl border border-border bg-card px-4 py-4">
         {children}
       </View>
     </View>

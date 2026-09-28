@@ -225,7 +225,7 @@ export default function ReceiptResultScreen() {
             return (
               <View
                 key={item.key}
-                className="gap-2 rounded-2xl border border-border bg-white p-3"
+                className="gap-2 rounded-2xl border border-border bg-card p-3"
               >
                 <View className="flex-row items-center gap-2">
                   <AppText variant="caption" className="font-bengali-bold text-muted">

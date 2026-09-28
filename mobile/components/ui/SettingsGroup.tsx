@@ -26,7 +26,7 @@ export function SettingsGroup({
           {title}
         </AppText>
       ) : null}
-      <View className="overflow-hidden rounded-2xl border border-border bg-white">
+      <View className="overflow-hidden rounded-2xl border border-border bg-card">
         {children}
       </View>
       {footer ? (

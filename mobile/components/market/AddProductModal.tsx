@@ -184,7 +184,7 @@ export function AddProductModal({
             </AppText>
             <Pressable
               onPress={onClose}
-              className="h-9 w-9 items-center justify-center rounded-full bg-white"
+              className="h-9 w-9 items-center justify-center rounded-full bg-card"
             >
               <Ionicons name="close" size={20} color={colors.ink} />
             </Pressable>
@@ -221,7 +221,7 @@ export function AddProductModal({
                 onChangeText={setName}
                 placeholder="যেমনঃ ব্রি ধান ২৯ বা দেশি লাল টমেটো"
                 placeholderTextColor={colors.muted}
-                className="min-h-touch-lg rounded-2xl bg-white px-4 font-bengali-medium text-body-lg text-ink"
+                className="min-h-touch-lg rounded-2xl bg-card px-4 font-bengali-medium text-body-lg text-ink"
               />
             </View>
 
@@ -237,7 +237,7 @@ export function AddProductModal({
                   keyboardType="numeric"
                   placeholder="যেমনঃ ৬০"
                   placeholderTextColor={colors.muted}
-                  className="min-h-touch-lg rounded-2xl bg-white px-4 font-bengali-medium text-body-lg text-ink"
+                  className="min-h-touch-lg rounded-2xl bg-card px-4 font-bengali-medium text-body-lg text-ink"
                 />
               </View>
               <View className="w-1/3 gap-2">
@@ -260,7 +260,7 @@ export function AddProductModal({
                   keyboardType="numeric"
                   placeholder="যেমনঃ ৫০০"
                   placeholderTextColor={colors.muted}
-                  className="min-h-touch-lg rounded-2xl bg-white px-4 font-bengali-medium text-body-lg text-ink"
+                  className="min-h-touch-lg rounded-2xl bg-card px-4 font-bengali-medium text-body-lg text-ink"
                 />
               </View>
               <View className="flex-1 gap-2">
@@ -273,7 +273,7 @@ export function AddProductModal({
                   keyboardType="numeric"
                   placeholder="যেমনঃ ১"
                   placeholderTextColor={colors.muted}
-                  className="min-h-touch-lg rounded-2xl bg-white px-4 font-bengali-medium text-body-lg text-ink"
+                  className="min-h-touch-lg rounded-2xl bg-card px-4 font-bengali-medium text-body-lg text-ink"
                 />
               </View>
             </View>
@@ -290,7 +290,7 @@ export function AddProductModal({
                 numberOfLines={3}
                 placeholder="পণ্যের বৈশিষ্ট্য, মান বা ডেলিভারির তথ্য লিখুন..."
                 placeholderTextColor={colors.muted}
-                className="min-h-[90px] rounded-2xl bg-white p-4 font-bengali-medium text-body text-ink"
+                className="min-h-[90px] rounded-2xl bg-card p-4 font-bengali-medium text-body text-ink"
               />
             </View>
 
@@ -311,7 +311,7 @@ export function AddProductModal({
             </View>
 
             {/* Organic Toggle */}
-            <View className="flex-row items-center justify-between rounded-2xl bg-white px-4 py-3">
+            <View className="flex-row items-center justify-between rounded-2xl bg-card px-4 py-3">
               <View className="flex-row items-center gap-2">
                 <Ionicons name="leaf" size={20} color={colors.primary} />
                 <AppText variant="body" className="font-bengali-semibold text-ink">

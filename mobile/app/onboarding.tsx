@@ -110,7 +110,7 @@ export default function OnboardingScreen() {
               <View
                 key={index}
                 className={`h-2.5 rounded-full ${
-                  index === step ? "w-8 bg-primary" : "w-2.5 bg-neutral-200"
+                  index === step ? "w-8 bg-forest-700" : "w-2.5 bg-neutral-200"
                 }`}
               />
             ))}

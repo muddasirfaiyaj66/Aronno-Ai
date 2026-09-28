@@ -109,7 +109,7 @@ export default function ReportPreviewScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-neutral-200 bg-white px-5 py-4">
+      <View className="border-b border-neutral-200 bg-card px-5 py-4">
         <AppText variant="title">রিপোর্ট প্রিভিউ</AppText>
         <AppText variant="caption" className="mt-1">
           {plan.cropNameBn} · {dateLabel}
@@ -182,7 +182,7 @@ export default function ReportPreviewScreen() {
         </View>
       </ScrollView>
 
-      <View className="gap-3 border-t border-neutral-200 bg-white px-5 py-4">
+      <View className="gap-3 border-t border-neutral-200 bg-card px-5 py-4">
         <ListenButton
           label="পুরো রিপোর্ট শুনুন"
           textBn={`${plan.diseaseNameBn}. ${plan.pesticideNameBn}. ${plan.weatherAdvisory.reasonBn}`}
@@ -210,7 +210,7 @@ export default function ReportPreviewScreen() {
         <Animated.View
           entering={FadeIn.duration(160)}
           exiting={FadeOut.duration(220)}
-          className="absolute bottom-32 left-5 right-5 items-center rounded-2xl bg-ink px-4 py-3"
+          className="absolute bottom-32 left-5 right-5 items-center rounded-2xl bg-neutral-900 px-4 py-3"
         >
           <AppText variant="caption" className="text-center text-white">
             রিপোর্ট তৈরি হয়েছে — সংরক্ষণ বা শেয়ার করুন।

@@ -23,7 +23,7 @@ export function ListingCard({
   const isRow = layout === "row";
   return (
     <View
-      className={`overflow-hidden rounded-3xl bg-white ${isRow ? "w-full" : "w-40"} ${className}`}
+      className={`overflow-hidden rounded-3xl bg-card ${isRow ? "w-full" : "w-40"} ${className}`}
       style={styles.card}
     >
       <View className={isRow ? "flex-row" : ""}>

@@ -22,7 +22,7 @@ export function StructuredCard({
   style,
   ...props
 }: StructuredCardProps) {
-  const surface = tone === "soft" ? "bg-secondary" : "bg-white";
+  const surface = tone === "soft" ? "bg-secondary" : "bg-card";
 
   return (
     <View
@@ -32,7 +32,7 @@ export function StructuredCard({
     >
       <View className="flex-row items-center gap-3 px-5 pt-5">
         {icon ? (
-          <View className="h-12 w-12 items-center justify-center rounded-2xl bg-white">
+          <View className="h-12 w-12 items-center justify-center rounded-2xl bg-card">
             {icon}
           </View>
         ) : null}

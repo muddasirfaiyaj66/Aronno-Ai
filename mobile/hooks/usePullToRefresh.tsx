@@ -16,6 +16,9 @@ export function usePullToRefresh(onRefresh: () => Promise<void> | void) {
     setRefreshing(true);
     try {
       await onRefresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("has not been started")) throw error;
     } finally {
       busy.current = false;
       setRefreshing(false);
@@ -30,7 +33,7 @@ export function usePullToRefresh(onRefresh: () => Promise<void> | void) {
       }}
       tintColor={colors.primary}
       colors={[colors.primary]}
-      progressBackgroundColor={colors.white}
+      progressBackgroundColor={colors.card}
     />
   );
 

@@ -26,7 +26,7 @@ export function SingleShopCartModal({
       onRequestClose={onClose}
     >
       <View className="flex-1 bg-black/60 items-center justify-center px-5">
-        <View className="w-full max-w-sm rounded-3xl bg-white p-5 gap-4 shadow-xl border border-border">
+        <View className="w-full max-w-sm rounded-3xl bg-card p-5 gap-4 shadow-xl border border-border">
           {/* Header Icon & Title */}
           <View className="items-center gap-2">
             <View className="h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 border border-amber-200">

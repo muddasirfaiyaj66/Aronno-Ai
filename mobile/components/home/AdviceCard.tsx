@@ -18,6 +18,7 @@ import {
   type SeverityLevel,
 } from "@/components/ui";
 import { colors } from "@/constants/theme";
+import { useTheme } from "@/context/theme";
 
 export type AdviceCardProps = {
   title: string;
@@ -38,6 +39,7 @@ export function AdviceCard({
   delay = 0,
   onDetails,
 }: AdviceCardProps) {
+  const { scheme } = useTheme();
   const reveal = useSharedValue(0.92);
 
   useEffect(() => {
@@ -56,7 +58,11 @@ export function AdviceCard({
     <Animated.View entering={FadeInDown.delay(delay).duration(520).springify()}>
       <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient
-          colors={["#ECFDF5", "#FFFFFF"]}
+          colors={
+            scheme === "dark"
+              ? ["#132E2A", "#162420"]
+              : ["#ECFDF5", "#FFFFFF"]
+          }
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.inner}
@@ -99,7 +105,7 @@ export function AdviceCard({
               <SecondaryButton
                 label={detailsLabel}
                 onPress={onDetails}
-                className="bg-white"
+                className="bg-card"
               />
             </Animated.View>
           </View>

@@ -99,7 +99,7 @@ export default function MyProductsScreen() {
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       {/* Header */}
-      <View className="flex-row items-center justify-between border-b border-border bg-white px-5 py-3.5">
+      <View className="flex-row items-center justify-between border-b border-border bg-card px-5 py-3.5">
         <View className="flex-row items-center gap-3">
           <Pressable
             onPress={() => router.back()}
@@ -123,7 +123,7 @@ export default function MyProductsScreen() {
             setEditingProduct(null);
             setAddModalVisible(true);
           }}
-          className="flex-row items-center gap-1.5 rounded-full bg-primary px-4 py-2"
+          className="flex-row items-center gap-1.5 rounded-full bg-forest-700 px-4 py-2"
         >
           <Ionicons name="add" size={18} color={colors.white} />
           <AppText variant="caption" className="font-bengali-bold text-white">
@@ -167,7 +167,7 @@ export default function MyProductsScreen() {
             return (
               <View
                 key={product.id}
-                className="overflow-hidden rounded-3xl bg-white shadow-sm"
+                className="overflow-hidden rounded-3xl bg-card shadow-sm"
               >
                 {/* Product Row */}
                 <View className="flex-row gap-3 p-4">

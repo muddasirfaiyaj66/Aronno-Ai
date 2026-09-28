@@ -69,7 +69,9 @@ function ScanCard({
         }}
         accessibilityRole="button"
       >
-        <Animated.View style={[styles.card, animatedStyle]}>
+        <Animated.View
+          style={[styles.card, animatedStyle, { backgroundColor: colors.card }]}
+        >
           <LinearGradient
             colors={scan.gradient}
             start={{ x: 0, y: 0 }}

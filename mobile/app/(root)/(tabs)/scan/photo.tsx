@@ -56,13 +56,13 @@ export default function PhotoCaptureScreen() {
 
   if (photoUri) {
     return (
-      <SafeAreaView className="flex-1 bg-ink" edges={["top", "bottom"]}>
+      <SafeAreaView className="flex-1 bg-neutral-900" edges={["top", "bottom"]}>
         <Image
           source={{ uri: photoUri }}
           style={{ flex: 1 }}
           resizeMode="cover"
         />
-        <View className="flex-row gap-3 bg-ink px-5 py-5">
+        <View className="flex-row gap-3 bg-neutral-900 px-5 py-5">
           <SecondaryButton
             label="আবার তুলুন"
             onPress={() => setPhotoUri(null)}
@@ -106,9 +106,9 @@ export default function PhotoCaptureScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-ink" edges={["top", "bottom"]}>
+    <SafeAreaView className="flex-1 bg-neutral-900" edges={["top", "bottom"]}>
       <CameraView ref={cameraRef} style={{ flex: 1 }} facing="back" />
-      <View className="items-center bg-ink px-5 py-6">
+      <View className="items-center bg-neutral-900 px-5 py-6">
         <Pressable
           onPress={handleCapture}
           accessibilityRole="button"

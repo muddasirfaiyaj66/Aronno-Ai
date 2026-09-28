@@ -1,5 +1,6 @@
 import { Pressable, View } from "react-native";
 import { AppText } from "./AppText";
+import { colors } from "@/constants/theme";
 import { useLocale, type Locale } from "@/context/locale";
 
 export type LanguageToggleProps = {
@@ -29,7 +30,7 @@ export function LanguageToggle({
         accessibilityState={{ selected: active }}
         accessibilityLabel={label}
         className={`min-h-[40px] min-w-[48px] items-center justify-center rounded-full px-3 ${
-          active ? (light ? "bg-white" : "bg-primary") : "bg-transparent"
+          active ? (light ? "bg-white" : "bg-forest-700") : "bg-transparent"
         }`}
       >
         <AppText
@@ -42,7 +43,7 @@ export function LanguageToggle({
                 : "#FFFFFF"
               : light
                 ? "rgba(255,255,255,0.88)"
-                : "#5C6E68",
+                : colors.muted,
           }}
         >
           {label}

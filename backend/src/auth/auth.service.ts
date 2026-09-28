@@ -34,6 +34,15 @@ export type UserDto = {
   district: { slug: string; nameBn: string } | null;
 };
 
+function labelFromAgent(userAgent?: string | null) {
+  const ua = userAgent ?? '';
+  if (/android/i.test(ua)) return 'Android অ্যাপ';
+  if (/iphone|ipad/i.test(ua)) return 'iPhone';
+  if (/windows/i.test(ua)) return 'Windows';
+  if (/mac/i.test(ua)) return 'Mac';
+  return 'অন্য ডিভাইস';
+}
+
 const userInclude = {
   role: true,
   profession: true,
@@ -135,7 +144,7 @@ export class AuthService {
   async login(
     input: { email: string; password: string },
     res: Response,
-    meta: { userAgent?: string; ip?: string },
+    meta: { userAgent?: string; ip?: string; deviceName?: string },
   ) {
     const user = await this.prisma.user.findUnique({
       where: { email: input.email.toLowerCase() },
@@ -189,7 +198,7 @@ export class AuthService {
   async verifyEmail(
     input: { email: string; code: string },
     res: Response,
-    meta: { userAgent?: string; ip?: string },
+    meta: { userAgent?: string; ip?: string; deviceName?: string },
   ) {
     const user = await this.consumeOtp(input.email, input.code, 'verification');
     const updated = await this.prisma.user.update({
@@ -397,7 +406,7 @@ export class AuthService {
   async googleLogin(
     idToken: string,
     res: Response,
-    meta: { userAgent?: string; ip?: string },
+    meta: { userAgent?: string; ip?: string; deviceName?: string },
   ) {
     const clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
     if (!clientId) throw Errors.aiUnavailable();
@@ -484,7 +493,7 @@ export class AuthService {
   async refresh(
     refreshRaw: string | undefined,
     res: Response,
-    meta: { userAgent?: string; ip?: string },
+    meta: { userAgent?: string; ip?: string; deviceName?: string },
   ) {
     if (!refreshRaw) throw Errors.unauthorized();
     const tokenHash = sha256(refreshRaw);
@@ -545,11 +554,64 @@ export class AuthService {
     return this.toDto(user);
   }
 
+  async listSessions(
+    userId: string,
+    meta: { userAgent?: string; deviceName?: string },
+  ) {
+    const rows = await this.prisma.refreshToken.findMany({
+      where: {
+        userId,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const seen = new Set<string>();
+    let currentMarked = false;
+    const sessions: {
+      id: string;
+      deviceName: string;
+      createdAt: string;
+      current: boolean;
+    }[] = [];
+    for (const row of rows) {
+      if (seen.has(row.familyId)) continue;
+      seen.add(row.familyId);
+      const nameMatch = Boolean(
+        meta.deviceName && row.deviceName && row.deviceName === meta.deviceName,
+      );
+      const uaMatch = Boolean(
+        !row.deviceName && meta.userAgent && row.userAgent === meta.userAgent,
+      );
+      const current = !currentMarked && (nameMatch || uaMatch);
+      if (current) currentMarked = true;
+      sessions.push({
+        id: row.id,
+        deviceName: row.deviceName || labelFromAgent(row.userAgent),
+        createdAt: row.createdAt.toISOString(),
+        current,
+      });
+    }
+    return { sessions };
+  }
+
+  async revokeSession(userId: string, id: string) {
+    const token = await this.prisma.refreshToken.findFirst({
+      where: { id, userId },
+    });
+    if (!token) throw Errors.notFound();
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, familyId: token.familyId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return { ok: true as const };
+  }
+
   private async issueSession(
     userId: string,
     role: AuthUser['role'],
     res: Response,
-    meta: { userAgent?: string; ip?: string },
+    meta: { userAgent?: string; ip?: string; deviceName?: string },
     familyId = randomToken(16),
   ) {
     const jti = randomToken(16);
@@ -569,6 +631,7 @@ export class AuthService {
         expiresAt: new Date(Date.now() + REFRESH_TTL_SECONDS * 1000),
         userAgent: meta.userAgent,
         ip: meta.ip,
+        deviceName: meta.deviceName,
       },
     });
     setAuthCookies(res, this.config, accessToken, refreshRaw, randomToken(16));

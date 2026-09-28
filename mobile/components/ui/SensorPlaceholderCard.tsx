@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { AppText } from "./AppText";
+import { colors } from "@/constants/theme";
 
 export type SensorPlaceholderCardProps = {
   title: string;
@@ -45,7 +46,7 @@ export function SensorPlaceholderCard({
       >
         <View
           className="overflow-hidden rounded-3xl bg-neutral-100"
-          style={styles.card}
+          style={[styles.card, { borderColor: colors.border }]}
         >
           <View className="flex-row items-center gap-3 px-5 pt-5">
             <View className="h-12 w-12 items-center justify-center rounded-2xl bg-neutral-200">
@@ -79,7 +80,7 @@ export function SensorPlaceholderCard({
         <Animated.View
           entering={FadeIn.duration(160)}
           exiting={FadeOut.duration(220)}
-          className="mt-2 items-center rounded-2xl bg-ink px-4 py-3"
+          className="mt-2 items-center rounded-2xl bg-neutral-900 px-4 py-3"
         >
           <AppText variant="caption" className="text-center text-white">
             {toastMessage}

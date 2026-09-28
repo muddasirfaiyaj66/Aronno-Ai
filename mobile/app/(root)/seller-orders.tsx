@@ -151,7 +151,7 @@ function OrderCard({
 
   return (
     <View
-      className="rounded-2xl border border-border bg-white overflow-hidden shadow-sm"
+      className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm"
       style={{
         shadowColor: "#000",
         shadowOpacity: 0.04,
@@ -350,7 +350,7 @@ function OrderCard({
                   className={`flex-row items-center gap-2 rounded-xl px-4 py-2.5 ${
                     t.danger
                       ? "bg-red-50 border border-red-200"
-                      : "bg-primary border border-primary"
+                      : "bg-forest-700 border border-primary"
                   }`}
                   style={{ opacity: updating ? 0.6 : 1 }}
                 >
@@ -436,7 +436,7 @@ export default function SellerOrdersScreen() {
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       {/* Header */}
-      <View className="border-b border-border bg-white px-5 py-3.5">
+      <View className="border-b border-border bg-card px-5 py-3.5">
         <View className="flex-row items-center gap-3">
           <Pressable
             onPress={() => router.back()}
@@ -466,7 +466,7 @@ export default function SellerOrdersScreen() {
       </View>
 
       {/* Status filter tabs */}
-      <View className="bg-white border-b border-border">
+      <View className="bg-card border-b border-border">
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -485,8 +485,8 @@ export default function SellerOrdersScreen() {
                 onPress={() => setActiveTab(tab.id)}
                 className={`flex-row items-center gap-1.5 rounded-full px-4 py-2 border ${
                   isActive
-                    ? "bg-primary border-primary"
-                    : "bg-white border-border"
+                    ? "bg-forest-700 border-primary"
+                    : "bg-card border-border"
                 }`}
               >
                 <AppText

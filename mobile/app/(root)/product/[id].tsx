@@ -83,7 +83,7 @@ export default function ProductDetailScreen() {
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       {/* Header Bar */}
-      <View className="flex-row items-center justify-between border-b border-border bg-white px-5 py-3.5">
+      <View className="flex-row items-center justify-between border-b border-border bg-card px-5 py-3.5">
         <Pressable
           onPress={() => router.back()}
           className="h-10 w-10 items-center justify-center rounded-full bg-neutral"
@@ -99,7 +99,7 @@ export default function ProductDetailScreen() {
         >
           <Ionicons name="cart-outline" size={20} color={colors.ink} />
           {cartItemCount > 0 ? (
-            <View className="absolute -top-1 -right-1 h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 border-2 border-white shadow-xs">
+            <View className="absolute -top-1 -right-1 h-5 min-w-5 items-center justify-center rounded-full bg-forest-700 px-1 border-2 border-white shadow-xs">
               <AppText
                 variant="caption"
                 className="font-bengali-bold text-white"
@@ -128,7 +128,7 @@ export default function ProductDetailScreen() {
           <>
             {/* Image Gallery */}
             <View className="gap-2">
-              <View className="relative h-64 w-full rounded-3xl bg-white shadow-sm overflow-hidden border border-border/40">
+              <View className="relative h-64 w-full rounded-3xl bg-card shadow-sm overflow-hidden border border-border/40">
                 {product.images && product.images.length > 0 ? (
                   <Image
                     source={{ uri: product.images[selectedImageIndex]?.url ?? product.images[0].url }}
@@ -394,12 +394,12 @@ export default function ProductDetailScreen() {
 
       {/* Bottom Sticky Action Bar */}
       {product ? (
-        <View className="absolute bottom-0 left-0 right-0 border-t border-border bg-white px-5 py-4 shadow-lg flex-row items-center gap-3">
+        <View className="absolute bottom-0 left-0 right-0 border-t border-border bg-card px-5 py-4 shadow-lg flex-row items-center gap-3">
           {/* Quantity Controls */}
           <View className="flex-row items-center rounded-2xl bg-neutral px-2 py-1 border border-border">
             <Pressable
               onPress={() => setQuantity((q) => Math.max(minQty, q - 1))}
-              className="h-9 w-9 items-center justify-center rounded-xl bg-white shadow-xs"
+              className="h-9 w-9 items-center justify-center rounded-xl bg-card shadow-xs"
             >
               <Ionicons name="remove" size={18} color={colors.ink} />
             </Pressable>
@@ -408,7 +408,7 @@ export default function ProductDetailScreen() {
             </AppText>
             <Pressable
               onPress={() => setQuantity((q) => Math.min(product.availableQuantity, q + 1))}
-              className="h-9 w-9 items-center justify-center rounded-xl bg-white shadow-xs"
+              className="h-9 w-9 items-center justify-center rounded-xl bg-card shadow-xs"
             >
               <Ionicons name="add" size={18} color={colors.ink} />
             </Pressable>

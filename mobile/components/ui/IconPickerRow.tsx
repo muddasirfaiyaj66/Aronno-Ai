@@ -39,7 +39,7 @@ export function IconPickerRow({
                 : "border-border bg-neutral"
             }`}
           >
-            <View className="h-11 w-11 items-center justify-center rounded-2xl bg-white">
+            <View className="h-11 w-11 items-center justify-center rounded-2xl bg-card">
               {option.icon}
             </View>
             <AppText

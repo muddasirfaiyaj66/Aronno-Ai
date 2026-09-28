@@ -82,7 +82,7 @@ export function AIGeneratingShimmer({
   const widths: DimensionValue[] = ["92%", "76%", "58%"];
 
   return (
-    <View className={`rounded-3xl bg-white px-5 py-5 ${className}`} style={styles.card}>
+    <View className={`rounded-3xl bg-card px-5 py-5 ${className}`} style={styles.card}>
       <View className="flex-row items-center gap-2">
         <Animated.View style={sparkleStyle}>
           <Ionicons name="sparkles" size={18} color={colors.tertiary} />

@@ -143,7 +143,7 @@ export default function SoilSensorScreen() {
                 key={mode}
                 onPress={() => setMode(mode)}
                 className={`flex-1 items-center rounded-2xl border px-3 py-3 ${
-                  active ? "border-primary bg-secondary" : "border-border bg-white"
+                  active ? "border-primary bg-secondary" : "border-border bg-card"
                 }`}
               >
                 <AppText
@@ -170,7 +170,7 @@ export default function SoilSensorScreen() {
                 key={kind}
                 onPress={() => setTransport(kind)}
                 className={`flex-1 flex-row items-center justify-center gap-2 rounded-2xl border px-3 py-3 ${
-                  active ? "border-primary bg-white" : "border-border bg-white/70"
+                  active ? "border-primary bg-card" : "border-border bg-white/70"
                 }`}
               >
                 <Ionicons
@@ -210,7 +210,7 @@ export default function SoilSensorScreen() {
               <Pressable
                 key={d.id}
                 onPress={() => void onConnectBle(d)}
-                className="flex-row items-center gap-3 rounded-2xl border border-border bg-white px-4 py-3"
+                className="flex-row items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3"
               >
                 <Ionicons name="hardware-chip-outline" size={22} color={colors.primary} />
                 <View className="flex-1">
@@ -324,7 +324,7 @@ export default function SoilSensorScreen() {
             {crops.slice(0, 5).map((c) => (
               <View
                 key={c.cropSlug}
-                className="rounded-2xl border border-border bg-white px-4 py-3"
+                className="rounded-2xl border border-border bg-card px-4 py-3"
               >
                 <View className="flex-row items-center justify-between">
                   <AppText variant="body" className="font-bengali-bold text-ink">

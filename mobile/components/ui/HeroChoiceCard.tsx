@@ -14,6 +14,7 @@ import Animated, {
 import { AppText } from "./AppText";
 import { TiltPressable } from "./TiltPressable";
 import { colors } from "@/constants/theme";
+import { useTheme } from "@/context/theme";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -25,27 +26,6 @@ export type HeroChoiceCardProps = {
   tone?: "photo" | "voice" | "text";
 };
 
-const TONE = {
-  photo: {
-    bg: colors.secondary,
-    icon: colors.white,
-    gradient: ["#1AA88A", "#0F766E", "#115E59"] as const,
-    light: false,
-  },
-  voice: {
-    bg: "#FBF4E6",
-    icon: "#C4841D",
-    gradient: ["#FFFFFF", "#FFFFFF"] as const,
-    light: true,
-  },
-  text: {
-    bg: "#E7F1FB",
-    icon: "#1D4E89",
-    gradient: ["#FFFFFF", "#FFFFFF"] as const,
-    light: true,
-  },
-} as const;
-
 export function HeroChoiceCard({
   title,
   subtitle,
@@ -53,7 +33,29 @@ export function HeroChoiceCard({
   onPress,
   tone = "voice",
 }: HeroChoiceCardProps) {
-  const palette = TONE[tone];
+  const { scheme } = useTheme();
+  const dark = scheme === "dark";
+  const palette =
+    tone === "photo"
+      ? {
+          bg: "rgba(255,255,255,0.18)",
+          icon: colors.white,
+          gradient: ["#1AA88A", "#0F766E", "#115E59"] as const,
+          light: false,
+        }
+      : tone === "voice"
+        ? {
+            bg: dark ? "#3A2E18" : "#FBF4E6",
+            icon: dark ? "#E8B04A" : "#C4841D",
+            gradient: [colors.card, colors.card] as const,
+            light: true,
+          }
+        : {
+            bg: dark ? "#1C2C40" : "#E7F1FB",
+            icon: dark ? "#93C5FD" : "#1D4E89",
+            gradient: [colors.card, colors.card] as const,
+            light: true,
+          };
   const float = useSharedValue(0);
   const shine = useSharedValue(-1);
 
@@ -92,7 +94,7 @@ export function HeroChoiceCard({
       contentStyle={{
         minHeight: 96,
         borderRadius: 28,
-        backgroundColor: colors.white,
+        backgroundColor: colors.card,
         borderWidth: palette.light ? 1 : 0,
         borderColor: colors.border,
         overflow: "hidden",

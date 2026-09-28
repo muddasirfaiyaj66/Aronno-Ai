@@ -4,14 +4,37 @@ import { enablePlaybackAudio } from "@/lib/speechRecording";
 
 const LANGS = ["bn-BD", "bn-IN", "bn"] as const;
 
-type VoicePick = { language: string; voice?: string };
+type VoicePick = { language: string; voice?: string; pitch: number };
 
 let cachedPick: VoicePick | null = null;
 let pickPromise: Promise<VoicePick> | null = null;
 
-/** Prefer clearer / neural Bangla voices when the OS exposes them. */
+function voiceLabel(v: Speech.Voice): string {
+  return `${v.identifier} ${v.name} ${v.language}`.toLowerCase();
+}
+
+function isFemaleVoice(v: Speech.Voice): boolean {
+  const id = voiceLabel(v);
+  return (
+    id.includes("female") ||
+    id.includes("woman") ||
+    id.includes("nabanita") ||
+    id.includes("tanishaa")
+  );
+}
+
+function isMaleVoice(v: Speech.Voice): boolean {
+  const id = voiceLabel(v);
+  return (
+    id.includes("male") ||
+    id.includes("pradeep") ||
+    id.includes("bashkar")
+  );
+}
+
+/** Prefer a female Bangla voice. A lone male system voice is pitched up. */
 function scoreVoice(v: Speech.Voice): number {
-  const id = `${v.identifier} ${v.name} ${v.language}`.toLowerCase();
+  const id = voiceLabel(v);
   let score = 0;
   if (id.includes("bn-bd") || id.includes("bengali bangladesh")) score += 40;
   else if (id.includes("bn-in") || id.includes("bengali")) score += 30;
@@ -19,19 +42,18 @@ function scoreVoice(v: Speech.Voice): number {
   if (id.includes("neural") || id.includes("wavenet") || id.includes("natural"))
     score += 25;
   if (id.includes("enhanced") || id.includes("premium") || id.includes("hq")) score += 15;
-  if (
-    id.includes("female") ||
-    id.includes("woman") ||
-    id.includes("nabanita") ||
-    id.includes("tanishaa")
-  )
-    score += 60;
-  if (id.includes("male") || id.includes("pradeep") || id.includes("bashkar"))
-    score -= 40;
+  if (isFemaleVoice(v)) score += 80;
+  if (isMaleVoice(v)) score -= 80;
   if (id.includes("local") || id.includes("offline")) score += 5;
-  if (id.includes("network") || id.includes("online")) score += 12;
   if (v.quality === VoiceQuality.Enhanced) score += 20;
   return score;
+}
+
+function pitchFor(v: Speech.Voice | undefined): number {
+  if (!v) return 1.45;
+  if (isFemaleVoice(v)) return 1.02;
+  if (isMaleVoice(v)) return 1.55;
+  return 1.35;
 }
 
 async function resolveBanglaVoice(): Promise<VoicePick> {
@@ -41,13 +63,18 @@ async function resolveBanglaVoice(): Promise<VoicePick> {
   pickPromise = (async () => {
     try {
       const voices = await Speech.getAvailableVoicesAsync();
-      const bangla = voices
-        .filter((v) => /^bn/i.test(v.language) || /bengali/i.test(v.name))
-        .sort((a, b) => scoreVoice(b) - scoreVoice(a));
-      if (bangla[0]) {
+      const bangla = voices.filter(
+        (v) => /^bn/i.test(v.language) || /bengali/i.test(v.name),
+      );
+      const female = bangla.filter((v) => !isMaleVoice(v));
+      const pool = (female.length ? female : bangla).sort(
+        (a, b) => scoreVoice(b) - scoreVoice(a),
+      );
+      if (pool[0]) {
         const pick = {
-          language: bangla[0].language || "bn-BD",
-          voice: bangla[0].identifier,
+          language: pool[0].language || "bn-BD",
+          voice: pool[0].identifier,
+          pitch: pitchFor(pool[0]),
         };
         cachedPick = pick;
         return pick;
@@ -55,7 +82,7 @@ async function resolveBanglaVoice(): Promise<VoicePick> {
     } catch {
       // fall through
     }
-    const pick = { language: "bn-BD" as string, voice: undefined };
+    const pick = { language: "bn-BD" as string, voice: undefined, pitch: 1.45 };
     cachedPick = pick;
     return pick;
   })();
@@ -115,7 +142,7 @@ export function prepareSpeechText(raw: string): string {
   s = s.replace(/([।!?]){2,}/g, "$1");
   s = s.replace(/\s+/g, " ").trim();
 
-  return s.slice(0, 3900);
+  return s.slice(0, 8000);
 }
 
 /** Split into speakable chunks so the engine doesn't rush or drop mid-clause. */
@@ -163,6 +190,7 @@ function speakOnce(
   text: string,
   language: string,
   voice: string | undefined,
+  pitch: number,
   signal: { stopped: boolean },
 ): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -174,7 +202,7 @@ function speakOnce(
       language,
       voice,
       rate: 0.92,
-      pitch: 1.06,
+      pitch,
       onDone: () => resolve(),
       onStopped: () => resolve(),
       onError: (err) => reject(err instanceof Error ? err : new Error("tts")),
@@ -216,10 +244,9 @@ export async function speakBangla(
         return;
       }
       try {
-        await speakOnce(chunks[i], pick.language, pick.voice, signal);
+        await speakOnce(chunks[i], pick.language, pick.voice, pick.pitch, signal);
       } catch {
-        // Retry chunk without a pinned voice id (some identifiers are flaky).
-        await speakOnce(chunks[i], pick.language, undefined, signal);
+        await speakOnce(chunks[i], pick.language, pick.voice, pick.pitch, signal);
       }
     }
     if (signal.stopped) handlers?.onStopped?.();

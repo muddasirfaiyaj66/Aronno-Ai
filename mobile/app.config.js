@@ -1,4 +1,14 @@
-const app = require("./app.json").expo;
+module.exports = ({ config }) => {
+  const googleSchemes = [
+    reversedClientScheme(process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID),
+    reversedClientScheme(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID),
+  ].filter(Boolean);
+
+  return {
+    ...config,
+    scheme: ["aronno", ...new Set(googleSchemes)],
+  };
+};
 
 function reversedClientScheme(clientId) {
   if (!clientId) return null;
@@ -9,15 +19,3 @@ function reversedClientScheme(clientId) {
   if (!String(clientId).includes(".apps.googleusercontent.com")) return null;
   return `com.googleusercontent.apps.${prefix}`;
 }
-
-const googleSchemes = [
-  reversedClientScheme(process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID),
-  reversedClientScheme(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID),
-].filter(Boolean);
-
-module.exports = {
-  expo: {
-    ...app,
-    scheme: ["aronno", ...new Set(googleSchemes)],
-  },
-};

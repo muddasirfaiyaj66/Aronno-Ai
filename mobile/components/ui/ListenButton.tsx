@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "./AppText";
 import { colors } from "@/constants/theme";
 import { useLocale } from "@/context/locale";
-import { speakBangla, stopBanglaSpeech } from "@/lib/speakBangla";
+import { speakOffline, stopOfflineSpeech } from "@/lib/offlineVoice/ttsEngine";
 
 export type ListenButtonProps = {
   textBn: string;
@@ -20,7 +20,7 @@ export function ListenButton({ textBn, label, className = "" }: ListenButtonProp
 
   const toggle = async () => {
     if (playing) {
-      await stopBanglaSpeech();
+      await stopOfflineSpeech();
       setPlaying(false);
       return;
     }
@@ -28,7 +28,7 @@ export function ListenButton({ textBn, label, className = "" }: ListenButtonProp
     if (!spoken) return;
     setPlaying(true);
     try {
-      await speakBangla(spoken, {
+      await speakOffline(spoken, {
         onDone: () => setPlaying(false),
         onStopped: () => setPlaying(false),
         onError: () => setPlaying(false),

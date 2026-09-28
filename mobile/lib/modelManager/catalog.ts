@@ -33,7 +33,10 @@ const HF = (repo: string, file: string) =>
   `https://huggingface.co/${repo}/resolve/main/${file}`;
 
 const BN_STT = "csukuangfj2/sherpa-onnx-streaming-zipformer-bn-vosk-2026-02-09";
-const BN_TTS_COQUI = "csukuangfj/vits-coqui-bn-custom_female";
+const PIPER_BN =
+  "https://huggingface.co/rhasspy/piper-voices/resolve/main/bn/bn_BD/google/medium/bn_BD-google-medium.onnx";
+const ESPEAK_NG_DATA =
+  "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/espeak-ng-data.tar.bz2";
 const GEMMA_4B = "unsloth/gemma-3-4b-it-GGUF";
 const QWEN_VL_3B = "unsloth/Qwen2.5-VL-3B-Instruct-GGUF";
 
@@ -129,19 +132,19 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     ],
   },
   {
-    id: "tts-bn-vits-coqui",
+    id: "tts-bn-piper",
     kind: "tts",
-    nameBn: "বাংলা লেখা → কণ্ঠ (VITS)",
-    nameEn: "Bangla Text → Speech (VITS Coqui female)",
-    // model.onnx ≈ 109 MB on Hugging Face
-    sizeMb: 110,
-    minRamMb: 1000,
-    repo: BN_TTS_COQUI,
-    file: "tokens.txt",
+    nameBn: "বাংলা নারী কণ্ঠ (অফলাইন)",
+    nameEn: "Bangla female voice (Piper, offline)",
+    // onnx ≈ 73 MB plus shared espeak-ng-data ≈ 7 MB. No smaller Bangla Piper voice is published.
+    sizeMb: 81,
+    minRamMb: 512,
+    repo: "rhasspy/piper-voices",
+    file: "model.onnx",
     recommended: true,
     files: [
-      { relativePath: "model.onnx", url: HF(BN_TTS_COQUI, "model.onnx") },
-      { relativePath: "tokens.txt", url: HF(BN_TTS_COQUI, "tokens.txt") },
+      { relativePath: "model.onnx", url: PIPER_BN },
+      { relativePath: "espeak-ng-data.tar.bz2", url: ESPEAK_NG_DATA },
     ],
   },
 ];

@@ -1,7 +1,8 @@
 /**
- * Bangla TTS: prefer on-device sherpa VITS when downloaded; otherwise
- * expo-speech (OS Bangla voice). Sherpa TTS.initialize can SIGABRT on some
- * devices — crash guard skips native TTS after a failed mid-init launch.
+ * Bangla TTS: Gemini female voice online, then on-device Piper (Sherpa-ONNX)
+ * female speaker, then the phone's female Bangla voice. Sherpa TTS.initialize
+ * can SIGABRT on some devices — crash guard skips native TTS after a failed
+ * mid-init launch.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio } from "expo-av";
@@ -14,10 +15,20 @@ import {
 } from "@/lib/speakBangla";
 import { enablePlaybackAudio } from "@/lib/speechRecording";
 import { logMetric, markStart } from "@/lib/offline/metrics";
+import {
+  PIPER_BN_TOKENS,
+  PIPER_ESPEAK_ARCHIVE,
+  PIPER_ESPEAK_DIR,
+  PIPER_FEMALE_SPEAKER,
+  PIPER_META_SUFFIX,
+  PIPER_MODEL_FILE,
+  PIPER_ONNX_BYTES,
+  PIPER_TOKENS_FILE,
+} from "@/lib/offlineVoice/piperBn";
 
 const TTS_INITING = "aronno.sherpa.tts.initing";
 const TTS_BAD = "aronno.sherpa.tts.bad";
-const TTS_ENTRY_ID = "tts-bn-vits-coqui";
+const TTS_ENTRY_ID = "tts-bn-piper";
 
 let sherpaReady = false;
 let sherpaDisabled = false;
@@ -90,8 +101,62 @@ export async function hasOfflineTtsFiles(): Promise<boolean> {
   return isInstalled(entry);
 }
 
+type ArchiveApi = {
+  extractTarBz2: (
+    sourcePath: string,
+    targetDir: string,
+  ) => Promise<{ success: boolean; message?: string }>;
+};
+
+async function getArchive(): Promise<ArchiveApi | null> {
+  try {
+    const mod = await import("@siteed/sherpa-onnx.rn");
+    const bag = mod as {
+      default?: { Archive?: ArchiveApi };
+      Archive?: ArchiveApi;
+    };
+    return bag.default?.Archive ?? bag.Archive ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Write tokens, mark the onnx as Piper, and unpack espeak-ng-data. */
+async function preparePiperVoice(modelDir: string): Promise<boolean> {
+  const { File } = await import("expo-file-system");
+  const tokens = new File(`${modelDir}${PIPER_TOKENS_FILE}`);
+  if (!tokens.exists) tokens.create();
+  tokens.write(PIPER_BN_TOKENS);
+
+  const model = new File(`${modelDir}${PIPER_MODEL_FILE}`);
+  const size = model.info().size ?? 0;
+  const patchedSize = PIPER_ONNX_BYTES + PIPER_META_SUFFIX.byteLength;
+  if (size === PIPER_ONNX_BYTES) {
+    const handle = model.open();
+    try {
+      handle.offset = size;
+      handle.writeBytes(PIPER_META_SUFFIX);
+    } finally {
+      handle.close();
+    }
+  } else if (size !== patchedSize) {
+    return false;
+  }
+
+  const phontab = new File(`${modelDir}${PIPER_ESPEAK_DIR}/phontab`);
+  if (phontab.exists) return true;
+
+  const archive = await getArchive();
+  if (!archive) return false;
+  const extracted = await archive.extractTarBz2(
+    nativePath(`${modelDir}${PIPER_ESPEAK_ARCHIVE}`),
+    nativePath(modelDir),
+  );
+  return extracted.success && new File(`${modelDir}${PIPER_ESPEAK_DIR}/phontab`).exists;
+}
+
 /**
- * Warm sherpa VITS when files exist. Always returns true because expo-speech
+ * Warm sherpa Piper when files exist. Always returns true because expo-speech
  * remains a working fallback.
  */
 export async function initTTS(opts?: { force?: boolean }): Promise<boolean> {
@@ -122,12 +187,23 @@ export async function initTTS(opts?: { force?: boolean }): Promise<boolean> {
       end("no-native");
       return true;
     }
+    const modelDir = localDir(entry);
+    const assetsReady = await preparePiperVoice(modelDir);
+    if (!assetsReady) {
+      await AsyncStorage.removeItem(TTS_INITING).catch(() => undefined);
+      end("piper-assets");
+      return true;
+    }
     const result = await TTS.initialize({
-      modelDir: nativePath(localDir(entry)),
+      modelDir: nativePath(modelDir),
       ttsModelType: "vits",
-      modelFile: "model.onnx",
-      tokensFile: "tokens.txt",
-      numThreads: 2,
+      modelFile: PIPER_MODEL_FILE,
+      tokensFile: PIPER_TOKENS_FILE,
+      dataDir: nativePath(`${modelDir}${PIPER_ESPEAK_DIR}`),
+      numThreads: 1,
+      noiseScale: 0.667,
+      noiseScaleW: 0.8,
+      lengthScale: 1,
     });
     await AsyncStorage.removeItem(TTS_INITING).catch(() => undefined);
     if (!result.success) {
@@ -168,20 +244,52 @@ async function stopPlayingSound() {
   }
 }
 
-/** First sentence starts quickly; the rest is synthesized while it plays. */
+/** Keep each local clip short so a long answer stays on the female Piper voice. */
+const SHERPA_CHARS = 220;
+
 function speechPlan(text: string): string[] {
-  const parts = text
+  const sentences = text
     .split(/(?<=[।!?])\s+/)
     .map((part) => part.trim())
     .filter(Boolean);
-  if (parts.length <= 1) return [text];
-  const first = parts[0];
-  const rest = parts.slice(1).join(" ");
-  if (rest.length <= 240) return [first, rest];
-  const mid = Math.ceil(parts.length / 2);
-  return [first, parts.slice(1, mid).join(" "), parts.slice(mid).join(" ")].filter(
-    Boolean,
-  );
+  const pieces = sentences.length ? sentences : [text];
+  const chunks: string[] = [];
+  let buf = "";
+
+  const flush = () => {
+    const next = buf.trim();
+    buf = "";
+    if (next) chunks.push(next);
+  };
+
+  for (const piece of pieces) {
+    let rest = piece;
+    while (rest) {
+      const joined = buf ? `${buf} ${rest}` : rest;
+      if (joined.length <= SHERPA_CHARS) {
+        buf = joined;
+        rest = "";
+        break;
+      }
+      if (buf) flush();
+      if (rest.length <= SHERPA_CHARS) {
+        buf = rest;
+        rest = "";
+        break;
+      }
+      const window = rest.slice(0, SHERPA_CHARS);
+      const cut = Math.max(
+        window.lastIndexOf(" "),
+        window.lastIndexOf("।"),
+        window.lastIndexOf(","),
+      );
+      const at = cut > 40 ? cut : SHERPA_CHARS;
+      chunks.push(rest.slice(0, at).trim());
+      rest = rest.slice(at).trim();
+    }
+  }
+  flush();
+  return chunks.length ? chunks : [text];
 }
 
 async function synthesizeSherpa(
@@ -189,7 +297,8 @@ async function synthesizeSherpa(
   text: string,
 ): Promise<string | null> {
   const result = await TTS.generateSpeech(text, {
-    speakingRate: 1.05,
+    speakerId: PIPER_FEMALE_SPEAKER,
+    speakingRate: 1,
     playAudio: false,
   });
   if (!result.success || !result.filePath) return null;
@@ -240,6 +349,7 @@ async function speakWithSherpa(
   if (!TTS || !sherpaReady) return false;
   const gen = speakGen;
   const plan = speechPlan(text);
+  let played = false;
   try {
     await enablePlaybackAudio();
     let upcoming = synthesizeSherpa(TTS, plan[0]);
@@ -248,12 +358,18 @@ async function speakWithSherpa(
         handlers?.onStopped?.();
         return true;
       }
-      const uri = await upcoming;
-      if (!uri) return false;
+      let uri = await upcoming;
+      if (!uri) uri = await synthesizeSherpa(TTS, plan[i]);
+      if (!uri) {
+        if (!played) return false;
+        await speakBangla(plan.slice(i).join(" "), handlers);
+        return true;
+      }
       if (i + 1 < plan.length) {
         upcoming = synthesizeSherpa(TTS, plan[i + 1]);
       }
       await playFile(uri, gen);
+      played = true;
     }
     if (gen !== speakGen) {
       handlers?.onStopped?.();
@@ -265,8 +381,24 @@ async function speakWithSherpa(
   } catch {
     await stopPlayingSound();
     handlers?.onError?.();
-    return false;
+    return played;
   }
+}
+
+/** On-device Piper female voice. Used for the whole reply, and for whatever Gemini could not finish. */
+async function speakWithLocalFemale(
+  text: string,
+  handlers?: {
+    onDone?: () => void;
+    onStopped?: () => void;
+    onError?: () => void;
+  },
+): Promise<boolean> {
+  const prepared = prepareSpeechText(text);
+  if (!prepared) return true;
+  if (!sherpaReady && !sherpaDisabled) await initTTS();
+  if (!sherpaReady) return false;
+  return speakWithSherpa(prepared, handlers);
 }
 
 export async function speakOffline(
@@ -289,17 +421,9 @@ export async function speakOffline(
     return;
   }
 
-  if (!sherpaReady && !sherpaDisabled) {
-    await initTTS();
-  }
-
-  if (sherpaReady) {
-    const ok = await speakWithSherpa(prepared, handlers);
-    if (ok) {
-      end("sherpa");
-      return;
-    }
-    end("sherpa-fail-fallback");
+  if (await speakWithLocalFemale(prepared, handlers)) {
+    end("sherpa");
+    return;
   }
 
   try {
@@ -319,10 +443,8 @@ function bytesFromBase64(base64: string): Uint8Array {
   return bytes;
 }
 
-/** Matches the backend free-tier clip. Longer text is several of these, not one big call. */
+/** One free Flash-Lite clip. The full answer is many of these, never one paid long call. */
 const CLOUD_TTS_CHARS = 480;
-/** Six clips cover a full treatment read-aloud without spending the daily free quota on one tap. */
-const CLOUD_TTS_MAX_CHUNKS = 6;
 
 function cloudSpeechChunks(text: string): string[] {
   const sentences = text
@@ -336,13 +458,12 @@ function cloudSpeechChunks(text: string): string[] {
   const flush = () => {
     const next = buf.trim();
     buf = "";
-    if (next && chunks.length < CLOUD_TTS_MAX_CHUNKS) chunks.push(next);
+    if (next) chunks.push(next);
   };
 
   for (const piece of pieces) {
-    if (chunks.length >= CLOUD_TTS_MAX_CHUNKS) break;
     let rest = piece;
-    while (rest && chunks.length < CLOUD_TTS_MAX_CHUNKS) {
+    while (rest) {
       const joined = buf ? `${buf} ${rest}` : rest;
       if (joined.length <= CLOUD_TTS_CHARS) {
         buf = joined;
@@ -366,22 +487,30 @@ function cloudSpeechChunks(text: string): string[] {
   return chunks;
 }
 
-async function fetchCloudWav(text: string, gen: number, index: number) {
+async function fetchCloudAudio(text: string): Promise<string | null> {
+  const clip = text.slice(0, CLOUD_TTS_CHARS);
+  const { synthesizeGeminiFemale } = await import(
+    "@/lib/offlineVoice/geminiTts"
+  );
+  const direct = await synthesizeGeminiFemale(clip);
+  if (direct && direct.length > 80) return direct;
+
   const { api } = await import("@/services/api");
   const { store } = await import("@/store");
-  const { File, Paths } = await import("expo-file-system");
   const result = await Promise.race([
     store
-      .dispatch(
-        api.endpoints.speak.initiate({
-          textBn: text.slice(0, CLOUD_TTS_CHARS),
-        }),
-      )
+      .dispatch(api.endpoints.speak.initiate({ textBn: clip }))
       .unwrap(),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), 12000)),
   ]);
   const audio = result?.audioBase64;
-  if (!audio || audio.length < 80 || gen !== speakGen) return null;
+  return audio && audio.length > 80 ? audio : null;
+}
+
+async function fetchCloudWav(text: string, gen: number, index: number) {
+  const { File, Paths } = await import("expo-file-system");
+  const audio = await fetchCloudAudio(text);
+  if (!audio || gen !== speakGen) return null;
   const file = new File(Paths.cache, `aronno-voice-${gen}-${index}.wav`);
   if (file.exists) file.delete();
   file.create();
@@ -412,8 +541,17 @@ async function speakWithCloudFemale(
         handlers?.onStopped?.();
         return true;
       }
-      const file = await upcoming;
-      if (!file) break;
+      let file = await upcoming;
+      if (!file) file = await fetchCloudWav(chunks[i], gen, i);
+      if (!file) {
+        if (!played) return false;
+        const rest = chunks.slice(i).join(" ");
+        if (!(await speakWithLocalFemale(rest))) {
+          await speakBangla(rest);
+        }
+        played = true;
+        break;
+      }
       if (i + 1 < chunks.length) upcoming = fetchCloudWav(chunks[i + 1], gen, i + 1);
       try {
         await playFile(file.uri, gen);

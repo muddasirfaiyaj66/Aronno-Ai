@@ -8,6 +8,7 @@ import { EssentialServicesGrid } from "@/components/home/EssentialServicesGrid";
 import { DateWeatherCard } from "@/components/home/DateWeatherCard";
 import { InsightHeroCard, type InsightItem } from "@/components/home/InsightHeroCard";
 import { MarketingHero } from "@/components/home/MarketingHero";
+import { useInbox } from "@/lib/notifications/inbox";
 import { useLocale } from "@/context/locale";
 import { useAppSelector } from "@/store";
 import { useFarmLocation } from "@/hooks/useFarmLocation";
@@ -20,6 +21,7 @@ import {
 export default function HomeScreen() {
   const router = useRouter();
   const { t } = useLocale();
+  const { unread } = useInbox();
   const name = useAppSelector((s) => s.auth.user?.displayName);
   const { data: history, refetch: refetchHistory } = useGetHistoryQuery();
   const location = useFarmLocation();
@@ -90,6 +92,7 @@ export default function HomeScreen() {
                 : t("স্বাগতম", "Welcome")
             }
             notifyLabel={t("বিজ্ঞপ্তি", "Notifications")}
+            unread={unread}
             onNotify={() => router.push("/(root)/notifications")}
             scanTitle={t("রোগ চিনুন", "Spot disease")}
             scanBody={t("পাতা দেখেই পরামর্শ", "Advice from a leaf photo")}

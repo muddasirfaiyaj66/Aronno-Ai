@@ -23,6 +23,7 @@ import type { FertilizerAdvice } from "@/types/fertilizer";
 import type { CropPlan } from "@/types/planning";
 import type { HeatmapResponse, MarketListing, MarketPriceEntry, ShopData } from "@/types/market";
 import type { CurrentWeather } from "@/types/weather";
+import type { AppNotification } from "@/lib/notifications/inbox";
 
 export const API_URL =
   process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000/api";
@@ -166,6 +167,7 @@ export const api = createApi({
     "Cart",
     "Order",
     "Session",
+    "Notification",
   ],
   endpoints: (builder) => ({
     getProfessions: builder.query<{ slug: string; nameBn: string; nameEn: string }[], void>({
@@ -632,6 +634,14 @@ export const api = createApi({
       transformResponse: (r) => unwrap<ShopData>(r),
       providesTags: (_r, _e, id) => [{ type: "Shop", id }],
     }),
+    reportShop: builder.mutation<{ id: string }, { shopId: string; reason: string; details?: string }>({
+      query: ({ shopId, ...body }) => ({
+        url: `/marketplace/shops/${shopId}/report`,
+        method: "POST",
+        body,
+      }),
+      transformResponse: (r) => unwrap(r),
+    }),
     getShops: builder.query<{ items: ShopData[]; total: number; page: number; totalPages: number }, any>({
       query: (params) => {
         const p = new URLSearchParams();
@@ -904,6 +914,31 @@ export const api = createApi({
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Order", "Product"],
     }),
+    getNotifications: builder.query<AppNotification[], void>({
+      query: () => "/notifications",
+      transformResponse: (r) => unwrap(r),
+      providesTags: ["Notification"],
+    }),
+    syncNotificationLocation: builder.mutation<{ ok: true }, { lat: number; lon: number }>({
+      query: (body) => ({ url: "/notifications/location", method: "POST", body }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Notification"],
+    }),
+    dismissNotification: builder.mutation<AppNotification, string>({
+      query: (id) => ({ url: `/notifications/${id}/dismiss`, method: "POST" }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Notification"],
+    }),
+    markNotificationRead: builder.mutation<AppNotification, string>({
+      query: (id) => ({ url: `/notifications/${id}/read`, method: "POST" }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Notification"],
+    }),
+    markAllNotificationsRead: builder.mutation<{ ok: true }, void>({
+      query: () => ({ url: "/notifications/read-all", method: "POST" }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Notification"],
+    }),
     createReview: builder.mutation<
       any,
       { orderId: string; productId: string; rating: number; comment?: string }
@@ -970,6 +1005,7 @@ export const {
   useDeleteStorageImageMutation,
   useGetMyShopQuery,
   useGetPublicShopQuery,
+  useReportShopMutation,
   useGetShopsQuery,
   useCreateShopMutation,
   useUpdateMyShopMutation,
@@ -990,4 +1026,9 @@ export const {
   useGetOrderQuery,
   useUpdateOrderStatusMutation,
   useCreateReviewMutation,
+  useGetNotificationsQuery,
+  useSyncNotificationLocationMutation,
+  useDismissNotificationMutation,
+  useMarkNotificationReadMutation,
+  useMarkAllNotificationsReadMutation,
 } = api;

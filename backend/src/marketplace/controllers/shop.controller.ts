@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -48,6 +49,20 @@ export class ShopController {
     @Body() dto: UpdateShopDto,
   ) {
     const data = await this.shopService.updateShop(user.id, dto);
+    return { success: true, data };
+  }
+
+  @Post(':id/report')
+  async reportShop(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() body: { reason?: string; details?: string },
+  ) {
+    const reason = body?.reason?.trim() ?? '';
+    if (reason.length < 2) {
+      throw new BadRequestException('রিপোর্টের কারণ লিখুন।');
+    }
+    const data = await this.shopService.reportShop(user.id, id, reason, body.details);
     return { success: true, data };
   }
 

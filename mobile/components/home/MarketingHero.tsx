@@ -25,6 +25,7 @@ export type MarketingHeroProps = {
   onScan: () => void;
   onMarket: () => void;
   notifyLabel: string;
+  unread?: number;
   scanTitle: string;
   scanBody: string;
   marketTitle: string;
@@ -37,6 +38,7 @@ export function MarketingHero({
   onScan,
   onMarket,
   notifyLabel,
+  unread = 0,
   scanTitle,
   scanBody,
   marketTitle,
@@ -82,6 +84,16 @@ export function MarketingHero({
               style={{ backgroundColor: "rgba(255,255,255,0.18)" }}
             >
               <Ionicons name="notifications-outline" size={20} color={colors.white} />
+              {unread > 0 ? (
+                <View
+                  className="absolute -right-1 -top-1 min-w-[18px] items-center justify-center rounded-full bg-severity-high px-1"
+                  style={{ height: 18 }}
+                >
+                  <AppText variant="caption" style={{ color: colors.white, fontSize: 10, lineHeight: 14 }}>
+                    {unread > 9 ? "9+" : String(unread)}
+                  </AppText>
+                </View>
+              ) : null}
             </Pressable>
           </View>
           <View>

@@ -7,5 +7,6 @@ import { HeatmapService } from './heatmap.service';
   imports: [StorageModule],
   controllers: [MarketController],
   providers: [HeatmapService],
+  exports: [HeatmapService],
 })
 export class MarketModule {}

@@ -31,6 +31,7 @@ import { ApiExceptionFilter } from './common/filters/api-exception.filter';
 import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor';
 import { WeatherModule } from './weather/weather.module';
 import { SyncModule } from './sync/sync.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { SyncModule } from './sync/sync.module';
     HealthModule,
     WeatherModule,
     SyncModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

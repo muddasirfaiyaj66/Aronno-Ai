@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Image, Linking, Pressable, ScrollView, View } from "react-native";
+import { Image, Linking, Modal, Pressable, ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -18,6 +18,7 @@ import {
   useGetMeQuery,
   useGetMyShopQuery,
   useGetPublicShopQuery,
+  useReportShopMutation,
 } from "@/services/api";
 import { formatPriceBn, formatUnitBn, toBn } from "@/utils/marketFormatters";
 
@@ -26,6 +27,13 @@ export default function PublicShopScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [addProductModalVisible, setAddProductModalVisible] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reason, setReason] = useState("ভুয়া বা ভুল পণ্য");
+  const [details, setDetails] = useState("");
+  const [reportNote, setReportNote] = useState<string | null>(null);
+  const [reportShop, { isLoading: reporting }] = useReportShopMutation();
+
+  const reportReasons = ["ভুয়া বা ভুল পণ্য", "দাম বা ওজন ঠিক নেই", "যোগাযোগ করা যাচ্ছে না", "অন্য সমস্যা"];
 
   // Fetch current user and myShop for ownership detection
   const { data: currentUser } = useGetMeQuery();
@@ -143,11 +151,18 @@ export default function PublicShopScreen() {
                     </View>
                   </View>
                 ) : (
-                  <PrimaryButton
-                    label="বিক্রেতাকে কল করুন"
-                    onPress={handleCallSeller}
-                    icon={<Ionicons name="call" size={18} color={colors.white} />}
-                  />
+                  <View className="gap-2">
+                    <PrimaryButton
+                      label="বিক্রেতাকে কল করুন"
+                      onPress={handleCallSeller}
+                      icon={<Ionicons name="call" size={18} color={colors.white} />}
+                    />
+                    <SecondaryButton
+                      label="বিক্রেতাকে রিপোর্ট করুন"
+                      onPress={() => setReportOpen(true)}
+                      icon={<Ionicons name="flag-outline" size={18} color={colors.ink} />}
+                    />
+                  </View>
                 )
               }
             >
@@ -224,6 +239,11 @@ export default function PublicShopScreen() {
                 ) : null}
               </View>
             </StructuredCard>
+            {reportNote ? (
+              <AppText variant="caption" className="text-primary">
+                {reportNote}
+              </AppText>
+            ) : null}
 
             {/* Section: "এই দোকানের পণ্য" */}
             <View className="gap-3 mt-1">
@@ -313,6 +333,60 @@ export default function PublicShopScreen() {
         visible={addProductModalVisible}
         onClose={() => setAddProductModalVisible(false)}
       />
+      <Modal visible={reportOpen} transparent animationType="fade" onRequestClose={() => setReportOpen(false)}>
+        <Pressable
+          className="flex-1 justify-end bg-black/50"
+          onPress={() => setReportOpen(false)}
+        >
+          <Pressable onPress={() => undefined} className="rounded-t-3xl bg-card px-5 pb-8 pt-5">
+            <View className="mb-4 flex-row items-center justify-between">
+              <AppText variant="title">বিক্রেতাকে রিপোর্ট</AppText>
+              <Pressable onPress={() => setReportOpen(false)} accessibilityLabel="বন্ধ করুন">
+                <Ionicons name="close" size={22} color={colors.ink} />
+              </Pressable>
+            </View>
+            <View className="gap-2">
+              {reportReasons.map((item) => (
+                <Pressable
+                  key={item}
+                  onPress={() => setReason(item)}
+                  className="rounded-2xl border px-4 py-3"
+                  style={{
+                    borderColor: reason === item ? colors.primary : colors.border,
+                    backgroundColor: reason === item ? colors.secondary : colors.card,
+                  }}
+                >
+                  <AppText variant="body">{item}</AppText>
+                </Pressable>
+              ))}
+            </View>
+            <TextInput
+              value={details}
+              onChangeText={setDetails}
+              placeholder="আরও কিছু লিখতে চাইলে"
+              placeholderTextColor={colors.muted}
+              multiline
+              className="mt-3 min-h-20 rounded-2xl border border-border px-4 py-3 text-ink"
+            />
+            <View className="mt-4">
+              <PrimaryButton
+                label={reporting ? "পাঠানো হচ্ছে" : "রিপোর্ট পাঠান"}
+                onPress={() => {
+                  if (!id || reporting) return;
+                  void reportShop({ shopId: id, reason, details: details.trim() || undefined })
+                    .unwrap()
+                    .then(() => {
+                      setReportOpen(false);
+                      setDetails("");
+                      setReportNote("রিপোর্ট পাঠানো হয়েছে। অ্যাডমিন দেখবেন।");
+                    })
+                    .catch(() => setReportNote("রিপোর্ট পাঠানো যায়নি। আবার চেষ্টা করুন।"));
+                }}
+              />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }

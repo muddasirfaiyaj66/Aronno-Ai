@@ -93,6 +93,129 @@ export async function patchUserActive(id: string, isActive: boolean) {
   });
 }
 
+export type BroadcastPriority = "normal" | "important" | "emergency";
+
+export type AdminBroadcast = {
+  id: string;
+  title: string;
+  body: string;
+  priority: BroadcastPriority | string;
+  audience: "all" | "user" | string;
+  targetUserId?: string | null;
+  recipientCount: number;
+  createdAt: string;
+};
+
+export type AdminOverview = {
+  users: { total: number; active: number; inactive: number; farmers: number; verified: number; unverified: number };
+  diagnoses: number;
+  shops: { total: number; active: number };
+  products: { total: number; active: number };
+  orders: { total: number; revenue: number; byStatus: Record<string, number> };
+  reportsOpen: number;
+  roleBreakdown: { name: string; value: number }[];
+  topDistricts: { name: string; value: number }[];
+  weeklySignups: { label: string; count: number; revenue: number }[];
+  weeklySales: { label: string; count: number; revenue: number }[];
+  topShops: { id: string; name: string; orders: number; revenue: number }[];
+  recentOrders: { id: string; orderNumber: string; shopName: string; totalBdt: number; status: string; createdAt: string }[];
+};
+
+export type AdminShopRow = {
+  id: string;
+  name: string;
+  phone: string;
+  isActive: boolean;
+  district: string;
+  ownerId: string;
+  ownerName: string;
+  ownerEmail: string;
+  ownerActive: boolean;
+  products: number;
+  orders: number;
+  revenue: number;
+};
+
+export type AdminOrderRow = {
+  id: string;
+  orderNumber: string;
+  shopName: string;
+  buyerName: string;
+  totalBdt: number;
+  status: string;
+  createdAt: string;
+};
+
+export type SellerReportRow = {
+  id: string;
+  reason: string;
+  details: string | null;
+  status: string;
+  action: string | null;
+  createdAt: string;
+  shop: { id: string; name: string; isActive: boolean } | null;
+  reporter: { id: string; displayName: string; email: string } | null;
+  seller: { id: string; displayName: string; email: string; isActive: boolean } | null;
+};
+
+export type HeatPlace = {
+  slug: string;
+  nameBn: string;
+  level: string;
+  caseCount: number;
+  priority: BroadcastPriority;
+  title: string;
+  body: string;
+};
+
+export async function getOverview() {
+  return apiFetch<AdminOverview>("/api/admin/overview");
+}
+
+export async function getCommerce() {
+  return apiFetch<{ shops: AdminShopRow[]; orders: AdminOrderRow[] }>("/api/admin/commerce");
+}
+
+export async function setShopActive(id: string, isActive: boolean) {
+  return apiFetch<{ id: string; isActive: boolean }>(`/api/admin/shops/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ isActive }),
+  });
+}
+
+export async function listReports() {
+  return apiFetch<SellerReportRow[]>("/api/admin/reports");
+}
+
+export async function resolveReport(id: string, action: "dismiss" | "block_seller" | "hide_shop") {
+  return apiFetch<{ id: string; status: string }>(`/api/admin/reports/${id}`, {
+    method: "POST",
+    body: JSON.stringify({ action }),
+  });
+}
+
+export async function listHeatPlaces() {
+  return apiFetch<HeatPlace[]>("/api/admin/notifications/places");
+}
+
+export async function listBroadcasts() {
+  return apiFetch<AdminBroadcast[]>("/api/admin/notifications");
+}
+
+export async function sendBroadcast(input: {
+  title: string;
+  body: string;
+  priority: BroadcastPriority;
+  audience: "all" | "user" | "district";
+  userId?: string;
+  districtSlug?: string;
+}) {
+  return apiFetch<AdminBroadcast>("/api/admin/notifications", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function patchUserRole(
   id: string,
   roleSlug: "SUPERADMIN" | "ADMIN" | "USER",

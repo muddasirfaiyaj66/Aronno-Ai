@@ -208,4 +208,25 @@ export class ShopService {
       },
     });
   }
+
+  async reportShop(reporterUserId: string, shopId: string, reason: string, details?: string) {
+    const shop = await this.prisma.shop.findUnique({ where: { id: shopId } });
+    if (!shop || !shop.isActive) throw new NotFoundException('দোকান পাওয়া যায়নি।');
+    if (shop.ownerUserId === reporterUserId) {
+      throw new BadRequestException('নিজের দোকান রিপোর্ট করা যায় না।');
+    }
+    const open = await this.prisma.sellerReport.findFirst({
+      where: { reporterUserId, shopId, status: 'open' },
+    });
+    if (open) throw new ConflictException('এই দোকানের একটি রিপোর্ট ইতিমধ্যে খোলা আছে।');
+    return this.prisma.sellerReport.create({
+      data: {
+        reporterUserId,
+        shopId,
+        sellerUserId: shop.ownerUserId,
+        reason: reason.trim(),
+        details: details?.trim() || null,
+      },
+    });
+  }
 }

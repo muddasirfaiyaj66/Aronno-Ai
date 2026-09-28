@@ -4,245 +4,189 @@ import { SiteFooter, SiteHeader } from "@/components/marketing/SiteChrome";
 
 const CAPABILITIES = [
   {
+    kicker: "স্ক্যান",
     title: "রোগ শনাক্তকরণ",
-    body: "পাতার ছবি থেকে সম্ভাব্য রোগ ও পরবর্তী পদক্ষেপ — বাংলায়, স্পষ্ট ভাষায়।",
+    body: "পাতার ছবি থেকে সম্ভাব্য রোগ ও পরের পদক্ষেপ — বাংলায়, স্পষ্ট ভাষায়।",
+    image: "/marketing/leaf.jpg",
+    alt: "কৃষক পাতা পরীক্ষা করছেন",
   },
   {
-    title: "কণ্ঠ ও লেখার পরামর্শ",
-    body: "জিজ্ঞাসা বলুন বা লিখুন। নেট দুর্বল হলেও অন‑ডিভাইস মডেল সাহায্য করে।",
+    kicker: "কণ্ঠ",
+    title: "প্রশ্ন করুন",
+    body: "বলুন বা লিখুন। নেট দুর্বল হলেও ফোনের মডেল সাহায্য করতে পারে।",
+    image: "/marketing/field.jpg",
+    alt: "ধানক্ষেতে কৃষক",
   },
   {
-    title: "সার, আবহাওয়া, বাজার",
-    body: "সার নির্দেশনা, আবহাওয়া সতর্কতা এবং স্থানীয় দাম — একই অ্যাপে।",
+    kicker: "বাজার",
+    title: "সার, আবহাওয়া, দাম",
+    body: "সার নির্দেশনা, আবহাওয়ার সতর্কতা এবং স্থানীয় দাম একই অ্যাপে।",
+    image: "/marketing/market.jpg",
+    alt: "সকালের সবজির বাজার",
   },
 ];
 
 const STEPS = [
-  {
-    n: "০১",
-    title: "স্ক্যান খুলুন",
-    body: "মোবাইল অ্যাপের স্ক্যান বিভাগে যান।",
-  },
-  {
-    n: "০২",
-    title: "ছবি বা প্রশ্ন দিন",
-    body: "পাতা তুলুন, অথবা কণ্ঠে/লেখায় সমস্যা জানান।",
-  },
-  {
-    n: "০৩",
-    title: "নির্দেশনা নিন",
-    body: "রোগ, চিকিৎসা ও সতর্কতা বাংলায় পড়ুন বা শুনুন।",
-  },
+  { n: "০১", title: "স্ক্যান খুলুন", body: "অ্যাপে স্ক্যান বিভাগে যান।" },
+  { n: "০২", title: "ছবি বা প্রশ্ন দিন", body: "পাতা তুলুন, অথবা কণ্ঠে সমস্যা বলুন।" },
+  { n: "০৩", title: "নির্দেশনা নিন", body: "রোগ, চিকিৎসা ও সতর্কতা বাংলায় পড়ুন।" },
+];
+
+const SPECS = [
+  { title: "আর্দ্রতা", body: "মাটি কত ভেজা, ক্ষেতেই।" },
+  { title: "পিএইচ", body: "মাটি অম্ল না ক্ষার।" },
+  { title: "পুষ্টি", body: "সার দেওয়ার আগে ধারণা।" },
 ];
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-sand">
+      <SiteHeader />
       <main>
-        <section className="hero-field relative min-h-[100svh] overflow-hidden text-sand">
-          <Image
-            src="/hero-field.jpg"
-            alt=""
-            fill
-            priority
-            sizes="100vw"
-            className="hero-photo object-cover object-[center_40%]"
-          />
-          <div className="hero-veil" aria-hidden />
-          <div className="hero-grain" aria-hidden />
-          <div className="hero-glow" aria-hidden />
-          <div className="hero-horizon" aria-hidden />
-          <SiteHeader />
-
-          <div className="relative z-10 mx-auto flex min-h-[100svh] max-w-6xl flex-col justify-end px-5 pb-16 pt-28 sm:pb-20 sm:pt-32 md:px-6 md:pb-24">
-            <div className="rise-in max-w-[40rem] [text-shadow:0_2px_28px_rgba(7,31,24,0.45)]">
-              <p className="font-display text-[clamp(4.5rem,14vw,8.75rem)] leading-[0.88] tracking-[-0.03em]">
-                আরণ্য
-              </p>
-              <p className="mt-4 text-[0.7rem] font-semibold tracking-[0.28em] text-sand/55 uppercase">
-                Aronno · Bangladesh
-              </p>
-            </div>
-
-            <div className="rise-in-delay mt-10 max-w-xl [text-shadow:0_2px_20px_rgba(7,31,24,0.5)] md:mt-12">
-              <h1 className="text-[clamp(1.35rem,3.2vw,1.85rem)] font-semibold leading-[1.4] text-sand">
-                মাঠের সিদ্ধান্ত — নির্ভরযোগ্য কৃষি সহায়তা, বাংলায়।
-              </h1>
-              <p className="mt-4 max-w-md text-[1.05rem] leading-relaxed text-sand/75">
-                রোগ শনাক্তকরণ, সার ও স্প্রে নির্দেশনা, আবহাওয়া ও বাজার — অফলাইনও
-                কাজ করে।
-              </p>
-            </div>
-
-            <div className="rise-in-late mt-9 flex flex-wrap gap-3">
-              <Link
-                href="/heatmap"
-                className="btn !min-h-[3.15rem] !bg-sand !px-6 !text-forest-deep hover:!bg-white"
-              >
+        <section className="mx-auto grid max-w-6xl items-center gap-10 px-5 py-12 md:px-6 md:py-20 lg:grid-cols-[1.05fr_0.95fr]">
+          <div>
+            <p className="section-label">আরণ্য · বাংলাদেশ</p>
+            <h1 className="mt-4 max-w-xl font-display text-[clamp(2.7rem,6vw,4.6rem)] text-forest">
+              মাঠের সিদ্ধান্ত, পরিষ্কার বাংলায়।
+            </h1>
+            <p className="mt-5 max-w-lg text-lg leading-relaxed text-muted">
+              রোগ শনাক্তকরণ, সার ও স্প্রে, আবহাওয়া এবং বাজার — কৃষক যা করেন, সেই মুহূর্তের জন্য। নেট না থাকলেও মূল কাজ চলে।
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link href="/heatmap" className="btn btn-primary">
                 হিট ম্যাপ খুলুন
               </Link>
-              <Link
-                href="/market"
-                className="btn !min-h-[3.15rem] border border-white/25 !bg-transparent !px-6 !text-sand hover:!bg-white/10"
-              >
+              <Link href="/market" className="btn btn-ghost">
                 বাজার দেখুন
               </Link>
+            </div>
+            <dl className="mt-10 grid max-w-lg grid-cols-3 gap-4 border-t border-border pt-6">
+              {[
+                ["৬৪", "জেলা"],
+                ["বাংলা", "ভাষা"],
+                ["অফলাইন", "সক্ষম"],
+              ].map(([value, label]) => (
+                <div key={label}>
+                  <dt className="font-display text-2xl text-forest">{value}</dt>
+                  <dd className="text-sm text-muted">{label}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <div className="relative">
+            <div className="absolute -left-4 -top-4 hidden h-full w-full rounded-[2rem] bg-forest/10 md:block" aria-hidden />
+            <div className="relative aspect-[4/5] overflow-hidden rounded-[2rem] shadow-[0_30px_60px_-36px_rgba(7,31,24,0.7)] sm:aspect-[5/4]">
+              <Image
+                src="/marketing/field.jpg"
+                alt="ধানক্ষেতে কৃষক"
+                fill
+                priority
+                sizes="(min-width: 1024px) 46vw, 100vw"
+                className="object-cover object-[center_30%]"
+              />
             </div>
           </div>
         </section>
 
-        <section id="capabilities" className="bg-sand">
-          <div className="mx-auto max-w-6xl px-5 py-20 md:px-6 md:py-28">
-            <div className="max-w-2xl">
-              <p className="section-label">সক্ষমতা</p>
-              <h2 className="mt-4 font-display text-[clamp(1.85rem,4vw,3rem)] text-forest">
-                ক্ষেতের কাজের ধাপে ধাপে সহায়তা
-              </h2>
-              <p className="mt-4 max-w-lg text-lg leading-relaxed text-muted">
-                জটিল ড্যাশবোর্ড নয় — কৃষক যা করেন, সেই মুহূর্তেই প্রয়োজনীয়
-                উত্তর।
-              </p>
+        <section id="capabilities" className="border-y border-border bg-white">
+          <div className="mx-auto max-w-6xl px-5 py-16 md:px-6 md:py-24">
+            <div className="flex flex-wrap items-end justify-between gap-6">
+              <div className="max-w-xl">
+                <p className="section-label">সক্ষমতা</p>
+                <h2 className="mt-3 font-display text-[clamp(1.8rem,4vw,2.8rem)] text-forest">
+                  ক্ষেতের কাজের জন্য যা লাগে
+                </h2>
+              </div>
+              <p className="max-w-sm text-muted">জটিল ড্যাশবোর্ড নয়। ছবি, কণ্ঠ, বাজার — যেটা এখন দরকার।</p>
             </div>
-
-            <div className="mt-16 grid gap-0 md:grid-cols-3">
-              {CAPABILITIES.map((item, i) => (
-                <article
-                  key={item.title}
-                  className={`border-forest/25 pt-7 md:border-t-0 md:pt-0 md:pl-8 ${
-                    i === 0
-                      ? "border-t md:border-t md:pl-0 md:pr-8"
-                      : "border-t md:border-l"
-                  }`}
-                >
-                  <h3 className="text-xl font-semibold tracking-tight text-ink">
-                    {item.title}
-                  </h3>
-                  <p className="mt-3 max-w-sm leading-relaxed text-muted">
-                    {item.body}
-                  </p>
+            <div className="mt-12 grid gap-6 md:grid-cols-3">
+              {CAPABILITIES.map((item) => (
+                <article key={item.title} className="group overflow-hidden rounded-[1.6rem] border border-border bg-sand/40">
+                  <div className="relative h-52">
+                    <Image
+                      src={item.image}
+                      alt={item.alt}
+                      fill
+                      sizes="(min-width: 768px) 30vw, 100vw"
+                      className="object-cover transition duration-500 group-hover:scale-[1.03]"
+                    />
+                  </div>
+                  <div className="p-6">
+                    <p className="text-xs font-semibold tracking-[0.14em] text-leaf uppercase">{item.kicker}</p>
+                    <h3 className="mt-2 text-xl font-semibold text-ink">{item.title}</h3>
+                    <p className="mt-2 leading-relaxed text-muted">{item.body}</p>
+                  </div>
                 </article>
               ))}
             </div>
           </div>
         </section>
 
-        <section id="how" className="border-y border-border bg-white">
-          <div className="mx-auto max-w-6xl px-5 py-20 md:px-6 md:py-28">
-            <div className="max-w-2xl">
-              <p className="section-label">ব্যবহার</p>
-              <h2 className="mt-4 font-display text-[clamp(1.85rem,4vw,3rem)] text-forest">
-                তিন ধাপে শুরু
-              </h2>
-              <p className="mt-4 text-lg leading-relaxed text-muted">
-                অ্যান্ড্রয়েড অ্যাপে স্ক্যান করে শুরু করুন — ছবি, কণ্ঠ বা লেখায়।
+        <section id="device" className="bg-forest-deep text-sand">
+          <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 py-16 md:px-6 md:py-24 lg:grid-cols-[0.92fr_1.08fr]">
+            <div className="rounded-[2rem] bg-[#f3f6f1] p-3 shadow-[0_24px_50px_-30px_rgba(0,0,0,0.45)]">
+              <div className="relative aspect-[4/3] overflow-hidden rounded-[1.35rem] bg-[#e7efe4]">
+                <Image
+                  src="/marketing/soil-meter.jpg"
+                  alt="মাটির সেন্সরের পর্দায় আর্দ্রতা ৬২ শতাংশ, পিএইচ ৬.৪ এবং এনপিকে"
+                  fill
+                  sizes="(min-width: 1024px) 46vw, 100vw"
+                  className="object-contain"
+                />
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold tracking-[0.16em] text-leaf uppercase">শীঘ্রই আসছে</p>
+              <h2 className="mt-3 font-display text-[clamp(2rem,4vw,3.2rem)]">আরণ্য সয়েল সেন্সর</h2>
+              <p className="mt-4 max-w-xl text-lg leading-relaxed text-sand/75">
+                শুধু মাটি পরীক্ষার যন্ত্র। স্পাইক মাটিতে বসালে পর্দায় আর্দ্রতা, পিএইচ ও এনপিকে দেখায় — যেমন আর্দ্রতা ৬২%, পিএইচ ৬.৪। অ্যাপ সেই সংখ্যা পড়ে সারের পরামর্শ দেবে।
               </p>
-            </div>
-
-            <ol className="mt-16 grid gap-12 md:grid-cols-3 md:gap-10">
-              {STEPS.map((s) => (
-                <li key={s.n} className="relative">
-                  <span className="font-display text-[2.75rem] leading-none text-leaf/75">
-                    {s.n}
-                  </span>
-                  <h3 className="mt-5 text-xl font-semibold tracking-tight text-ink">
-                    {s.title}
-                  </h3>
-                  <p className="mt-2 leading-relaxed text-muted">{s.body}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </section>
-
-        <section
-          id="open"
-          className="relative overflow-hidden bg-forest-deep text-sand"
-        >
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-[0.18]"
-            style={{
-              backgroundImage:
-                "radial-gradient(ellipse 70% 50% at 15% 20%, rgba(61,149,112,.9), transparent 55%), radial-gradient(ellipse 50% 40% at 90% 80%, rgba(154,100,24,.4), transparent 50%)",
-            }}
-          />
-          <div className="relative mx-auto max-w-6xl px-5 py-20 md:px-6 md:py-28">
-            <p className="text-[0.8125rem] font-semibold tracking-[0.14em] text-leaf/80 uppercase">
-              উন্মুক্ত তথ্য
-            </p>
-            <h2 className="mt-4 max-w-2xl font-display text-[clamp(1.85rem,4vw,3.1rem)] leading-[1.15]">
-              লগইন ছাড়াই দেশের রোগ মানচিত্র ও বাজার দেখুন।
-            </h2>
-            <p className="mt-5 max-w-xl text-lg leading-relaxed text-sand/60">
-              কৃষকদের স্ক্যান থেকে তৈরি হিট ম্যাপ, স্থানীয় দাম এবং তালিকাভুক্ত
-              পণ্য — সবার জন্য।
-            </p>
-
-            <div className="mt-12 grid gap-8 border-t border-white/15 pt-10 sm:grid-cols-2">
-              <Link
-                href="/heatmap"
-                className="group block transition hover:opacity-95"
-              >
-                <p className="text-sm font-semibold tracking-wide text-leaf">
-                  OpenStreetMap
-                </p>
-                <p className="mt-2 font-display text-3xl leading-tight transition group-hover:text-leaf md:text-4xl">
-                  রোগের হিট ম্যাপ →
-                </p>
-                <p className="mt-3 max-w-sm text-sand/55">
-                  জেলাভিত্তিক প্রাদুর্ভাব — মানচিত্রে ক্লিক করে বিস্তারিত।
-                </p>
-              </Link>
-              <Link
-                href="/market"
-                className="group block transition hover:opacity-95"
-              >
-                <p className="text-sm font-semibold tracking-wide text-leaf">
-                  পাবলিক বাজার
-                </p>
-                <p className="mt-2 font-display text-3xl leading-tight transition group-hover:text-leaf md:text-4xl">
-                  দাম ও পণ্য →
-                </p>
-                <p className="mt-3 max-w-sm text-sand/55">
-                  বাজার দর, দোকান ও তালিকাভুক্ত কৃষি পণ্য এক নজরে।
-                </p>
-              </Link>
+              <ul className="mt-8 grid gap-3 sm:grid-cols-3">
+                {SPECS.map((spec) => (
+                  <li key={spec.title} className="rounded-2xl border border-white/12 bg-white/6 px-4 py-4">
+                    <p className="font-semibold text-sand">{spec.title}</p>
+                    <p className="mt-1 text-sm text-sand/65">{spec.body}</p>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-6 text-sm text-sand/50">ব্র্যান্ডিং প্রিভিউ · এখনও বিক্রি হচ্ছে না</p>
             </div>
           </div>
         </section>
 
-        <section className="bg-sand">
-          <div className="mx-auto max-w-6xl px-5 py-20 md:px-6 md:py-24">
-            <div className="editorial-rule mb-12 max-w-xs" />
-            <h2 className="max-w-2xl font-display text-[clamp(1.75rem,3.5vw,2.75rem)] text-forest">
-              নেটওয়ার্ক দুর্বল হলেও কাজ চলে।
-            </h2>
-            <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted">
-              মূল মডেল ফোনেই চলে। সংযোগ ফিরলে তথ্য সিঙ্ক হয় — একই কেন্দ্রীয়
-              সিস্টেমের সঙ্গে।
-            </p>
-          </div>
+        <section id="how" className="mx-auto max-w-6xl px-5 py-16 md:px-6 md:py-24">
+          <p className="section-label">ব্যবহার</p>
+          <h2 className="mt-3 font-display text-[clamp(1.8rem,4vw,2.8rem)] text-forest">তিন ধাপে শুরু</h2>
+          <ol className="mt-10 grid gap-4 md:grid-cols-3">
+            {STEPS.map((step) => (
+              <li key={step.n} className="rounded-[1.5rem] border border-border bg-white p-6">
+                <span className="font-display text-4xl text-leaf">{step.n}</span>
+                <h3 className="mt-4 text-xl font-semibold text-ink">{step.title}</h3>
+                <p className="mt-2 text-muted">{step.body}</p>
+              </li>
+            ))}
+          </ol>
         </section>
 
-        {/* ── Admin: quiet, secondary ── */}
-        <section id="team" className="border-t border-border bg-white">
-          <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-8 px-5 py-14 md:flex-row md:items-center md:px-6 md:py-16">
-            <div className="max-w-lg">
-              <p className="section-label">পরিচালনা</p>
-              <h2 className="mt-3 font-display text-2xl text-forest md:text-3xl">
-                দলের জন্য প্রশাসনিক প্যানেল
-              </h2>
-              <p className="mt-3 leading-relaxed text-muted">
-                ব্যবহারকারী ও বিশ্লেষণ — মোবাইল অ্যাপের একই API।
-              </p>
+        <section className="mx-auto grid max-w-6xl gap-5 px-5 pb-20 md:grid-cols-2 md:px-6">
+          <Link href="/heatmap" className="group relative min-h-64 overflow-hidden rounded-[1.7rem]">
+            <Image src="/marketing/field.jpg" alt="" fill sizes="50vw" className="object-cover transition duration-500 group-hover:scale-105" />
+            <div className="absolute inset-0 bg-gradient-to-t from-forest-deep via-forest-deep/55 to-forest-deep/10" />
+            <div className="relative flex h-full min-h-64 flex-col justify-end p-7 text-sand">
+              <p className="text-sm font-semibold text-leaf">উন্মুক্ত মানচিত্র</p>
+              <p className="mt-2 font-display text-4xl">রোগের হিট ম্যাপ</p>
             </div>
-            <Link href="/admin/login" className="btn btn-ghost shrink-0">
-              প্রশাসক প্রবেশ
-            </Link>
-          </div>
+          </Link>
+          <Link href="/market" className="group relative min-h-64 overflow-hidden rounded-[1.7rem]">
+            <Image src="/marketing/market.jpg" alt="" fill sizes="50vw" className="object-cover transition duration-500 group-hover:scale-105" />
+            <div className="absolute inset-0 bg-gradient-to-t from-forest-deep via-forest-deep/55 to-forest-deep/10" />
+            <div className="relative flex h-full min-h-64 flex-col justify-end p-7 text-sand">
+              <p className="text-sm font-semibold text-leaf">পাবলিক বাজার</p>
+              <p className="mt-2 font-display text-4xl">দাম ও পণ্য</p>
+            </div>
+          </Link>
         </section>
       </main>
-
       <SiteFooter />
     </div>
   );

@@ -3,9 +3,10 @@ import Link from "next/link";
 import { ReactNode } from "react";
 
 const NAV = [
+  { href: "/", label: "হোম" },
   { href: "/heatmap", label: "হিট ম্যাপ" },
   { href: "/market", label: "বাজার" },
-  { href: "/#capabilities", label: "সক্ষমতা" },
+  { href: "/#device", label: "মাটি সেন্সর" },
 ];
 
 export function PublicHeader({ solid = false }: { solid?: boolean }) {
@@ -13,8 +14,8 @@ export function PublicHeader({ solid = false }: { solid?: boolean }) {
     <header
       className={
         solid
-          ? "sticky top-0 z-40 border-b border-border bg-white/92 backdrop-blur-md"
-          : "absolute inset-x-0 top-0 z-30"
+          ? "site-header border-b border-border bg-white/95 backdrop-blur-md"
+          : "site-header border-b border-white/10 bg-forest-deep/80 text-sand backdrop-blur-md"
       }
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
@@ -32,14 +33,24 @@ export function PublicHeader({ solid = false }: { solid?: boolean }) {
           />
           <span className="font-display text-2xl tracking-tight">আরণ্য</span>
         </Link>
-        <nav className="flex items-center gap-1 sm:gap-2">
+        <Link
+          href="/admin/login"
+          className={
+            solid
+              ? "btn btn-ghost !min-h-9 !px-3 text-sm md:hidden"
+              : "rounded-lg border border-white/20 bg-white/8 px-3 py-2 text-sm font-semibold text-sand md:hidden"
+          }
+        >
+          প্রশাসক
+        </Link>
+        <nav className="hidden items-center gap-1 md:flex">
           {NAV.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`hidden px-3 py-2 text-sm font-medium transition sm:inline ${
+              className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${
                 solid
-                  ? "text-muted hover:text-forest"
+                  ? "text-muted hover:bg-sand hover:text-forest"
                   : "text-sand/75 hover:text-sand"
               }`}
             >
@@ -58,6 +69,19 @@ export function PublicHeader({ solid = false }: { solid?: boolean }) {
           </Link>
         </nav>
       </div>
+      <nav className="flex gap-2 overflow-x-auto px-5 pb-3 md:hidden">
+        {NAV.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium ${
+              solid ? "bg-sand text-forest" : "bg-white/10 text-sand"
+            }`}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
     </header>
   );
 }
@@ -72,8 +96,7 @@ export function PublicFooter() {
             Aronno
           </p>
           <p className="mt-4 max-w-md text-sm leading-relaxed text-sand/65">
-            বাংলাদেশের কৃষকদের জন্য অন‑ডিভাইস কৃষি সহায়ক — রোগ শনাক্তকরণ, সার
-            নির্দেশনা, আবহাওয়া ও বাজার তথ্য।
+            বাংলাদেশের কৃষকদের জন্য রোগ শনাক্তকরণ, মাটি পরীক্ষা, আবহাওয়া ও বাজার।
           </p>
         </div>
         <div className="flex flex-col gap-2 text-sm md:items-end md:text-right">
@@ -107,14 +130,15 @@ export function PublicShell({
   return (
     <div className="site-canvas min-h-screen">
       <PublicHeader solid />
-      <main className="mx-auto max-w-6xl px-5 py-10 md:py-14">
-        <div className="max-w-2xl">
-          <h1 className="font-display text-3xl text-forest md:text-5xl">{title}</h1>
+      <main className="mx-auto max-w-6xl px-5 py-10 md:px-6 md:py-14">
+        <div className="rounded-[1.6rem] border border-border bg-white px-6 py-8 md:px-10">
+          <p className="section-label">আরণ্য</p>
+          <h1 className="mt-3 font-display text-3xl text-forest md:text-5xl">{title}</h1>
           {subtitle ? (
-            <p className="mt-3 text-lg leading-relaxed text-muted">{subtitle}</p>
+            <p className="mt-3 max-w-2xl text-lg leading-relaxed text-muted">{subtitle}</p>
           ) : null}
         </div>
-        <div className="mt-10">{children}</div>
+        <div className="mt-8">{children}</div>
       </main>
       <PublicFooter />
     </div>

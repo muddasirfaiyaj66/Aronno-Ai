@@ -66,7 +66,7 @@ export function DiseaseHeatMap({
     <div
       className={
         className ??
-        "h-[min(70vh,560px)] w-full overflow-hidden rounded-2xl border border-border"
+        "map-frame h-[min(70vh,560px)] w-full overflow-hidden rounded-2xl border border-border"
       }
     >
       <MapContainer

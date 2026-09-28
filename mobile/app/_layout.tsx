@@ -13,6 +13,7 @@ import {
   NotoSansBengali_700Bold,
 } from "@expo-google-fonts/noto-sans-bengali";
 import { OfflineBanner } from "@/components/ui";
+import { NotificationSync } from "@/components/NotificationSync";
 import { OfflineAiBootstrap } from "@/components/OfflineAiBootstrap";
 import { LocaleProvider } from "@/context/locale";
 import { ThemeProvider, useTheme } from "@/context/theme";
@@ -56,6 +57,7 @@ export default function RootLayout() {
           <LocaleProvider>
             <SessionHydrator />
             <OfflineAiBootstrap />
+            <NotificationSync />
             <ThemedStatusBar />
             <OfflineBanner />
             <Stack

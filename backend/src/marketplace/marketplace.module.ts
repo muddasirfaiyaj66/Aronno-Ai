@@ -11,9 +11,10 @@ import { ProductService } from './services/product.service';
 import { CartService } from './services/cart.service';
 import { OrderService } from './services/order.service';
 import { ReviewService } from './services/review.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [PrismaModule, StorageModule, JwtModule.register({})],
+  imports: [PrismaModule, StorageModule, JwtModule.register({}), NotificationsModule],
   controllers: [
     ShopController,
     ProductController,

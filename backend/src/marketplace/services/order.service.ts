@@ -7,10 +7,14 @@ import {
 import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateOrderDto, UpdateOrderStatusDto } from '../dto/order.dto';
+import { NotificationsService } from '../../notifications/notifications.service';
 
 @Injectable()
 export class OrderService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   private async resolveDistrict(districtIdOrSlug: string) {
     if (!districtIdOrSlug) return null;
@@ -166,6 +170,15 @@ export class OrderService {
       data: { items: remainingCartItems },
     });
 
+    void this.notifications
+      .notifyOrder({
+        buyerUserId,
+        sellerUserId: shop.ownerUserId,
+        orderId: order.id,
+        status: order.status,
+      })
+      .catch(() => undefined);
+
     return order;
   }
 
@@ -274,6 +287,15 @@ export class OrderService {
     });
 
     // If order was cancelled, restore stock
+    void this.notifications
+      .notifyOrder({
+        buyerUserId: updated.buyerUserId,
+        sellerUserId: updated.sellerUserId,
+        orderId: updated.id,
+        status: updated.status,
+      })
+      .catch(() => undefined);
+
     if (dto.status === 'cancelled' && order.status !== 'cancelled') {
       for (const item of order.items) {
         const product = await this.prisma.product.findUnique({

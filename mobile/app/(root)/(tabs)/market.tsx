@@ -786,7 +786,7 @@ export default function MarketScreen() {
           <>
             <AppText variant="caption" className="text-muted">
               গত {toBn(heatmap?.windowDays ?? 60)} দিনে কৃষকদের স্ক্যান থেকে জেলাভিত্তিক রোগের
-              প্রাদুর্ভাব। কোনো এলাকায় চাপ দিন।
+              প্রাদুর্ভাব। রঙিন বৃত্ত সেই এলাকার ব্যাসার্ধ। আপনি বৃত্তের ভিতরে থাকলে বিজ্ঞপ্তি আসবে।
             </AppText>
 
             {heatmapError ? (

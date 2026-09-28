@@ -133,8 +133,10 @@ export function DistrictBars({ data }: { data: Slice[] }) {
 
 export function SignupArea({
   data,
+  name = "নতুন অ্যাকাউন্ট",
 }: {
   data: { label: string; count: number }[];
+  name?: string;
 }) {
   if (data.every((d) => d.count === 0)) return <EmptyChart />;
   return (
@@ -163,7 +165,7 @@ export function SignupArea({
         <Area
           type="monotone"
           dataKey="count"
-          name="নতুন অ্যাকাউন্ট"
+          name={name}
           stroke="#1b5e4a"
           strokeWidth={2.5}
           fill="url(#signupFill)"

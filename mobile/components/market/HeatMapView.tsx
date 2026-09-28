@@ -6,6 +6,7 @@ import { AppText } from "@/components/ui";
 import { colors } from "@/constants/theme";
 import type { HeatmapArea } from "@/types/market";
 import { HEAT_COLORS } from "./heatmapHtml";
+import { heatRadiusMeters } from "@/lib/heatZone";
 
 export type HeatMapViewProps = {
   areas: HeatmapArea[];
@@ -38,6 +39,10 @@ function xToLon(x: number, zoom: number) {
 function yToLat(y: number, zoom: number) {
   const n = Math.PI - (2 * Math.PI * y) / 2 ** zoom;
   return (180 / Math.PI) * Math.atan(Math.sinh(n));
+}
+
+function metersPerPixel(lat: number, zoom: number) {
+  return (156543.03392 * Math.cos((lat * Math.PI) / 180)) / 2 ** zoom;
 }
 
 function clamp(n: number, min: number, max: number) {
@@ -126,7 +131,11 @@ export function HeatMapView({
       const r = Math.round(
         Math.max(8, Math.min(18, 7 + Math.sqrt(area.caseCount) * 2)),
       );
-      return { area, x, y, r, color: HEAT_COLORS[area.level] };
+      const zoneR = Math.max(
+        18,
+        heatRadiusMeters(area.caseCount) / metersPerPixel(area.location.lat, zoom),
+      );
+      return { area, x, y, r, zoneR, color: HEAT_COLORS[area.level] };
     });
   }, [areas, width, height, zoom, center.lat, center.lon]);
 
@@ -157,6 +166,24 @@ export function HeatMapView({
             }}
             cachePolicy="memory-disk"
             recyclingKey={tile.key}
+          />
+        ))}
+        {markers.map((m) => (
+          <View
+            key={`${m.area.location.slug}-zone`}
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: m.x - m.zoneR,
+              top: m.y - m.zoneR,
+              width: m.zoneR * 2,
+              height: m.zoneR * 2,
+              borderRadius: m.zoneR,
+              backgroundColor: m.color,
+              opacity: 0.22,
+              borderWidth: 2,
+              borderColor: m.color,
+            }}
           />
         ))}
         {markers.map((m) => {

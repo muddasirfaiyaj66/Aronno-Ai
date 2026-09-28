@@ -9,6 +9,7 @@ import { StorageService } from '../storage/storage.service';
 import { Errors } from '../common/errors';
 import { resolveDiagnosisLocation, type Geo } from './diagnosis-location';
 import type { AuthUser } from '../auth/auth.types';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const transcriptSchema = z.object({ transcriptBn: z.string().trim() });
 
@@ -19,6 +20,7 @@ export class DiagnosesService {
     private readonly storage: StorageService,
     @Inject(AI_VISION) private readonly vision: AiVisionPort,
     private readonly gemini: GeminiClient,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private dto(row: {
@@ -155,6 +157,13 @@ Return JSON only: {"transcriptBn": "<exact spoken words or empty string>"}`;
       });
       return created;
     });
+    void this.notifications
+      .notifyScan(userId, {
+        id: row.id,
+        diseaseNameBn: data.diseaseNameBn,
+        cropId: data.cropId,
+      })
+      .catch(() => undefined);
     return this.dto(row);
   }
 

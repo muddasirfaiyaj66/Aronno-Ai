@@ -20,11 +20,11 @@ import type { CurrentWeather } from "@/types/weather";
 import type { FarmLocationStatus } from "@/hooks/useFarmLocation";
 
 const SKY: Record<CurrentWeather["kind"], [string, string, string]> = {
-  sunny: ["#E7F5F2", "#FFFFFF", "#F4F7F6"],
-  partly: ["#E7F5F2", "#FFFFFF", "#D5F3EC"],
-  cloudy: ["#EEF2F1", "#FFFFFF", "#E7EEEB"],
-  rainy: ["#E7F5F2", "#FFFFFF", "#C5E4DB"],
-  storm: ["#D5F3EC", "#FFFFFF", "#C5E4DB"],
+  sunny: ["#1AA88A", "#0F766E", "#115E59"],
+  partly: ["#14967A", "#0F766E", "#134E4A"],
+  cloudy: ["#3D6B66", "#115E59", "#0E3D38"],
+  rainy: ["#1D6A8A", "#0F766E", "#115E59"],
+  storm: ["#1E3A4C", "#134E4A", "#0E3D38"],
 };
 
 export function DateWeatherCard({
@@ -108,37 +108,49 @@ export function DateWeatherCard({
           </Animated.View>
           <View className="flex-row items-start justify-between">
             <View className="flex-1 pr-3">
-              <AppText variant="caption" className="font-bengali-semibold text-primary">
+              <AppText
+                variant="caption"
+                className="font-bengali-semibold"
+                style={{ color: "rgba(255,255,255,0.82)" }}
+              >
                 {t("আজকের আবহাওয়া", "Today's weather")}
               </AppText>
-              <AppText variant="title" className="mt-1 text-primary">
+              <AppText variant="title" className="mt-1" style={{ color: colors.white }}>
                 {formatHomeDate(now, locale)}
               </AppText>
               <View className="mt-3 flex-row items-center gap-2">
                 <View
                   className="h-8 w-8 items-center justify-center rounded-full"
-                  style={{ backgroundColor: "rgba(6,78,59,0.1)" }}
+                  style={{ backgroundColor: "rgba(255,255,255,0.16)" }}
                 >
-                  <Ionicons name="time-outline" size={16} color={colors.forest900} />
+                  <Ionicons name="time-outline" size={16} color={colors.white} />
                 </View>
-                <AppText variant="bodyLg" className="font-bengali-bold text-ink">
+                <AppText
+                  variant="bodyLg"
+                  className="font-bengali-bold"
+                  style={{ color: colors.white }}
+                >
                   {formatHomeTime(now, locale)}
                 </AppText>
               </View>
             </View>
 
             <Animated.View style={icon3d} className="items-center">
-              <WeatherMood kind={kind} size={36} />
+              <WeatherMood kind={kind} size={36} color={colors.white} />
               {weather ? (
                 <AppText
                   variant="display"
-                  className="mt-1 text-primary"
-                  style={{ fontSize: 36, lineHeight: 42 }}
+                  className="mt-1"
+                  style={{ fontSize: 36, lineHeight: 42, color: colors.white }}
                 >
                   {toLocaleDigits(weather.tempC, locale)}°
                 </AppText>
               ) : (
-                <AppText variant="caption" className="mt-1">
+                <AppText
+                  variant="caption"
+                  className="mt-1"
+                  style={{ color: "rgba(255,255,255,0.82)" }}
+                >
                   {t("আনা হচ্ছে…", "Loading…")}
                 </AppText>
               )}
@@ -146,26 +158,45 @@ export function DateWeatherCard({
           </View>
 
           {weather ? (
-            <View className="mt-4 rounded-2xl bg-white/80 px-3 py-3">
+            <View
+              className="mt-4 rounded-2xl px-3 py-3"
+              style={{ backgroundColor: "rgba(255,255,255,0.16)" }}
+            >
               <View className="flex-row items-center justify-between">
                 <View className="flex-1">
-                  <AppText variant="body" className="font-bengali-semibold text-ink">
+                  <AppText
+                    variant="body"
+                    className="font-bengali-semibold"
+                    style={{ color: colors.white }}
+                  >
                     {t(weather.conditionBn, weather.conditionEn)}
                   </AppText>
-                  <AppText variant="caption" className="mt-0.5">
+                  <AppText
+                    variant="caption"
+                    className="mt-0.5"
+                    style={{ color: "rgba(255,255,255,0.82)" }}
+                  >
                     {place}
                   </AppText>
                 </View>
                 <View className="flex-row gap-4">
                   <View className="items-center">
-                    <Ionicons name="water-outline" size={16} color="#6B7280" />
-                    <AppText variant="caption" className="mt-1 font-bengali-bold text-ink">
+                    <Ionicons name="water-outline" size={16} color={colors.white} />
+                    <AppText
+                      variant="caption"
+                      className="mt-1 font-bengali-bold"
+                      style={{ color: colors.white }}
+                    >
                       {toLocaleDigits(weather.humidity, locale)}%
                     </AppText>
                   </View>
                   <View className="items-center">
-                    <Ionicons name="navigate-outline" size={16} color="#6B7280" />
-                    <AppText variant="caption" className="mt-1 font-bengali-bold text-ink">
+                    <Ionicons name="navigate-outline" size={16} color={colors.white} />
+                    <AppText
+                      variant="caption"
+                      className="mt-1 font-bengali-bold"
+                      style={{ color: colors.white }}
+                    >
                       {toLocaleDigits(weather.windKph, locale)} {t("কিমি", "km")}
                     </AppText>
                   </View>
@@ -179,9 +210,10 @@ export function DateWeatherCard({
               onPress={onEnableLocation}
               accessibilityRole="button"
               accessibilityLabel={t("অবস্থান চালু করুন", "Turn on location")}
-              className="mt-3 flex-row items-center gap-2 rounded-2xl bg-white/90 px-3 py-3"
+              className="mt-3 flex-row items-center gap-2 rounded-2xl px-3 py-3"
+              style={{ backgroundColor: colors.white }}
             >
-              <Ionicons name="location-outline" size={18} color={colors.forest900} />
+              <Ionicons name="location-outline" size={18} color={colors.primary} />
               <AppText variant="caption" className="flex-1 font-bengali-semibold text-primary">
                 {locationStatus === "off"
                   ? t(
@@ -205,27 +237,25 @@ const styles = StyleSheet.create({
   shadow: {
     borderRadius: 28,
     shadowColor: colors.forest900,
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
   },
   card: {
     borderRadius: 28,
     paddingHorizontal: 18,
     paddingVertical: 18,
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(213,221,216,0.95)",
   },
   orb: {
     position: "absolute",
-    right: -20,
-    top: -24,
-    height: 110,
-    width: 110,
-    borderRadius: 55,
-    backgroundColor: "rgba(47,125,98,0.12)",
+    right: -28,
+    top: -36,
+    height: 150,
+    width: 150,
+    borderRadius: 75,
+    backgroundColor: "rgba(255,255,255,0.14)",
   },
   shine: {
     position: "absolute",

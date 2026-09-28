@@ -50,7 +50,7 @@ export function InsightHeroCard({
       <Pressable onPress={() => onPress?.(active)} accessibilityRole="button">
         <View style={styles.shadow}>
           <LinearGradient
-            colors={[colors.secondary, "#FFFFFF", "#D4E8E0"]}
+            colors={["#E7F5F2", "#FFFFFF", "#D5F3EC"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.card}

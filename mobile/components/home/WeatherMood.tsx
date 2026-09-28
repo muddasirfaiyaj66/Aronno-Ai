@@ -32,9 +32,11 @@ const KIND_COLOR: Record<WeatherKind, string> = {
 export function WeatherMood({
   kind,
   size = 34,
+  color,
 }: {
   kind: WeatherKind;
   size?: number;
+  color?: string;
 }) {
   const pulse = useSharedValue(0);
 
@@ -80,7 +82,7 @@ export function WeatherMood({
       {(kind === "rainy" || kind === "storm") &&
         [0, 1, 2].map((i) => <RainDrop key={i} delay={i * 180} left={8 + i * 12} />)}
       <Animated.View style={iconStyle}>
-        <Ionicons name={KIND_ICON[kind]} size={size} color={KIND_COLOR[kind]} />
+        <Ionicons name={KIND_ICON[kind]} size={size} color={color ?? KIND_COLOR[kind]} />
       </Animated.View>
     </View>
   );

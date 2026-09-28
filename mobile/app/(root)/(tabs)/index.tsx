@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { Pressable, ScrollView, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -83,35 +84,53 @@ export default function HomeScreen() {
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       <ScrollView
         className="flex-1"
-        contentContainerClassName="pb-20"
+        contentContainerClassName="pb-28"
         showsVerticalScrollIndicator={false}
         refreshControl={refreshControl}
       >
-        <View className="flex-row items-center justify-between px-5 pt-2 pb-4">
-          <View className="min-w-0 flex-1 pr-3">
-            <AppText variant="caption" className="font-bengali-semibold text-primary">
-              {t("আরণ্য", "Aronno")}
-            </AppText>
-            <AppText variant="title" className="mt-1 text-ink">
-              {t("স্বাগতম", "Welcome")}
-            </AppText>
-            {name ? (
-              <AppText variant="display" className="mt-1 text-primary" numberOfLines={2}>
-                {name}
-              </AppText>
-            ) : null}
-          </View>
-          <View className="flex-row items-center gap-2">
-            <LanguageToggle />
-            <Pressable
-              onPress={() => router.push("/(root)/notifications")}
-              accessibilityRole="button"
-              accessibilityLabel={t("বিজ্ঞপ্তি", "Notifications")}
-              className="h-12 w-12 items-center justify-center rounded-full bg-white"
-            >
-              <Ionicons name="notifications-outline" size={22} color={colors.ink} />
-            </Pressable>
-          </View>
+        <View className="px-5 pb-4 pt-3">
+          <LinearGradient
+            colors={["#134E4A", "#0F766E", "#1AA88A"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ borderRadius: 28, paddingHorizontal: 18, paddingVertical: 18 }}
+          >
+            <View className="flex-row items-start justify-between gap-3">
+              <View className="min-w-0 flex-1">
+                <AppText
+                  variant="caption"
+                  className="font-bengali-semibold"
+                  style={{ color: "rgba(255,255,255,0.8)" }}
+                >
+                  {t("আরণ্য", "Aronno")}
+                </AppText>
+                <AppText variant="title" className="mt-1" style={{ color: colors.white }}>
+                  {name
+                    ? t(`স্বাগতম, ${name.split(/\s+/)[0]}`, `Welcome, ${name.split(/\s+/)[0]}`)
+                    : t("স্বাগতম", "Welcome")}
+                </AppText>
+                <AppText
+                  variant="caption"
+                  className="mt-1"
+                  style={{ color: "rgba(255,255,255,0.82)" }}
+                >
+                  {t("ক্ষেত, আবহাওয়া ও বাজার — এক জায়গায়", "Field, weather, and market in one place")}
+                </AppText>
+              </View>
+              <View className="flex-row items-center gap-2">
+                <LanguageToggle light />
+                <Pressable
+                  onPress={() => router.push("/(root)/notifications")}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("বিজ্ঞপ্তি", "Notifications")}
+                  className="h-12 w-12 items-center justify-center rounded-full"
+                  style={{ backgroundColor: "rgba(255,255,255,0.18)" }}
+                >
+                  <Ionicons name="notifications-outline" size={22} color={colors.white} />
+                </Pressable>
+              </View>
+            </View>
+          </LinearGradient>
         </View>
 
         <View className="gap-6 px-5">
@@ -169,6 +188,8 @@ export default function HomeScreen() {
                   title: t("সার", "Fertilizer"),
                   subtitle: t("জমির তথ্য দিয়ে পরামর্শ", "Advice from field details"),
                   icon: "flask-outline",
+                  accent: "#FBF4E6",
+                  iconColor: "#C4841D",
                   onPress: () => router.push("/(root)/(tabs)/scan/fertilizer"),
                 },
                 {
@@ -176,6 +197,8 @@ export default function HomeScreen() {
                   title: t("মাটি", "Soil"),
                   subtitle: t("ব্লুটুথ / ওয়াই‑ফাই সেন্সর", "Bluetooth / Wi‑Fi sensor"),
                   icon: "hardware-chip-outline",
+                  accent: "#E7F1FB",
+                  iconColor: "#1D4E89",
                   onPress: () => router.push("/(root)/(tabs)/scan/soil-sensor"),
                 },
                 {
@@ -183,6 +206,8 @@ export default function HomeScreen() {
                   title: t("যন্ত্র", "Tools"),
                   subtitle: t("ছবি বা কথা দিয়ে খুঁজুন", "Find by photo or voice"),
                   icon: "construct-outline",
+                  accent: "#F3E8FF",
+                  iconColor: "#6D28D9",
                   onPress: () => router.push("/(root)/(tabs)/scan/tools"),
                 },
                 {
@@ -190,6 +215,8 @@ export default function HomeScreen() {
                   title: t("রসিদ", "Receipt"),
                   subtitle: t("ছবি তুলুন — খরচ শুনুন", "Photo, then hear the cost"),
                   icon: "receipt-outline",
+                  accent: "#FDECEC",
+                  iconColor: "#B42318",
                   onPress: () => router.push("/(root)/(tabs)/scan/receipt"),
                 },
                 {
@@ -197,6 +224,8 @@ export default function HomeScreen() {
                   title: t("পরিকল্পনা", "Plan"),
                   subtitle: t("আবহাওয়া মেনে ফসল", "Weather-aware crops"),
                   icon: "calendar-outline",
+                  accent: "#E7F5F2",
+                  iconColor: "#0F766E",
                   onPress: () => router.push("/(root)/(tabs)/scan/planning"),
                 },
                 {
@@ -204,6 +233,8 @@ export default function HomeScreen() {
                   title: t("বাজার", "Market"),
                   subtitle: t("দাম দেখুন, বিক্রি করুন", "Prices and selling"),
                   icon: "storefront-outline",
+                  accent: "#FFF4E5",
+                  iconColor: "#C2410C",
                   onPress: () => router.push("/(root)/(tabs)/market"),
                 },
                 {
@@ -211,6 +242,8 @@ export default function HomeScreen() {
                   title: t("চ্যাট", "Chat"),
                   subtitle: t("লেখা বা কণ্ঠে জিজ্ঞাসা", "Ask by text or voice"),
                   icon: "chatbubbles-outline",
+                  accent: "#E8F8F4",
+                  iconColor: "#0F766E",
                   onPress: () => router.push("/(root)/(tabs)/assistant"),
                 },
               ]}

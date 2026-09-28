@@ -34,15 +34,16 @@ export function LanguageToggle({
       >
         <AppText
           variant="caption"
-          className={`font-bengali-bold ${
-            active
+          className="font-bengali-bold"
+          style={{
+            color: active
               ? light
-                ? "text-primary"
-                : "text-white"
+                ? "#0F766E"
+                : "#FFFFFF"
               : light
-                ? "text-white"
-                : "text-muted"
-          }`}
+                ? "rgba(255,255,255,0.88)"
+                : "#5C6E68",
+          }}
         >
           {label}
         </AppText>

@@ -97,7 +97,7 @@ function ScanFab({
             shadowOffset: { width: 0, height: 6 },
             elevation: 8,
             borderWidth: 4,
-            borderColor: colors.neutral,
+            borderColor: colors.white,
           }}
         >
           <Ionicons name="camera" size={28} color={colors.white} />
@@ -154,15 +154,26 @@ function SideTab({
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
-        paddingTop: 6,
+        paddingTop: 8,
         minWidth: 0,
       }}
     >
-      <Ionicons
-        name={focused ? meta.iconFocused : meta.icon}
-        size={tabBar.iconSize}
-        color={color}
-      />
+      <View
+        style={{
+          height: 32,
+          minWidth: 46,
+          borderRadius: 16,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: focused ? colors.secondary : "transparent",
+        }}
+      >
+        <Ionicons
+          name={focused ? meta.iconFocused : meta.icon}
+          size={tabBar.iconSize}
+          color={color}
+        />
+      </View>
       <Text
         numberOfLines={1}
         adjustsFontSizeToFit
@@ -209,18 +220,26 @@ function CenteredTabBar({ state, navigation, insets }: BottomTabBarProps) {
   return (
     <View
       style={{
+        backgroundColor: colors.neutral,
+        paddingHorizontal: 12,
+        paddingTop: 18,
+        paddingBottom: bottomInset,
+      }}
+    >
+    <View
+      style={{
         flexDirection: "row",
         alignItems: "flex-end",
-        height: tabBar.height + bottomInset,
-        paddingBottom: bottomInset,
+        height: 74,
         backgroundColor: colors.white,
-        borderTopColor: colors.border,
-        borderTopWidth: 1,
+        borderRadius: 28,
+        borderWidth: 1,
+        borderColor: colors.border,
         shadowColor: colors.forest900,
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: -4 },
-        elevation: 8,
+        shadowOpacity: 0.12,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 10,
       }}
     >
       {/* Equal-width sides keep Scan geometrically centered */}
@@ -257,6 +276,7 @@ function CenteredTabBar({ state, navigation, insets }: BottomTabBarProps) {
           );
         })}
       </View>
+    </View>
     </View>
   );
 }

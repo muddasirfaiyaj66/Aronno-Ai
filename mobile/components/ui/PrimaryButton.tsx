@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, type PressableProps } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -50,39 +51,48 @@ export function PrimaryButton({
       style={[
         animatedStyle,
         {
-          minHeight: 64,
-          borderRadius: 18,
-          backgroundColor: colors.primary,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 8,
-          paddingHorizontal: 20,
+          borderRadius: 20,
+          overflow: "hidden",
           opacity: isDisabled ? 0.5 : 1,
           shadowColor: colors.primary,
-          shadowOpacity: 0.28,
-          shadowRadius: 14,
+          shadowOpacity: 0.32,
+          shadowRadius: 16,
           shadowOffset: { width: 0, height: 8 },
-          elevation: 5,
+          elevation: 6,
         },
       ]}
       className={className}
       {...props}
     >
-      {loading ? (
-        <ActivityIndicator color={colors.white} />
-      ) : (
-        <>
-          {icon}
-          <AppText
-            variant="bodyLg"
-            numberOfLines={1}
-            className="shrink font-bengali-bold text-white"
-          >
-            {label}
-          </AppText>
-        </>
-      )}
+      <LinearGradient
+        colors={["#1AA88A", "#0F766E", "#115E59"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{
+          minHeight: 64,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          paddingHorizontal: 20,
+        }}
+      >
+        {loading ? (
+          <ActivityIndicator color={colors.white} />
+        ) : (
+          <>
+            {icon}
+            <AppText
+              variant="bodyLg"
+              numberOfLines={1}
+              className="shrink font-bengali-bold"
+              style={{ color: colors.white }}
+            >
+              {label}
+            </AppText>
+          </>
+        )}
+      </LinearGradient>
     </AnimatedPressable>
   );
 }

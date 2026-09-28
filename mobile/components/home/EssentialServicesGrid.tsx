@@ -15,6 +15,7 @@ export type ServiceItem = {
   icon: IconName;
   onPress: () => void;
   accent?: string;
+  iconColor?: string;
 };
 
 export type EssentialServicesGridProps = {
@@ -37,6 +38,7 @@ function ServiceTile({
   delay: number;
 }) {
   const accent = item.accent ?? colors.secondary;
+  const iconColor = item.iconColor ?? colors.primary;
 
   return (
     <Animated.View
@@ -56,7 +58,7 @@ function ServiceTile({
           className="h-11 w-11 items-center justify-center rounded-2xl"
           style={{ backgroundColor: accent }}
         >
-          <Ionicons name={item.icon} size={22} color={colors.primary} />
+          <Ionicons name={item.icon} size={22} color={iconColor} />
         </View>
         <AppText
           variant="body"
@@ -95,11 +97,16 @@ const styles = StyleSheet.create({
   },
   tile: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+    borderRadius: 22,
     paddingVertical: 16,
     paddingHorizontal: 14,
-    minHeight: 120,
+    minHeight: 128,
     borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: "#115E59",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
 });

@@ -1,6 +1,9 @@
+import { setDefaultResultOrder } from 'node:dns';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer from 'nodemailer';
+
+setDefaultResultOrder('ipv4first');
 
 export type MailDetail = { label: string; value: string };
 
@@ -17,40 +20,81 @@ export type MailMessage = {
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private transporter: nodemailer.Transporter | null = null;
 
-  constructor(private readonly config: ConfigService) {
-    const host = this.config.get<string>('SMTP_HOST');
-    if (!host) {
-      this.logger.warn('SMTP_HOST is not set — emails will be logged only');
-      return;
-    }
-    this.transporter = nodemailer.createTransport({
-      host,
-      port: Number(this.config.get('SMTP_PORT', 587)),
-      secure: this.config.get('SMTP_SECURE', 'false') === 'true',
-      auth: {
-        user: this.config.get<string>('SMTP_USER'),
-        pass: this.config.get<string>('SMTP_PASS'),
-      },
-    });
-  }
+  constructor(private readonly config: ConfigService) {}
 
   async send(input: MailMessage) {
-    const from = this.config.get<string>('SMTP_FROM', 'Aronno <noreply@aronno.local>');
     const text = plainText(input);
     const html = renderEmail(input);
-    if (!this.transporter) {
+    const settings = this.settings();
+    if (!settings) {
       this.logger.log(`[dev] ${input.subject} → ${input.to}\n${text}`);
       return;
     }
-    await this.transporter.sendMail({
-      from,
+    const message = {
+      from: settings.from,
       to: input.to,
       subject: input.subject,
       text,
       html,
+    };
+    try {
+      await this.deliver(settings, message);
+    } catch (error) {
+      if (!settings.secure && droppedConnection(error)) {
+        this.logger.warn('SMTP connection dropped. Retrying with implicit TLS.');
+        await this.deliver({ ...settings, port: 465, secure: true }, message);
+        return;
+      }
+      throw error;
+    }
+  }
+
+  private settings() {
+    const host = this.config.get<string>('SMTP_HOST')?.trim();
+    if (!host) return null;
+    const port = Number(this.config.get('SMTP_PORT', 587));
+    const secure = this.config.get('SMTP_SECURE', 'false') === 'true' || port === 465;
+    const user = this.config.get<string>('SMTP_USER')?.trim() ?? '';
+    return {
+      host,
+      port,
+      secure,
+      user,
+      pass: (this.config.get<string>('SMTP_PASS') ?? '').replace(/\s+/g, ''),
+      from: this.envelopeFrom(user, this.config.get<string>('SMTP_FROM', 'Aronno <noreply@aronno.local>')),
+    };
+  }
+
+  private envelopeFrom(user: string, configured: string) {
+    const match = configured.match(/<([^>]+)>/);
+    const address = (match?.[1] ?? configured).trim().toLowerCase();
+    if (user && address === user.toLowerCase()) {
+      return configured.includes('<') ? configured : `আরণ্য <${user}>`;
+    }
+    return user ? `আরণ্য <${user}>` : configured;
+  }
+
+  private async deliver(
+    settings: NonNullable<ReturnType<MailService['settings']>>,
+    message: { from: string; to: string; subject: string; text: string; html: string },
+  ) {
+    const transporter = nodemailer.createTransport({
+      host: settings.host,
+      port: settings.port,
+      secure: settings.secure,
+      requireTLS: !settings.secure,
+      connectionTimeout: 15_000,
+      greetingTimeout: 15_000,
+      socketTimeout: 20_000,
+      auth: { user: settings.user, pass: settings.pass },
+      tls: { minVersion: 'TLSv1.2', servername: settings.host },
     });
+    try {
+      await transporter.sendMail(message);
+    } finally {
+      transporter.close();
+    }
   }
 
   async sendOtp(to: string, subject: string, code: string, bodyBn: string) {
@@ -153,4 +197,9 @@ function escapeHtml(value: string) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function droppedConnection(error: unknown) {
+  const message = error instanceof Error ? error.message : '';
+  return /connection closed|socket disconnected|timed out|ECONNRESET|ETIMEDOUT|ECONNECTION/i.test(message);
 }

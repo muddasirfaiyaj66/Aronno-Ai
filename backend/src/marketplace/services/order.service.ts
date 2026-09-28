@@ -138,14 +138,12 @@ export class OrderService {
     }
 
     if (!isGateway) {
-      void this.notifications
-        .notifyOrder({
-          buyerUserId,
-          sellerUserId: shop.ownerUserId,
-          orderId: order.id,
-          status: order.status,
-        })
-        .catch(() => undefined);
+      await this.notifications.notifyOrder({
+        buyerUserId,
+        sellerUserId: shop.ownerUserId,
+        orderId: order.id,
+        status: order.status,
+      });
       return { ...order, gatewayUrl: null as string | null };
     }
 
@@ -362,15 +360,12 @@ export class OrderService {
       },
     });
 
-    // If order was cancelled, restore stock
-    void this.notifications
-      .notifyOrder({
-        buyerUserId: updated.buyerUserId,
-        sellerUserId: updated.sellerUserId,
-        orderId: updated.id,
-        status: updated.status,
-      })
-      .catch(() => undefined);
+    await this.notifications.notifyOrder({
+      buyerUserId: updated.buyerUserId,
+      sellerUserId: updated.sellerUserId,
+      orderId: updated.id,
+      status: updated.status,
+    });
 
     if (
       dto.status === 'cancelled' &&

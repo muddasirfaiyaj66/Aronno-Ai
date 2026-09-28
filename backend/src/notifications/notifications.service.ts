@@ -330,18 +330,33 @@ export class NotificationsService {
       title: 'আপনার অর্ডার',
       body: buyerBody,
       pathname: '/(root)/orders',
-      email: buyerEmail,
     });
-    if (input.sellerUserId === input.buyerUserId) return;
-    await this.emit({
-      userId: input.sellerUserId,
-      dedupeKey: `order:${input.orderId}:${input.status}:seller`,
-      kind: 'order',
-      title: 'দোকানের অর্ডার',
-      body: sellerBody,
-      pathname: '/(root)/seller-orders',
-      email: sellerEmail,
-    });
+    if (input.sellerUserId !== input.buyerUserId) {
+      await this.emit({
+        userId: input.sellerUserId,
+        dedupeKey: `order:${input.orderId}:${input.status}:seller`,
+        kind: 'order',
+        title: 'দোকানের অর্ডার',
+        body: sellerBody,
+        pathname: '/(root)/seller-orders',
+      });
+    }
+    await this.emailOrderParties(input.buyerUserId, input.sellerUserId, [
+      {
+        userId: input.buyerUserId,
+        title: 'আপনার অর্ডার',
+        intro: buyerBody,
+        details: typeof buyerEmail === 'object' ? buyerEmail.details : undefined,
+        note: typeof buyerEmail === 'object' ? buyerEmail.note : undefined,
+      },
+      {
+        userId: input.sellerUserId,
+        title: 'দোকানের অর্ডার',
+        intro: sellerBody,
+        details: typeof sellerEmail === 'object' ? sellerEmail.details : undefined,
+        note: typeof sellerEmail === 'object' ? sellerEmail.note : undefined,
+      },
+    ]);
   }
 
   private async syncHeat(userId: string, lat: number, lon: number) {
@@ -459,12 +474,58 @@ export class NotificationsService {
             },
           });
       this.hub.push(draft.userId, this.toDto(row));
-      if (draft.email) void this.emailCopy(draft);
+      if (draft.email) await this.emailCopy(draft);
     } catch (error) {
       this.logger.warn(
         `Notification ${draft.dedupeKey} was not saved: ${error instanceof Error ? error.message : 'unknown'}`,
       );
     }
+  }
+
+  private async emailOrderParties(
+    buyerUserId: string,
+    sellerUserId: string,
+    messages: {
+      userId: string;
+      title: string;
+      intro: string;
+      details?: { label: string; value: string }[];
+      note?: string;
+    }[],
+  ) {
+    const ids = [...new Set(messages.map((message) => message.userId))];
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: ids }, isActive: true },
+      select: { id: true, email: true },
+    });
+    const emailById = new Map(users.map((user) => [user.id, user.email]));
+    await Promise.all(
+      messages.map(async (message) => {
+        const to = emailById.get(message.userId)?.trim();
+        if (!to) {
+          this.logger.warn(`Order email skipped for ${message.userId}: no address`);
+          return;
+        }
+        if (message.userId === sellerUserId && buyerUserId !== sellerUserId) {
+          const buyerAddress = emailById.get(buyerUserId)?.trim().toLowerCase();
+          if (buyerAddress && buyerAddress === to.toLowerCase()) return;
+        }
+        try {
+          await this.mail.send({
+            to,
+            subject: `আরণ্য — ${message.title}`,
+            title: message.title,
+            intro: message.intro,
+            details: message.details,
+            note: message.note,
+          });
+        } catch (error) {
+          this.logger.warn(
+            `Email for ${message.userId} was not sent: ${error instanceof Error ? error.message : 'unknown'}`,
+          );
+        }
+      }),
+    );
   }
 
   private async emailCopy(draft: NotificationDraft) {

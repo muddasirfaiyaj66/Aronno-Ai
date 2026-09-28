@@ -115,14 +115,12 @@ export class PaymentService {
       },
     });
     if (marked.count === 1) {
-      void this.notifications
-        .notifyOrder({
-          buyerUserId: order.buyerUserId,
-          sellerUserId: order.sellerUserId,
-          orderId: order.id,
-          status: 'paid',
-        })
-        .catch(() => undefined);
+      await this.notifications.notifyOrder({
+        buyerUserId: order.buyerUserId,
+        sellerUserId: order.sellerUserId,
+        orderId: order.id,
+        status: 'paid',
+      });
     }
     return { result: 'paid', orderId: order.id };
   }
@@ -139,14 +137,12 @@ export class PaymentService {
       select: { buyerUserId: true, sellerUserId: true },
     });
     if (!order) return;
-    void this.notifications
-      .notifyOrder({
-        buyerUserId: order.buyerUserId,
-        sellerUserId: order.sellerUserId,
-        orderId,
-        status: 'cancelled',
-      })
-      .catch(() => undefined);
+    await this.notifications.notifyOrder({
+      buyerUserId: order.buyerUserId,
+      sellerUserId: order.sellerUserId,
+      orderId,
+      status: 'cancelled',
+    });
   }
 }
 

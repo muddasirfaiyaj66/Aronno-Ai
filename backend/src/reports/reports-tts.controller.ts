@@ -147,14 +147,18 @@ export class ReportsTtsController {
     };
   }
 
-  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  @Throttle({ default: { ttl: 60000, limit: 40 } })
   @Post('tts')
   async speak(@Body(new ZodPipe(ttsSchema)) body: z.infer<typeof ttsSchema>) {
     const text = body.textBn ?? 'আরণ্য থেকে শোনার সুবিধা।';
     const audio = await this.tts.synthesize(text);
     const id = `${Date.now()}`;
     ttsStore.set(id, audio);
-    return { id, audioUrl: `/api/tts/audio/${id}` };
+    return {
+      id,
+      audioUrl: `/api/tts/audio/${id}`,
+      audioBase64: audio.toString('base64'),
+    };
   }
 
   @Public()

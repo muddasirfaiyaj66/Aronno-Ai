@@ -19,9 +19,17 @@ function scoreVoice(v: Speech.Voice): number {
   if (id.includes("neural") || id.includes("wavenet") || id.includes("natural"))
     score += 25;
   if (id.includes("enhanced") || id.includes("premium") || id.includes("hq")) score += 15;
-  if (id.includes("female") || id.includes("woman") || id.includes("samantha")) score += 8;
+  if (
+    id.includes("female") ||
+    id.includes("woman") ||
+    id.includes("nabanita") ||
+    id.includes("tanishaa")
+  )
+    score += 60;
+  if (id.includes("male") || id.includes("pradeep") || id.includes("bashkar"))
+    score -= 40;
   if (id.includes("local") || id.includes("offline")) score += 5;
-  if (id.includes("network") || id.includes("online")) score -= 3;
+  if (id.includes("network") || id.includes("online")) score += 12;
   if (v.quality === VoiceQuality.Enhanced) score += 20;
   return score;
 }
@@ -165,8 +173,8 @@ function speakOnce(
     Speech.speak(text, {
       language,
       voice,
-      rate: 1,
-      pitch: 1,
+      rate: 0.92,
+      pitch: 1.06,
       onDone: () => resolve(),
       onStopped: () => resolve(),
       onError: (err) => reject(err instanceof Error ? err : new Error("tts")),

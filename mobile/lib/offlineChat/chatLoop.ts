@@ -175,11 +175,17 @@ export async function runLlmTurn(
 
   if (online) {
     onStatus?.("ক্লাউড জেমা উত্তর দিচ্ছে…");
-    const market = await marketFacts(cleaned).catch(() => [] as string[]);
+    const [market, appFacts] = await Promise.all([
+      marketFacts(cleaned).catch(() => [] as string[]),
+      import("@/lib/offlineChat/appRag").then((mod) =>
+        mod.gatherAppFacts().catch(() => [] as string[]),
+      ),
+    ]);
     const cloud = await cloudReply(cleaned, earlierTurns, [
       ...liveLines,
       ...knowledge,
       ...market,
+      ...appFacts,
     ]).catch(() => "");
     const cloudText = preferGrounded(
       cleaned,
@@ -191,9 +197,17 @@ export async function runLlmTurn(
       end("cloud");
       return cloudText;
     }
+    const spoken =
+      directLiveAnswer(cleaned, live) ||
+      socialFallback(cleaned) ||
+      spokenFromFacts([...knowledge, ...appFacts]) ||
+      "এই মুহূর্তে ক্লাউড সহকারী উত্তর দিতে পারেনি। একটু পরে আবার বলুন।";
+    emitAll(spoken, onTextChunk, shouldContinue);
+    end("cloud-miss");
+    return spoken;
   }
 
-  // Offline Gemma when the cloud model is unavailable.
+  // On-device Gemma only when the phone is offline.
   if (!isLlmReady()) {
     onStatus?.("জেমা মডেল লোড হচ্ছে… একটু অপেক্ষা করুন");
     const loaded = await ensureLlmLoaded().catch(() => null);
@@ -301,7 +315,7 @@ async function marketFacts(text: string): Promise<string[]> {
 function socialFallback(text: string): string | null {
   const t = text.trim();
   if (/^(?:hi|hai|hello|hey|হ্যালো|নমস্কার|হাই)[\s!?.]*$/i.test(t)) {
-    return "নমস্কার। ফসল, রোগ, সার বা আবহাওয়া — কী জানতে চান?";
+    return "হ্যালো। ফসল, রোগ, সার বা আবহাওয়া — কী জানতে চান?";
   }
   if (/obosta|অবস্থা|কেমন\s*আছ/i.test(t) && t.length < 40) {
     return "ভালো আছি। আপনার ফসলে কোনো সমস্যা দেখা দিয়েছে?";

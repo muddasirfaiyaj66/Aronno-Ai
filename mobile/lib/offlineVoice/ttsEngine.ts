@@ -284,6 +284,11 @@ export async function speakOffline(
   }
   const end = markStart("tts.speak");
 
+  if (await speakWithCloudFemale(prepared, handlers)) {
+    end("cloud-female");
+    return;
+  }
+
   if (!sherpaReady && !sherpaDisabled) {
     await initTTS();
   }
@@ -304,6 +309,58 @@ export async function speakOffline(
     end("error");
     handlers?.onError?.();
     throw err;
+  }
+}
+
+function bytesFromBase64(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/** Online replies use Gemini's female Bangla voice. Offline stays on the phone. */
+async function speakWithCloudFemale(
+  text: string,
+  handlers?: {
+    onDone?: () => void;
+    onStopped?: () => void;
+    onError?: () => void;
+  },
+): Promise<boolean> {
+  const { fetchIsOnline } = await import("@/hooks/useIsOnline");
+  if (!(await fetchIsOnline())) return false;
+  const gen = speakGen;
+  try {
+    const { api } = await import("@/services/api");
+    const { store } = await import("@/store");
+    const { File, Paths } = await import("expo-file-system");
+    const result = await Promise.race([
+      store
+        .dispatch(
+          api.endpoints.speak.initiate({ textBn: text.slice(0, 700) }),
+        )
+        .unwrap(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 14000)),
+    ]);
+    const audio = result?.audioBase64;
+    if (!audio || audio.length < 80 || gen !== speakGen) return false;
+    const file = new File(Paths.cache, `aronno-voice-${gen}.wav`);
+    if (file.exists) file.delete();
+    file.create();
+    file.write(bytesFromBase64(audio));
+    await enablePlaybackAudio();
+    await playFile(file.uri, gen);
+    file.delete();
+    if (gen !== speakGen) {
+      handlers?.onStopped?.();
+      return true;
+    }
+    await stopPlayingSound();
+    handlers?.onDone?.();
+    return true;
+  } catch {
+    return false;
   }
 }
 

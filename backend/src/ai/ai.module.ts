@@ -8,7 +8,8 @@ import {
   AI_VISION,
   COST_ESTIMATE,
 } from './ai.tokens';
-import { MockCostAdapter, MockTtsAdapter } from './mock.adapters';
+import { MockCostAdapter } from './mock.adapters';
+import { GeminiTtsAdapter } from './gemini-tts.adapter';
 import { GeminiClient } from './gemini.client';
 import {
   GeminiReceiptAdapter,
@@ -28,7 +29,7 @@ import { RulesFertilizerAdapter } from '../fertilizer/fertilizer.rules';
     { provide: AI_TOOLS, useClass: GeminiToolsAdapter },
     { provide: AI_RECEIPT, useClass: GeminiReceiptAdapter },
     { provide: AI_FERTILIZER, useClass: RulesFertilizerAdapter },
-    { provide: AI_TTS, useClass: MockTtsAdapter },
+    { provide: AI_TTS, useClass: GeminiTtsAdapter },
     { provide: COST_ESTIMATE, useClass: MockCostAdapter },
   ],
   exports: [

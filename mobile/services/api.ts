@@ -435,7 +435,10 @@ export const api = createApi({
       query: (id) => ({ url: `/reports/${id}/pdf`, method: "POST" }),
       transformResponse: (r) => unwrap(r),
     }),
-    speak: builder.mutation<{ id: string; audioUrl: string }, { textBn: string }>({
+    speak: builder.mutation<
+      { id: string; audioUrl: string; audioBase64?: string },
+      { textBn: string }
+    >({
       query: (body) => ({ url: "/tts", method: "POST", body }),
       transformResponse: (r) => unwrap(r),
     }),

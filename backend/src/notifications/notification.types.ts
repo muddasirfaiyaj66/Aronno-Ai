@@ -1,4 +1,4 @@
-export const NOTIFICATION_KINDS = ['heat', 'weather', 'scan', 'order', 'admin'] as const;
+export const NOTIFICATION_KINDS = ['heat', 'weather', 'scan', 'order', 'admin', 'consult'] as const;
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
@@ -102,7 +103,9 @@ export default function AdminUsersPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-semibold text-ink">Users</h1>
-        <p className="mt-1 text-muted">Accounts, roles, and whether someone can sign in.</p>
+        <p className="mt-1 text-muted">
+          Accounts and roles. Specialist approval happens after the certificate and NID are reviewed.
+        </p>
       </div>
 
       <div className="panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
@@ -220,6 +223,18 @@ export default function AdminUsersPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
+                    {u.profession?.slug === "agronomist" ||
+                    u.profession?.slug === "extension_officer" ? (
+                      <Link href="/admin/specialists" className="btn btn-ghost !min-h-9 !px-3 text-xs">
+                        {u.specialistReviewStatus === "approved"
+                          ? "Approved"
+                          : u.specialistReviewStatus === "pending"
+                            ? "Review docs"
+                            : u.specialistReviewStatus === "rejected"
+                              ? "Rejected"
+                              : "No documents"}
+                      </Link>
+                    ) : null}
                     <button
                       type="button"
                       disabled={locked || busyId === u.id || u.id === me?.id}

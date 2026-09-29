@@ -6,7 +6,7 @@ export const COOKIE = {
 
 export const COOKIE_PATH = '/api';
 
-export const ACCESS_TTL_SECONDS = 15 * 60;
+export const ACCESS_TTL_SECONDS = 2 * 60 * 60;
 export const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export const LOCKOUT_THRESHOLD = 5;
@@ -31,3 +31,9 @@ export const PUBLIC_MUTATIONS = new Set([
   '/marketplace/payments/sslcommerz/cancel',
   '/marketplace/payments/sslcommerz/ipn',
 ]);
+
+/** Call-service routes include a consult id, so they cannot be listed one by one. */
+export function isServiceMutation(path: string) {
+  if (PUBLIC_MUTATIONS.has(path)) return true;
+  return path.startsWith('/api/internal/') || path.startsWith('/internal/');
+}

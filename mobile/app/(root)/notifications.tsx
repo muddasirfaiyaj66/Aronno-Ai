@@ -23,6 +23,7 @@ const ICON: Record<NotificationKind, keyof typeof Ionicons.glyphMap> = {
   scan: "leaf-outline",
   order: "bag-handle-outline",
   admin: "megaphone-outline",
+  consult: "videocam-outline",
 };
 
 export default function NotificationsScreen() {

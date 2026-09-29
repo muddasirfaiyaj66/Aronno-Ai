@@ -14,6 +14,7 @@ import {
   createAdminSchema,
   patchActiveSchema,
   patchRoleSchema,
+  specialistReviewSchema,
 } from '../auth/auth.dto';
 import type { AuthUser } from '../auth/auth.types';
 import { AdminService } from './admin.service';
@@ -182,6 +183,16 @@ export class AdminController {
     body: ReturnType<typeof patchRoleSchema.parse>,
   ) {
     return this.admin.patchRole(actor, id, body.roleSlug);
+  }
+
+  @Patch('users/:id/specialist')
+  patchSpecialist(
+    @CurrentUser() actor: AuthUser,
+    @Param('id') id: string,
+    @Body(new ZodPipe(specialistReviewSchema))
+    body: ReturnType<typeof specialistReviewSchema.parse>,
+  ) {
+    return this.admin.reviewSpecialist(actor, id, body.decision, body.note);
   }
 
   @Patch('users/:id/active')

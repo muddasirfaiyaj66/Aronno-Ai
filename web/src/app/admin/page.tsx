@@ -88,6 +88,7 @@ export default function AdminOverviewPage() {
           { href: "/admin/users", label: "Blocked accounts", value: data.users.inactive },
           { href: "/admin/users", label: "Unverified email", value: data.users.unverified },
           { href: "/admin/market", label: "Hidden shops", value: data.shops.total - data.shops.active },
+          { href: "/admin/specialists", label: "Specialist reviews", value: data.specialists?.pending ?? 0 },
           { href: "/admin/reports", label: "Open reports", value: data.reportsOpen },
         ].map((item) => (
           <Link key={item.label} href={item.href} className="panel flex items-center justify-between px-4 py-3">
@@ -95,6 +96,36 @@ export default function AdminOverviewPage() {
             <span className="text-xl font-semibold text-ink">{item.value}</span>
           </Link>
         ))}
+      </section>
+
+      <section className="panel overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
+          <div>
+            <h2 className="text-sm font-semibold tracking-wide text-muted uppercase">Specialist reviews</h2>
+            <p className="mt-1 text-sm text-muted">
+              {data.specialists?.approved ?? 0} approved. Certificate and NID must be checked before approval.
+            </p>
+          </div>
+          <Link href="/admin/specialists" className="btn btn-primary !min-h-10 text-sm">
+            Review documents
+          </Link>
+        </div>
+        <ul className="divide-y divide-border">
+          {(data.pendingSpecialists ?? []).map((row) => (
+            <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+              <div>
+                <p className="font-semibold text-ink">{row.displayName}</p>
+                <p className="text-sm text-muted">{row.profession} · {row.email}</p>
+              </div>
+              <Link href="/admin/specialists" className="text-sm font-semibold text-forest hover:underline">
+                Open
+              </Link>
+            </li>
+          ))}
+          {(data.pendingSpecialists ?? []).length === 0 ? (
+            <li className="px-5 py-8 text-center text-muted">No certificates waiting.</li>
+          ) : null}
+        </ul>
       </section>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

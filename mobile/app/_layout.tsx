@@ -14,6 +14,7 @@ import {
 } from "@expo-google-fonts/noto-sans-bengali";
 import { OfflineBanner } from "@/components/ui";
 import { NotificationSync } from "@/components/NotificationSync";
+import { SpecialistPresence } from "@/components/SpecialistPresence";
 import { OfflineAiBootstrap } from "@/components/OfflineAiBootstrap";
 import { LocaleProvider } from "@/context/locale";
 import { ThemeProvider, useTheme } from "@/context/theme";
@@ -58,6 +59,7 @@ export default function RootLayout() {
             <SessionHydrator />
             <OfflineAiBootstrap />
             <NotificationSync />
+            <SpecialistPresence />
             <ThemedStatusBar />
             <OfflineBanner />
             <Stack

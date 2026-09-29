@@ -5,6 +5,7 @@ import { AuthService } from '../auth/auth.service';
 import { PasswordService } from '../auth/password.service';
 import { Errors } from '../common/errors';
 import type { AuthUser } from '../auth/auth.types';
+import { NotificationsService } from '../notifications/notifications.service';
 
 type UserWithLookups = Prisma.UserGetPayload<{
   include: { role: true; profession: true; district: true };
@@ -16,6 +17,7 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly auth: AuthService,
     private readonly passwords: PasswordService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async createAdmin(
@@ -120,6 +122,71 @@ export class AdminService {
         target: userId,
         metadata: { isActive },
       },
+    });
+    return this.auth.me(userId);
+  }
+
+  async reviewSpecialist(
+    actor: AuthUser,
+    userId: string,
+    decision: 'approve' | 'reject',
+    note?: string,
+  ) {
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: true, profession: true },
+    });
+    if (!target) throw Errors.notFound();
+    if (target.role.slug === 'SUPERADMIN' && actor.role !== 'SUPERADMIN') {
+      throw Errors.forbidden();
+    }
+    const slug = target.profession?.slug;
+    if (slug !== 'agronomist' && slug !== 'extension_officer') {
+      throw Errors.validation(
+        { professionSlug: slug ?? null },
+        'কৃষিবিদ বা সম্প্রসারণ কর্মকর্তা ছাড়া বিশেষজ্ঞ অনুমোদন হয় না।',
+      );
+    }
+    if (!target.specialistCertificateUrl || !target.specialistNidUrl) {
+      throw Errors.validation(
+        { documents: 'missing' },
+        'সনদ ও এনআইডি ছবি ছাড়া অনুমোদন হয় না।',
+      );
+    }
+    if (decision === 'reject' && !note) {
+      throw Errors.validation(
+        { note: 'required' },
+        'বাতিলের কারণ লিখুন।',
+      );
+    }
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        specialistApproved: decision === 'approve',
+        specialistReviewStatus: decision === 'approve' ? 'approved' : 'rejected',
+        specialistReviewNote: decision === 'approve' ? null : note,
+      },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: actor.id,
+        action: 'USER_SPECIALIST_CHANGE',
+        target: userId,
+        metadata: { decision, note: note ?? null },
+      },
+    });
+    const approved = decision === 'approve';
+    void this.notifications.send({
+      userId,
+      dedupeKey: `specialist-review:${decision}:${Date.now()}`,
+      kind: 'consult',
+      title: approved ? 'বিশেষজ্ঞ অনুমোদন হয়েছে' : 'বিশেষজ্ঞ অনুমোদন হয়নি',
+      body: approved
+        ? 'অ্যাপে থাকলে কৃষকরা আপনাকে অনলাইনে দেখবে। কলের অনুরোধ এলে পপআপ আসবে।'
+        : note || 'সনদ বা এনআইডি আবার জমা দিন।',
+      pathname: '/(root)/consult',
+      priority: 'important',
+      popup: true,
     });
     return this.auth.me(userId);
   }

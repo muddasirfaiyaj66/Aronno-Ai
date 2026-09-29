@@ -3,7 +3,7 @@ import { API_URL } from "@/services/api";
 import { getCookie, getCookieHeader, ingestCookies } from "@/services/cookieJar";
 import { upsertFromServer, type AppNotification, type NotificationKind } from "@/lib/notifications/inbox";
 
-const KINDS = new Set<NotificationKind>(["heat", "weather", "scan", "order", "admin"]);
+const KINDS = new Set<NotificationKind>(["heat", "weather", "scan", "order", "admin", "consult"]);
 
 type SocketCtor = new (
   url: string,

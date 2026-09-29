@@ -158,12 +158,9 @@ function SideTab({
     >
       <View
         style={{
-          height: 32,
-          minWidth: 52,
-          borderRadius: 16,
+          height: 28,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: focused ? colors.secondary : "transparent",
         }}
       >
         <Ionicons

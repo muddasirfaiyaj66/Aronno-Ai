@@ -110,6 +110,26 @@ export const patchMeSchema = z
   })
   .strict();
 
+const httpsImage = z
+  .string()
+  .url()
+  .max(800)
+  .refine((value) => value.startsWith('https://'), 'ছবির লিংক সঠিক নয়।');
+
+export const specialistDocsSchema = z
+  .object({
+    certificateUrl: httpsImage,
+    nidUrl: httpsImage,
+  })
+  .strict();
+
+export const specialistReviewSchema = z
+  .object({
+    decision: z.enum(['approve', 'reject']),
+    note: z.string().trim().min(4).max(400).optional(),
+  })
+  .strict();
+
 export const createAdminSchema = z
   .object({
     email: emailSchema,

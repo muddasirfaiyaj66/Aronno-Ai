@@ -44,6 +44,7 @@ import { validateBdPhoneBn } from "@/lib/authValidation";
 import { matchDistrictSlug, useFarmLocation } from "@/hooks/useFarmLocation";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { uploadImageToCloudinary } from "@/services/cloudinary";
+import { SpecialistVerification } from "@/components/profile/SpecialistVerification";
 import { deviceLabel } from "@/lib/deviceLabel";
 import { formatPriceBn } from "@/utils/marketFormatters";
 import * as ImagePicker from "expo-image-picker";
@@ -600,6 +601,11 @@ export default function ProfileScreen() {
                 setSaved(false);
               }}
             />
+            {professionSlug === "agronomist" || professionSlug === "extension_officer" ? (
+              <AppText variant="caption">
+                সংরক্ষণের পর সনদ ও এনআইডির ছবি জমা দিতে হবে। অ্যাডমিন অনুমোদন করলে বিশেষজ্ঞ সারি খুলবে।
+              </AppText>
+            ) : null}
           </FormSection>
 
           <FormSection title="জেলা">
@@ -784,6 +790,22 @@ export default function ProfileScreen() {
                 onChange={setPreference}
               />
             </View>
+          </SettingsGroup>
+
+          {me &&
+          (me.profession?.slug === "agronomist" ||
+            me.profession?.slug === "extension_officer") ? (
+            <SpecialistVerification me={me} />
+          ) : null}
+
+          <SettingsGroup title="কৃষি পরামর্শ">
+            <SettingsRow
+              label="বিশেষজ্ঞের সাথে কথা"
+              subtitle="ভিডিও কল, ওষুধ ও পিডিএফ"
+              icon="videocam-outline"
+              last
+              onPress={() => router.push("/(root)/consult" as never)}
+            />
           </SettingsGroup>
 
           <SettingsGroup

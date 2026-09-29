@@ -1,0 +1,8 @@
+{$CALL_HOST} {
+	handle /v1/* {
+		reverse_proxy 127.0.0.1:4000
+	}
+	handle {
+		reverse_proxy 127.0.0.1:7880
+	}
+}

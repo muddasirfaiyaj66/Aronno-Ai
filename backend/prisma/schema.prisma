@@ -74,7 +74,15 @@ model User {
   roleId           String    @db.ObjectId
   professionId     String?   @db.ObjectId
   districtId       String?   @db.ObjectId
-  isActive         Boolean   @default(true)
+  isActive                 Boolean                 @default(true)
+  specialistApproved       Boolean                 @default(false)
+  specialistCertificateUrl String?
+  specialistNidUrl         String?
+  specialistReviewStatus   SpecialistReviewStatus  @default(none)
+  specialistReviewNote     String?
+  specialistSubmittedAt    DateTime?
+  specialistOnline         Boolean   @default(false)
+  specialistLastSeenAt     DateTime?
   emailVerifiedAt  DateTime?
   failedLoginCount Int       @default(0)
   lockedUntil      DateTime?
@@ -108,6 +116,8 @@ model User {
   buyerOrders       Order[]           @relation("BuyerOrders")
   reviews           Review[]
   notifications     Notification[]
+  farmerConsults    Consult[]    @relation("FarmerConsults")
+  specialistConsults Consult[]   @relation("SpecialistConsults")
 
   @@index([googleSub])
 }
@@ -142,6 +152,13 @@ model RefreshToken {
 enum EmailTokenPurpose {
   verification
   password_reset
+}
+
+enum SpecialistReviewStatus {
+  none
+  pending
+  approved
+  rejected
 }
 
 model EmailToken {
@@ -208,6 +225,7 @@ model Diagnosis {
   district       District?       @relation(fields: [districtId], references: [id])
   treatmentPlan  TreatmentPlan?
   reports        Report[]
+  consults       Consult[]
 
   @@index([clientLocalId])
   @@index([createdAt, districtId])
@@ -847,4 +865,47 @@ model Review {
   @@unique([orderId, productId])
   @@index([productId])
   @@index([userId])
+}
+
+enum ConsultStatus {
+  requested
+  accepted
+  ringing
+  in_call
+  ended
+  completed
+  cancelled
+}
+
+model Consult {
+  id           String        @id @default(auto()) @map("_id") @db.ObjectId
+  farmerId     String        @db.ObjectId
+  specialistId String?       @db.ObjectId
+  diagnosisId  String?       @db.ObjectId
+  status       ConsultStatus @default(requested)
+  problemText  String
+  acceptedAt   DateTime?
+  endedAt      DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  farmer     User           @relation("FarmerConsults", fields: [farmerId], references: [id])
+  specialist User?          @relation("SpecialistConsults", fields: [specialistId], references: [id])
+  diagnosis  Diagnosis?     @relation(fields: [diagnosisId], references: [id])
+  advice     ConsultAdvice?
+
+  @@index([farmerId, createdAt])
+  @@index([specialistId])
+  @@index([status, createdAt])
+}
+
+model ConsultAdvice {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  consultId String   @unique @db.ObjectId
+  summaryBn String
+  steps     String
+  medicines Json
+  createdAt DateTime @default(now())
+
+  consult Consult @relation(fields: [consultId], references: [id])
 }

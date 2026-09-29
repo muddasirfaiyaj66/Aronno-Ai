@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Patch } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ZodPipe } from '../common/pipes/zod.pipe';
-import { patchMeSchema } from '../auth/auth.dto';
+import { patchMeSchema, specialistDocsSchema } from '../auth/auth.dto';
 import type { AuthUser } from '../auth/auth.types';
 import { UsersService } from './users.service';
 
@@ -21,5 +21,14 @@ export class UsersController {
     body: ReturnType<typeof patchMeSchema.parse>,
   ) {
     return this.users.patchMe(user.id, body);
+  }
+
+  @Post('me/specialist-docs')
+  submitSpecialistDocs(
+    @CurrentUser() user: AuthUser,
+    @Body(new ZodPipe(specialistDocsSchema))
+    body: ReturnType<typeof specialistDocsSchema.parse>,
+  ) {
+    return this.users.submitSpecialistDocs(user.id, body);
   }
 }

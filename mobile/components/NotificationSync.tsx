@@ -14,7 +14,7 @@ import {
 } from "@/services/api";
 import { AdminNotice } from "@/components/AdminNotice";
 
-const KINDS = new Set<AppNotification["kind"]>(["heat", "weather", "scan", "order", "admin"]);
+const KINDS = new Set<AppNotification["kind"]>(["heat", "weather", "scan", "order", "admin", "consult"]);
 
 function asList(value: unknown): AppNotification[] {
   if (!Array.isArray(value)) return [];

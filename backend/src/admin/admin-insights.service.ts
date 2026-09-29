@@ -20,7 +20,7 @@ export class AdminInsightsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async overview() {
-    const [userRows, diagnosisCount, shopCount, activeShopCount, productCount, activeProductCount, orders, openReports] =
+    const [userRows, diagnosisCount, shopCount, activeShopCount, productCount, activeProductCount, orders, openReports, pendingSpecialistCount, pendingSpecialists, approvedSpecialists] =
       await Promise.all([
         this.prisma.user.findMany({
           take: 2000,
@@ -54,6 +54,20 @@ export class AdminInsightsService {
           },
         }),
         this.prisma.sellerReport.count({ where: { status: 'open' } }),
+        this.prisma.user.count({ where: { specialistReviewStatus: 'pending' } }),
+        this.prisma.user.findMany({
+          where: { specialistReviewStatus: 'pending' },
+          orderBy: { specialistSubmittedAt: 'desc' },
+          take: 6,
+          select: {
+            id: true,
+            displayName: true,
+            email: true,
+            specialistSubmittedAt: true,
+            profession: { select: { nameEn: true, slug: true } },
+          },
+        }),
+        this.prisma.user.count({ where: { specialistApproved: true } }),
       ]);
 
     const roleMap = new Map<string, number>();
@@ -108,6 +122,17 @@ export class AdminInsightsService {
         byStatus,
       },
       reportsOpen: openReports,
+      specialists: {
+        pending: pendingSpecialistCount,
+        approved: approvedSpecialists,
+      },
+      pendingSpecialists: pendingSpecialists.map((row) => ({
+        id: row.id,
+        displayName: row.displayName,
+        email: row.email,
+        profession: row.profession?.nameEn ?? 'Specialist',
+        submittedAt: row.specialistSubmittedAt?.toISOString() ?? null,
+      })),
       roleBreakdown: [...roleMap.entries()].map(([name, value]) => ({ name, value })),
       topDistricts: [...districtMap.entries()]
         .map(([name, value]) => ({ name, value }))

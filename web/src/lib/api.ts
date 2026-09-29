@@ -113,6 +113,14 @@ export type AdminOverview = {
   products: { total: number; active: number };
   orders: { total: number; revenue: number; byStatus: Record<string, number> };
   reportsOpen: number;
+  specialists: { pending: number; approved: number };
+  pendingSpecialists: {
+    id: string;
+    displayName: string;
+    email: string;
+    profession: string;
+    submittedAt: string | null;
+  }[];
   roleBreakdown: { name: string; value: number }[];
   topDistricts: { name: string; value: number }[];
   weeklySignups: { label: string; count: number; revenue: number }[];
@@ -254,6 +262,17 @@ export async function resolvePayout(id: string, action: "paid" | "rejected") {
   return apiFetch<{ id: string; status: string }>(`/api/admin/payouts/${id}`, {
     method: "POST",
     body: JSON.stringify({ action }),
+  });
+}
+
+export async function reviewSpecialist(
+  id: string,
+  decision: "approve" | "reject",
+  note?: string,
+) {
+  return apiFetch<AuthUser>(`/api/admin/users/${id}/specialist`, {
+    method: "PATCH",
+    body: JSON.stringify({ decision, note }),
   });
 }
 

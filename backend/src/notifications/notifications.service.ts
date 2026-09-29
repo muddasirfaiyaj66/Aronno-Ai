@@ -439,6 +439,10 @@ export class NotificationsService {
     return heat.areas;
   }
 
+  send(draft: NotificationDraft) {
+    return this.emit(draft);
+  }
+
   private async emit(draft: NotificationDraft) {
     try {
       const existing = await this.prisma.notification.findUnique({

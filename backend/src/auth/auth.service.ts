@@ -32,6 +32,12 @@ export type UserDto = {
   role: { slug: string; nameBn: string; nameEn: string };
   profession: { slug: string; nameBn: string; nameEn: string } | null;
   district: { slug: string; nameBn: string } | null;
+  specialistApproved: boolean;
+  specialistReviewStatus: 'none' | 'pending' | 'approved' | 'rejected';
+  specialistCertificateUrl: string | null;
+  specialistNidUrl: string | null;
+  specialistReviewNote: string | null;
+  specialistSubmittedAt: string | null;
 };
 
 function labelFromAgent(userAgent?: string | null) {
@@ -92,6 +98,12 @@ export class AuthService {
     profession: { slug: string; nameBn: string; nameEn: string } | null;
     district: { slug: string; nameBn: string } | null;
     avatarUrl: string | null;
+    specialistApproved: boolean;
+    specialistReviewStatus: 'none' | 'pending' | 'approved' | 'rejected';
+    specialistCertificateUrl: string | null;
+    specialistNidUrl: string | null;
+    specialistReviewNote: string | null;
+    specialistSubmittedAt: Date | null;
   }): UserDto {
     return {
       id: user.id,
@@ -117,6 +129,12 @@ export class AuthService {
       district: user.district
         ? { slug: user.district.slug, nameBn: user.district.nameBn }
         : null,
+      specialistApproved: user.specialistApproved,
+      specialistReviewStatus: user.specialistReviewStatus,
+      specialistCertificateUrl: user.specialistCertificateUrl,
+      specialistNidUrl: user.specialistNidUrl,
+      specialistReviewNote: user.specialistReviewNote,
+      specialistSubmittedAt: user.specialistSubmittedAt?.toISOString() ?? null,
     };
   }
 

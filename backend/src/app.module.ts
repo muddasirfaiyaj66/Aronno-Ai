@@ -32,6 +32,7 @@ import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor'
 import { WeatherModule } from './weather/weather.module';
 import { SyncModule } from './sync/sync.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ConsultModule } from './consult/consult.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     WeatherModule,
     SyncModule,
     NotificationsModule,
+    ConsultModule,
   ],
   controllers: [AppController],
   providers: [

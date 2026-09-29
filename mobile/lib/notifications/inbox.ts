@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 
 const KEY = "aronno.notifications";
 
-export type NotificationKind = "heat" | "weather" | "scan" | "order" | "admin";
+export type NotificationKind = "heat" | "weather" | "scan" | "order" | "admin" | "consult";
 
 export type NotificationPriority = "normal" | "important" | "emergency";
 

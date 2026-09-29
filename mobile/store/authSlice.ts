@@ -11,6 +11,11 @@ export type AuthUser = {
   profession: { slug: string; nameBn: string; nameEn: string } | null;
   district: { slug: string; nameBn: string } | null;
   avatarUrl: string | null;
+  specialistApproved?: boolean;
+  specialistReviewStatus?: "none" | "pending" | "approved" | "rejected";
+  specialistCertificateUrl?: string | null;
+  specialistNidUrl?: string | null;
+  specialistReviewNote?: string | null;
 };
 
 type AuthState = {

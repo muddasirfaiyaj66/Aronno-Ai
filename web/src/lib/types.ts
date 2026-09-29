@@ -12,6 +12,12 @@ export type AuthUser = {
   role: { slug: UserRole; nameBn: string; nameEn: string };
   profession: { slug: string; nameBn: string; nameEn: string } | null;
   district: { slug: string; nameBn: string } | null;
+  specialistApproved?: boolean;
+  specialistReviewStatus?: "none" | "pending" | "approved" | "rejected";
+  specialistCertificateUrl?: string | null;
+  specialistNidUrl?: string | null;
+  specialistReviewNote?: string | null;
+  specialistSubmittedAt?: string | null;
 };
 
 export type ApiErrorBody = {

@@ -159,6 +159,15 @@ export default function HomeScreen() {
             <EssentialServicesGrid
               items={[
                 {
+                  id: "consult",
+                  title: t("বিশেষজ্ঞ", "Specialist"),
+                  subtitle: t("ভিডিও কল ও পরামর্শ", "Video call and advice"),
+                  icon: "videocam-outline",
+                  accent: "#E7F5F2",
+                  iconColor: "#0F766E",
+                  onPress: () => router.push("/(root)/consult" as never),
+                },
+                {
                   id: "fertilizer",
                   title: t("সার", "Fertilizer"),
                   subtitle: t("জমির তথ্য দিয়ে পরামর্শ", "Advice from field details"),

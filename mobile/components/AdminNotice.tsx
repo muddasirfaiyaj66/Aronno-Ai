@@ -1,5 +1,6 @@
 import { Modal, Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter, type Href } from "expo-router";
 import { AppText } from "@/components/ui/AppText";
 import { useColors } from "@/context/theme";
 import { dismissNotification, useInbox, type AppNotification } from "@/lib/notifications/inbox";
@@ -19,6 +20,7 @@ function nextNotice(items: AppNotification[]) {
 
 export function AdminNotice() {
   const colors = useColors();
+  const router = useRouter();
   const { items } = useInbox();
   const [dismiss] = useDismissNotificationMutation();
   const notice = nextNotice(items);
@@ -33,6 +35,12 @@ export function AdminNotice() {
   const close = () => {
     dismissNotification(notice.id);
     void dismiss(notice.id);
+  };
+
+  const open = () => {
+    const path = notice.pathname;
+    close();
+    if (path) router.push(path as Href);
   };
 
   return (
@@ -89,7 +97,7 @@ export function AdminNotice() {
               {notice.body}
             </AppText>
             <Pressable
-              onPress={close}
+              onPress={notice.pathname ? open : close}
               accessibilityRole="button"
               style={{
                 marginTop: 18,
@@ -100,7 +108,7 @@ export function AdminNotice() {
               }}
             >
               <AppText variant="body" style={{ color: "#FFFFFF" }}>
-                বুঝেছি
+                {notice.pathname ? "দেখুন" : "বুঝেছি"}
               </AppText>
             </Pressable>
           </View>

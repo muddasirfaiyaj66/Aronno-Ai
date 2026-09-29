@@ -24,6 +24,7 @@ import type { CropPlan } from "@/types/planning";
 import type { HeatmapResponse, MarketListing, MarketPriceEntry, ShopData } from "@/types/market";
 import type { CurrentWeather } from "@/types/weather";
 import type { AppNotification } from "@/lib/notifications/inbox";
+import type { ConsultItem, ConsultList, ConsultMedicine, SpecialistCard } from "@/types/consult";
 
 export const API_URL =
   process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000/api";
@@ -169,6 +170,7 @@ export const api = createApi({
     "Wallet",
     "Session",
     "Notification",
+    "Consult",
   ],
   endpoints: (builder) => ({
     getProfessions: builder.query<{ slug: string; nameBn: string; nameEn: string }[], void>({
@@ -284,6 +286,22 @@ export const api = createApi({
       { displayName?: string; phone?: string; professionSlug?: string; districtSlug?: string; avatarUrl?: string }
     >({
       query: (body) => ({ url: "/users/me", method: "PATCH", body }),
+      transformResponse: (r) => unwrap<AuthUser>(r),
+      invalidatesTags: ["User", "Auth"],
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(setUser(data));
+        } catch {
+          // keep previous profile
+        }
+      },
+    }),
+    submitSpecialistDocs: builder.mutation<
+      AuthUser,
+      { certificateUrl: string; nidUrl: string }
+    >({
+      query: (body) => ({ url: "/users/me/specialist-docs", method: "POST", body }),
       transformResponse: (r) => unwrap<AuthUser>(r),
       invalidatesTags: ["User", "Auth"],
       async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
@@ -992,6 +1010,60 @@ export const api = createApi({
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Notification"],
     }),
+    listSpecialists: builder.query<SpecialistCard[], void>({
+      query: () => "/consults/specialists",
+      transformResponse: (r) => unwrap<SpecialistCard[]>(r),
+      providesTags: ["Consult"],
+    }),
+    setConsultPresence: builder.mutation<{ online: boolean }, { online: boolean }>({
+      query: (body) => ({ url: "/consults/presence", method: "POST", body }),
+      transformResponse: (r) => unwrap<{ online: boolean }>(r),
+    }),
+    listConsults: builder.query<ConsultList, void>({
+      query: () => "/consults",
+      transformResponse: (r) => unwrap(r),
+      providesTags: ["Consult"],
+    }),
+    getConsult: builder.query<ConsultItem, string>({
+      query: (id) => `/consults/${id}`,
+      transformResponse: (r) => unwrap(r),
+      providesTags: (_r, _e, id) => [{ type: "Consult", id }],
+    }),
+    createConsult: builder.mutation<
+      ConsultItem,
+      { specialistId: string; problemText: string; diagnosisId?: string }
+    >({
+      query: (body) => ({ url: "/consults", method: "POST", body }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Consult"],
+    }),
+    ringConsult: builder.mutation<ConsultItem & { videoReady?: boolean }, string>({
+      query: (id) => ({ url: `/consults/${id}/ring`, method: "POST" }),
+      transformResponse: (r) => unwrap<ConsultItem & { videoReady?: boolean }>(r),
+      invalidatesTags: ["Consult"],
+    }),
+    acceptConsult: builder.mutation<ConsultItem & { videoReady?: boolean }, string>({
+      query: (id) => ({ url: `/consults/${id}/accept`, method: "POST" }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Consult"],
+    }),
+    cancelConsult: builder.mutation<ConsultItem, string>({
+      query: (id) => ({ url: `/consults/${id}/cancel`, method: "POST" }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Consult"],
+    }),
+    saveConsultAdvice: builder.mutation<
+      ConsultItem,
+      { id: string; summaryBn: string; steps: string; medicines: ConsultMedicine[] }
+    >({
+      query: ({ id, ...body }) => ({ url: `/consults/${id}/advice`, method: "PUT", body }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Consult"],
+    }),
+    consultPdf: builder.mutation<{ filename: string; pdfBase64: string }, string>({
+      query: (id) => ({ url: `/consults/${id}/pdf`, method: "POST" }),
+      transformResponse: (r) => unwrap(r),
+    }),
     createReview: builder.mutation<
       any,
       { orderId: string; productId: string; rating: number; comment?: string }
@@ -1022,6 +1094,7 @@ export const {
   useGetSessionsQuery,
   useRevokeSessionMutation,
   usePatchMeMutation,
+  useSubmitSpecialistDocsMutation,
   useCreatePhotoDiagnosisMutation,
   useTranscribeMutation,
   useCreateVoiceDiagnosisMutation,
@@ -1088,4 +1161,14 @@ export const {
   useDismissNotificationMutation,
   useMarkNotificationReadMutation,
   useMarkAllNotificationsReadMutation,
+  useListSpecialistsQuery,
+  useSetConsultPresenceMutation,
+  useListConsultsQuery,
+  useGetConsultQuery,
+  useCreateConsultMutation,
+  useRingConsultMutation,
+  useAcceptConsultMutation,
+  useCancelConsultMutation,
+  useSaveConsultAdviceMutation,
+  useConsultPdfMutation,
 } = api;

@@ -58,11 +58,8 @@ export default function TreatmentPlanScreen() {
   }>();
 
   const diagnosisId = params.diagnosisId?.trim() ?? "";
-  // Server UUIDs only — local offline ids like "diag-…" skip the API.
-  const looksLikeServerId =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      diagnosisId,
-    );
+  // Server ids are Mongo ObjectIds. Local rows look like "diag_<time>_<rand>".
+  const looksLikeServerId = /^[0-9a-f]{24}$/i.test(diagnosisId);
 
   const {
     data: remotePlan,

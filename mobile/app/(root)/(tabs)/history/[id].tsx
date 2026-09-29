@@ -49,7 +49,7 @@ export default function HistoryDetailScreen() {
       router.replace({
         pathname: "/(root)/(tabs)/scan/result",
         params: {
-          id: localDiag.localId,
+          id: localDiag.serverId || localDiag.localId,
           diseaseNameBn: localDiag.diseaseNameBn,
           diseaseNameEn: localDiag.diseaseNameEn,
           confidence: String(localDiag.confidence),

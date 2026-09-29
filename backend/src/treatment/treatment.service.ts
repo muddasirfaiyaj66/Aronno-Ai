@@ -72,8 +72,12 @@ export class TreatmentService {
     if (diagnosis.userId !== user.id && user.role === 'USER')
       throw Errors.forbidden();
 
+    const diseaseLabel = [diagnosis.diseaseNameBn, diagnosis.diseaseNameEn]
+      .map((name) => name.trim())
+      .filter(Boolean)
+      .join(' — ');
     const generated = await this.ai.plan(
-      diagnosis.diseaseNameBn,
+      diseaseLabel,
       diagnosis.severity,
     );
     const point = await this.locations.forUser(user.id);

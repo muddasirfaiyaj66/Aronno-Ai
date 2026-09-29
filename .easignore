@@ -24,7 +24,8 @@ backend/dist
 backend/build
 **/.vercel
 
-# Server secrets. mobile/.env stays in the archive so the APK gets EXPO_PUBLIC_* values.
+# Server secrets. mobile/.env is kept on purpose: it is gitignored, and EAS
+# reads it during the build. Do not put API keys in eas.json.
 backend/.env
 backend/.env.*
 web/.env

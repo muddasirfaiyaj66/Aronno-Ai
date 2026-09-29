@@ -1,0 +1,52 @@
+# EAS reads this file only from the git root. mobile/.easignore is not used.
+# When this file exists, subdirectory .gitignore rules are not applied.
+
+# Local native projects. EAS runs prebuild on Linux. A Windows android/
+# folder ships local.properties and autolinking.json with paths that do not
+# exist on the builder, which makes every native module report "No variants exist".
+mobile/android
+mobile/android/**
+mobile/ios
+mobile/ios/**
+
+# Dependencies and lockfiles that would make EAS run npm ci
+node_modules
+**/node_modules
+**/package-lock.json
+
+# Expo / Metro / Next / Nest caches
+**/.expo
+**/web-build
+**/dist
+web/.next
+web/out
+backend/dist
+backend/build
+**/.vercel
+
+# Server secrets. mobile/.env stays in the archive so the APK gets EXPO_PUBLIC_* values.
+backend/.env
+backend/.env.*
+web/.env
+web/.env.*
+**/*.jks
+**/*.p8
+**/*.p12
+**/*.key
+**/*.mobileprovision
+**/*.pem
+
+# Large on-device models. Vision TFLite and the knowledge base stay in the archive.
+**/*.onnx
+**/*.gguf
+ml/artifacts
+ml/data
+ml/venv
+ml/.venv
+
+# Logs and OS junk
+**/*.log
+**/.DS_Store
+**/Thumbs.db
+**/*.tsbuildinfo
+**/*.hprof

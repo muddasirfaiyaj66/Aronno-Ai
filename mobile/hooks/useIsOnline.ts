@@ -18,7 +18,8 @@ export function useIsOnline(): boolean {
   return online;
 }
 
+/** Connected *and* the internet is reachable (captive Wi-Fi counts as offline). */
 export async function fetchIsOnline(): Promise<boolean> {
   const state = await NetInfo.fetch();
-  return state.isConnected !== false;
+  return state.isConnected !== false && state.isInternetReachable !== false;
 }

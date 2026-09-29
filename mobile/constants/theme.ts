@@ -22,6 +22,8 @@ export type Palette = {
   accent: string;
   white: string;
   border: string;
+  danger: string;
+  dangerSoft: string;
 };
 
 export const lightColors: Palette = {
@@ -46,6 +48,8 @@ export const lightColors: Palette = {
   accent: "#14967A",
   white: "#FFFFFF",
   border: "#D7E3DE",
+  danger: "#B42318",
+  dangerSoft: "#FEF3F2",
 };
 
 export const darkColors: Palette = {
@@ -70,6 +74,8 @@ export const darkColors: Palette = {
   accent: "#5EEAD4",
   white: "#FFFFFF",
   border: "#2A403A",
+  danger: "#F97066",
+  dangerSoft: "#3A1D1B",
 };
 
 let active: Palette = lightColors;
@@ -100,6 +106,8 @@ export function paletteVars(palette: Palette) {
     "--color-muted": channel(palette.muted),
     "--color-border": channel(palette.border),
     "--color-harvest-soft": channel(palette.harvestSoft),
+    "--color-danger": channel(palette.danger),
+    "--color-danger-soft": channel(palette.dangerSoft),
   });
 }
 
@@ -171,10 +179,16 @@ export const colors: Palette = {
   get border() {
     return active.border;
   },
+  get danger() {
+    return active.danger;
+  },
+  get dangerSoft() {
+    return active.dangerSoft;
+  },
 };
 
 export const tabBar = {
   height: 84,
   iconSize: 22,
-  labelSize: 11,
+  labelSize: 12,
 } as const;

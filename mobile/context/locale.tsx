@@ -1,12 +1,16 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type Locale = "bn" | "en";
+
+const STORAGE_KEY = "aronno.locale";
 
 type LocaleContextValue = {
   locale: Locale;
@@ -17,18 +21,36 @@ type LocaleContextValue = {
 
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
-export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocale] = useState<Locale>("bn");
+/** In memory too, so a theme-switch remount keeps the choice instantly. */
+let remembered: Locale = "bn";
 
-  const value = useMemo<LocaleContextValue>(
-    () => ({
+export function LocaleProvider({ children }: { children: ReactNode }) {
+  const [locale, setLocaleState] = useState<Locale>(remembered);
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((stored) => {
+        if (stored === "bn" || stored === "en") {
+          remembered = stored;
+          setLocaleState(stored);
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const value = useMemo<LocaleContextValue>(() => {
+    const setLocale = (next: Locale) => {
+      remembered = next;
+      setLocaleState(next);
+      AsyncStorage.setItem(STORAGE_KEY, next).catch(() => undefined);
+    };
+    return {
       locale,
       setLocale,
-      toggleLocale: () => setLocale((prev) => (prev === "bn" ? "en" : "bn")),
+      toggleLocale: () => setLocale(locale === "bn" ? "en" : "bn"),
       t: (bn, en) => (locale === "bn" ? bn : en),
-    }),
-    [locale],
-  );
+    };
+  }, [locale]);
 
   return (
     <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>

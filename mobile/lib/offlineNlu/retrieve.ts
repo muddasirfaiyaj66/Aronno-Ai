@@ -20,8 +20,57 @@ function tokens(s: string): string[] {
     .filter((t) => t.length >= 2);
 }
 
+/**
+ * Words in nearly every farming question. Scoring on them made "ধানের রোগ"
+ * match pepper disease just because both mention রোগ/পাতা/দাগ.
+ */
+const STOPWORDS = new Set(
+  (
+    "রোগ রোগের রোগে পাতা পাতায় পাতার দাগ দাগের কী কি করব করবো করতে করণীয় হলে হয়েছে হয় হচ্ছে " +
+    "আমার আমি আমাদের গাছ গাছে গাছের সমস্যা কেন কিভাবে কীভাবে কোন কোনো এখন দিন দেব দিব দিতে জন্য " +
+    "আর ও এবং লাগছে লাগে দেখা যাচ্ছে বলুন বলো জানতে চাই ফসল ফসলের জমি জমিতে একটু খুব অনেক " +
+    "প্রতিকার চিকিৎসা ওষুধ what how why the and my"
+  ).split(" "),
+);
+
+/** Crops a farmer may name. `kbPrefix` = id prefix of that crop's entries in the KB. */
+const CROP_WORDS: { key: string; nameBn: string; re: RegExp; kbPrefix?: string }[] = [
+  { key: "rice", nameBn: "ধান", re: /ধান|আমন|আউশ|বোরো|\brice\b|paddy/i },
+  { key: "wheat", nameBn: "গম", re: /(?:^|\s)গম(?:ের|ে)?(?:\s|$)|wheat/i },
+  { key: "jute", nameBn: "পাট", re: /(?:^|\s)পাট(?:ের|ে)?(?:\s|$)|jute/i },
+  { key: "maize", nameBn: "ভুট্টা", re: /ভুট্টা|maize|\bcorn\b/i },
+  { key: "tomato", nameBn: "টমেটো", re: /টমেটো|tomato/i, kbPrefix: "tomato" },
+  { key: "potato", nameBn: "আলু", re: /(?:^|\s)আলু|potato/i, kbPrefix: "potato" },
+  { key: "pepper", nameBn: "মরিচ", re: /মরিচ|ক্যাপসিকাম|pepper|capsicum|chilli/i, kbPrefix: "pepper" },
+  { key: "brinjal", nameBn: "বেগুন", re: /বেগুন|brinjal|eggplant/i },
+  { key: "onion", nameBn: "পেঁয়াজ", re: /পেঁয়াজ|পিঁয়াজ|onion/i },
+  { key: "garlic", nameBn: "রসুন", re: /রসুন|garlic/i },
+  { key: "mustard", nameBn: "সরিষা", re: /সরিষা|সর্ষে|mustard/i },
+  { key: "lentil", nameBn: "ডাল", re: /মসুর|ডাল\s*ফসল|lentil/i },
+  { key: "banana", nameBn: "কলা", re: /(?:^|\s)কলা(?:র|য়)?(?:\s|$)|banana/i },
+  { key: "mango", nameBn: "আম", re: /(?:^|\s)আম(?:ের|ে|গাছ)?(?:\s|$)|mango/i },
+  { key: "gourd", nameBn: "লাউ-কুমড়া", re: /লাউ|কুমড়া|শসা|করলা|gourd|cucumber/i },
+  { key: "cabbage", nameBn: "কপি", re: /কপি|cabbage|cauliflower/i },
+];
+
+export type CropMention = { key: string; nameBn: string; kbPrefix?: string };
+
+/** The crop the farmer is asking about, if they named one. */
+export function detectCropBn(text: string): CropMention | null {
+  const hit = CROP_WORDS.find((c) => c.re.test(` ${text} `));
+  return hit ? { key: hit.key, nameBn: hit.nameBn, kbPrefix: hit.kbPrefix } : null;
+}
+
+function diseaseCrop(id: string): string {
+  return id.split("_")[0]?.toLowerCase() ?? "";
+}
+
+function queryTokens(query: string): string[] {
+  return tokens(query).filter((t) => !STOPWORDS.has(t));
+}
+
 function overlapScore(query: string, haystack: string): number {
-  const q = tokens(query);
+  const q = queryTokens(query);
   const hay = normalize(haystack);
   if (!q.length || !hay) return 0;
   let score = 0;
@@ -35,7 +84,7 @@ const WEATHER_HINTS =
   /বৃষ্টি|আবহাওয়া|তাপমাত্রা|টেম্প|টেম্পারেচার|গরম|ঠান্ডা|কুয়াশা|ঝড়|রৌদ্র|রদ|humidity|rain|weather|temp/i;
 
 const TOOL_HINTS =
-  /যন্ত্রপাতি|হাতিয়ার|কৃষি\s*যন্ত্র|মেশিন|টুল|কোদাল|নিদানি|বেলচা|স্প্রেয়ার|ঠেলা|ঝাঁঝরি|বালতি|রেক|দা\s*কাটারি|চাষ/i;
+  /যন্ত্রপাতি|হাতিয়ার|কৃষি\s*যন্ত্র|মেশিন|টুল|কোদাল|নিদানি|বেলচা|স্প্রেয়ার|ঠেলা|ঝাঁঝরি|বালতি|রেক|দা\s*কাটারি/i;
 
 const FERTILIZER_HINTS =
   /সার|ইউরিয়া|টিএসপি|ডিএপি|এমওপি|পটাশ|জিপসাম|কম্পোস্ট|গোবর|ফার্টিলাইজার/i;
@@ -288,15 +337,21 @@ type Scored = { score: number; text: string };
 export function retrieveContext(userTextBn: string, limit = 4): string[] {
   const text = normalize(userTextBn);
   const scored: Scored[] = [];
+  const crop = detectCropBn(userTextBn);
 
   for (const d of kb.diseases) {
+    if (/healthy/i.test(d.id)) continue;
+    // Never hand the model another crop's disease: the KB only covers a few
+    // crops, and for the rest Gemma should answer from its own knowledge.
+    if (crop && crop.kbPrefix !== diseaseCrop(d.id)) continue;
     const hay = `${d.diseaseNameBn} ${d.diseaseNameEn} ${d.symptomsBn} ${d.id.replace(/_/g, " ")}`;
     let score = overlapScore(text, hay);
-    // Strong boost for exact disease name hits
-    if (text.includes(normalize(d.diseaseNameBn)) || text.includes(normalize(d.diseaseNameEn))) {
-      score += 10;
-    }
-    if (score >= 2) {
+    const named =
+      text.includes(normalize(d.diseaseNameBn)) || text.includes(normalize(d.diseaseNameEn));
+    if (named) score += 10;
+    // Same crop: a couple of symptom words is enough. No crop named: only a
+    // clear disease-name or strong symptom match counts.
+    if (score >= (crop ? 2 : 6)) {
       scored.push({
         score,
         text: `${d.diseaseNameBn}: লক্ষণ- ${d.symptomsBn}। চিকিৎসা- ${d.treatmentBn}। প্রতিরোধ- ${d.preventionBn}`,

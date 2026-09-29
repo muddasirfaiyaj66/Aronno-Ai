@@ -10,8 +10,15 @@ import {
   listenUntilSilence,
   warmSttForLive,
 } from "@/lib/offlineVoice/sttEngine";
-import { speakOffline, stopOfflineSpeech } from "@/lib/offlineVoice/ttsEngine";
-import { persistTurn, runLlmTurn } from "@/lib/offlineChat/chatLoop";
+import {
+  createSpeechStream,
+  stopOfflineSpeech,
+} from "@/lib/offlineVoice/ttsEngine";
+import {
+  ChatUnavailableError,
+  persistTurn,
+  runLlmTurn,
+} from "@/lib/offlineChat/chatLoop";
 import { getActiveSessionId } from "@/lib/offlineChat/sessionStore";
 import { getChatSession } from "@/lib/offlineDb/queries";
 import { logMetric } from "@/lib/offline/metrics";
@@ -68,7 +75,11 @@ export function startLiveConversation(
       return;
     }
 
-    // Gemma loads on first answer (runLlmTurn) — not together with sherpa warm.
+    // Warm the Piper voice now, so the first spoken sentence doesn't wait on it.
+    // (Gemma still loads on first answer — not together with sherpa warm.)
+    void import("@/lib/offlineVoice/ttsEngine")
+      .then((m) => m.initTTS())
+      .catch(() => undefined);
     handlers.onStatus?.("");
     handlers.onPhase("listening");
     let silentStreak = 0;
@@ -128,9 +139,13 @@ export function startLiveConversation(
 
       handlers.onPhase("thinking");
       const assistantId = handlers.onAssistantStart();
-      const ttsWarm = import("@/lib/offlineVoice/ttsEngine").then((m) =>
-        m.initTTS(),
-      );
+      // Speak each finished sentence while Gemma is still writing the rest;
+      // the next sentence's audio is prepared while the current one plays.
+      const speech = createSpeechStream({
+        onFirstAudio: () => {
+          if (!stopped) handlers.onPhase("speaking");
+        },
+      });
       let reply = "";
       try {
         // Gemma loads here on first need — not together with sherpa at start.
@@ -142,11 +157,18 @@ export function startLiveConversation(
             handlers.onStatus?.(msg);
           },
           sessionId,
+          {
+            onTextSet: (text) => handlers.onAssistantSet?.(assistantId, text),
+            onSpeakable: (sentences) => speech.push(sentences),
+          },
         );
-      } catch {
-        handlers.onAssistantSet?.(
-          assistantId,
-          "এখন উত্তর তৈরি করা যায়নি। আবার বলুন, অথবা লিখে জিজ্ঞাসা করুন।",
+      } catch (err) {
+        // No model answered: say so honestly instead of inventing a reply.
+        handlers.onAssistantSet?.(assistantId, "");
+        handlers.onNotice?.(
+          err instanceof ChatUnavailableError
+            ? err.message
+            : "এখন উত্তর তৈরি করা যায়নি। আবার বলুন, অথবা লিখে জিজ্ঞাসা করুন।",
         );
         if (stopped) break;
         continue;
@@ -154,15 +176,9 @@ export function startLiveConversation(
       if (stopped) break;
 
       if (reply && (await getChatSession(sessionId))) {
-        handlers.onAssistantSet?.(assistantId, reply);
         await persistTurn("assistant", reply, sessionId);
-        handlers.onPhase("speaking");
-        try {
-          await ttsWarm.catch(() => undefined);
-          await speakOffline(reply);
-        } catch {
-          // keep going
-        }
+        if (!speech.started()) speech.push(reply);
+        await speech.done();
       }
 
       await new Promise((r) => setTimeout(r, POST_SPEECH_MS));

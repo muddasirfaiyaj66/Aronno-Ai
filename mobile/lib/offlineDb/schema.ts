@@ -112,6 +112,15 @@ CREATE TABLE IF NOT EXISTS hidden_history_ids (
   hidden_at TEXT NOT NULL
 );
 
+-- Chat turns deleted on the phone. The server keeps its copy, so the sync
+-- pull skips anything listed here — a deleted chat never comes back.
+CREATE TABLE IF NOT EXISTS deleted_chat_turns (
+  local_id TEXT PRIMARY KEY NOT NULL,
+  server_id TEXT,
+  deleted_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_deleted_chat_server ON deleted_chat_turns(server_id);
+
 CREATE INDEX IF NOT EXISTS idx_diag_sync ON local_diagnoses(sync_status);
 CREATE INDEX IF NOT EXISTS idx_tool_sync ON local_tools(sync_status);
 CREATE INDEX IF NOT EXISTS idx_chat_sync ON chat_turns(sync_status);

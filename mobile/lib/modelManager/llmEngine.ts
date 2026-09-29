@@ -431,6 +431,11 @@ async function completeOnce(
   return emittedAny;
 }
 
+/** Stop an in-flight on-device completion (stop button / new chat). */
+export async function stopLlmReply(): Promise<void> {
+  await ctx?.stopCompletion().catch(() => undefined);
+}
+
 export async function streamLlmReply(
   promptBn: string,
   onToken: (token: string) => void,
@@ -454,10 +459,8 @@ export async function streamLlmReply(
     return;
   }
 
-  onToken(
-    "দুঃখিত, উত্তরটি প্রস্তুত করা যায়নি। প্রশ্নটি আরেকটু স্পষ্ট করে বলুন, অথবা মডেল ম্যানেজার থেকে মডেলটি চালু আছে কিনা দেখুন।",
-  );
-  end("empty-fallback");
+  // No canned filler: an empty result lets the caller show an honest error.
+  end("empty");
 }
 
 export async function streamLlmVisionReply(

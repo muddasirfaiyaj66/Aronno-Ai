@@ -1,31 +1,35 @@
 /**
- * Offline chat pipeline: Intent + RAG + on-device LLM.
- * Intent and RAG supply grounded facts; every user-facing reply is streamed
- * from the offline model (never returned as canned text).
+ * Chat pipeline: intent + RAG → Gemma.
+ *
+ * Every reply the farmer sees is written by a model — Ollama cloud
+ * gemma4:31b when online (streamed token by token), on-device Gemma only when
+ * the phone is offline. Intent, knowledge base, clock, weather and app data
+ * are *context* for the model, never a canned answer. If no model can answer,
+ * the caller gets a ChatUnavailableError and shows a notice instead.
  */
-import { streamOffline } from "@/lib/offlineVoice/ttsEngine";
 import {
   buildWelcomeBn,
-  directLiveAnswer,
+  detectCropBn,
   ensureCachedWeather,
   liveSnapshot,
   retrieveContext,
-  type LiveSnapshot,
 } from "@/lib/offlineNlu/retrieve";
 import {
   ensureLlmLoaded,
+  hasInstalledLlm,
   isLlmReady,
+  stopLlmReply,
   streamLlmReply,
   type LlmHistoryTurn,
 } from "@/lib/modelManager/llmEngine";
-import { logMetric, markStart } from "@/lib/offline/metrics";
+import { markStart } from "@/lib/offline/metrics";
 import {
   insertChatTurn,
   getChatSession,
-  recentChatForPrompt,
   recentChatHistoryTurns,
   recentScansForPrompt,
   renameChatSession,
+  recentChatForPrompt,
 } from "@/lib/offlineDb/queries";
 import { requestSyncSoon } from "@/lib/offlineDb/syncEngine";
 import { gatherIntentContext } from "@/lib/offlineChat/intents";
@@ -36,13 +40,31 @@ import {
   titleFromUserText,
 } from "@/lib/offlineChat/sessionStore";
 import { sanitizeAssistantReply } from "@/lib/offlineChat/sanitize";
+import { hasCloudChatKey, streamCloudGemma } from "@/lib/offlineChat/cloudGemma";
 import { fetchIsOnline } from "@/hooks/useIsOnline";
 
 export { sanitizeAssistantReply } from "@/lib/offlineChat/sanitize";
 export { buildWelcomeBn };
 
-const LOAD_FAIL_REPLY =
-  "জেমা মডেল এখন চালু নেই। মডেল ম্যানেজার খুলে ডাউনলোড করা জেমাতে «চালু করুন» চাপুন, তারপর এখানে আবার জিজ্ঞাসা করুন।";
+/** No model could answer. `message` is a Bangla notice for the farmer (not a reply). */
+export class ChatUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ChatUnavailableError";
+  }
+}
+
+const ERR_CLOUD =
+  "এখন অনলাইন সহকারীর কাছ থেকে উত্তর আসেনি। ইন্টারনেট দেখে আবার পাঠান।";
+const ERR_OFFLINE_NO_MODEL =
+  "ইন্টারনেট নেই, আর ফোনে অফলাইন মডেলও নেই। ইন্টারনেট চালু করুন, অথবা মডেল ম্যানেজার থেকে জেমা ডাউনলোড করুন।";
+const ERR_OFFLINE_EMPTY =
+  "অফলাইন মডেল এখন উত্তর দিতে পারেনি। আবার চেষ্টা করুন, অথবা ইন্টারনেট চালু করুন।";
+
+const WEATHER_RE =
+  /বৃষ্টি|আবহাওয়া|তাপমাত্রা|গরম|ঠান্ডা|কুয়াশা|ঝড়|রোদ|মেঘ|weather|rain|temp|স্প্রে|সেচ|বীজ\s*বোন|রোপণ/i;
+const SCAN_RE = /স্ক্যান|ছবি|scan|আমার\s*গাছে?র?\s*(?:কী|কি)|শেষ\s*পরীক্ষা/i;
+const PRICE_RE = /দাম|মূল্য|বাজার|কত\s*টাকা|price|mon\b|মণ/i;
 
 export function buildChatPrompt(
   userTextBn: string,
@@ -54,7 +76,7 @@ export function buildChatPrompt(
   const live = Array.from(new Set(liveLines.filter(Boolean))).slice(0, 8);
 
   return [
-    "তুমি আরণ্য। বাংলায় ২–৩টি সহজ বাক্যে উত্তর দাও। প্রশ্ন কপি করবে না।",
+    "তুমি আরণ্য। বাংলায় ২–৪টি সহজ বাক্যে উত্তর দাও। প্রশ্ন কপি করবে না। প্রশ্নে যে ফসলের কথা, শুধু সেটি নিয়েই বলবে।",
     "«অ্যাপ ডেটা» ফোনের ঘড়ি, আবহাওয়া, প্রোফাইল, সাম্প্রতিক স্ক্যান ও আগের চ্যাট থেকে নেওয়া। প্রশ্ন এগুলো নিয়ে হলে সংখ্যা ও নাম হুবহু বলো। অন্য প্রশ্নে এই তালিকা আউড়ে বলবে না। জ্ঞানভাণ্ডারে না থাকলে ওষুধের মাত্রা বা দাম বানাবে না।",
     intentLabel ? `বিষয়: ${intentLabel}` : "",
     live.length ? `অ্যাপ ডেটা:\n- ${live.join("\n- ")}` : "",
@@ -65,39 +87,79 @@ export function buildChatPrompt(
     .join("\n");
 }
 
-/** @deprecated use buildChatPrompt — kept for imports */
-export function buildGroundedPrompt(
-  userTextBn: string,
-  extraContext: string[] = [],
-): string {
-  return buildChatPrompt(userTextBn, extraContext);
-}
-
 export type ChatTurnHandlers = {
-  onPartialTranscript?: (text: string) => void;
-  onFinalTranscript?: (text: string) => void;
   onStatus?: (textBn: string) => void;
+  /** Legacy: receives the final reply once. */
   onTextChunk: (token: string) => void;
+  /** Streaming: receives the whole cleaned reply so far, many times. */
+  onTextSet?: (text: string) => void;
   onDone: () => void;
   onError?: (err: unknown) => void;
 };
 
-function emitAll(
-  text: string,
-  onTextChunk: (token: string) => void,
-  shouldContinue: () => boolean,
-) {
-  if (text && shouldContinue()) onTextChunk(text);
-  return text;
+export type LlmTurnOptions = {
+  /** Whole cleaned reply so far (streams). When absent, the final text goes to onTextChunk once. */
+  onTextSet?: (text: string) => void;
+  /** Finished sentences as soon as they exist — for speaking while writing. */
+  onSpeakable?: (sentences: string) => void;
+};
+
+/**
+ * Hands out finished sentences from a growing reply. The first one goes out
+ * as soon as it ends (the voice starts early); later ones in ~80-char batches
+ * so the cloud voice isn't called once per tiny sentence.
+ */
+function sentenceFeeder(onSpeakable?: (s: string) => void) {
+  let spoken = 0;
+  let sent = 0;
+  return {
+    feed(text: string) {
+      if (!onSpeakable || text.length <= spoken) return;
+      const rest = text.slice(spoken);
+      const ends = [...rest.matchAll(/[।!?\n]/g)];
+      const last = ends[ends.length - 1];
+      if (!last || last.index == null) return;
+      const cut = last.index + 1;
+      const piece = rest.slice(0, cut).trim();
+      if (piece.length < (sent === 0 ? 6 : 80)) return;
+      onSpeakable(piece);
+      spoken += cut;
+      sent += 1;
+    },
+    flush(text: string) {
+      if (!onSpeakable) return;
+      const rest = text.slice(spoken).trim();
+      if (rest) onSpeakable(rest);
+      spoken = text.length;
+    },
+  };
 }
 
-/** Intent → RAG → offline LLM stream. */
+/** Reply is empty, an echo of the question, or leaked prompt scaffolding. */
+function isUnusableModelText(reply: string, question: string): boolean {
+  const compact = reply.replace(/\s+/g, "");
+  const q = question.replace(/\s+/g, "");
+  if (compact.length < 4) return true;
+  if (q.length > 6 && compact.includes(q) && compact.length < q.length + 24) return true;
+  return /নির্দেশনা:|প্রামাণিক তথ্য|কৃষকের প্রশ্ন|start_of_turn|im_start/i.test(reply);
+}
+
+/** Only scans that fit the question: same crop, or the farmer asks about a scan. */
+function relevantScans(scans: string[], question: string): string[] {
+  if (SCAN_RE.test(question)) return scans.slice(-1);
+  const crop = detectCropBn(question);
+  if (!crop) return [];
+  return scans.filter((s) => s.includes(crop.nameBn)).slice(-1);
+}
+
+/** Intent → RAG → Gemma (cloud stream, or on-device when offline). */
 export async function runLlmTurn(
   userTextBn: string,
   onTextChunk: (token: string) => void,
   shouldContinue: () => boolean = () => true,
   onStatus?: (textBn: string) => void,
   sessionIdOverride?: string,
+  opts: LlmTurnOptions = {},
 ): Promise<string> {
   const end = markStart("chat.llm");
   const cleaned = userTextBn.trim();
@@ -106,172 +168,156 @@ export async function runLlmTurn(
     return "";
   }
 
-  let sessionId = "";
-  let topic: Awaited<ReturnType<typeof getSessionTopic>>;
-  let recentLines: string[] = [];
+  const sessionId = sessionIdOverride ?? (await getActiveSessionId().catch(() => ""));
+  const crop = detectCropBn(cleaned);
 
-  try {
-    sessionId = sessionIdOverride ?? (await getActiveSessionId());
-    topic = await getSessionTopic(sessionId);
-    recentLines = await recentChatForPrompt(4, sessionId).catch(() => []);
-  } catch {
-    // continue
-  }
+  // Everything independent runs together — no serial waits before the model.
+  const [topic, recentLines, online, scans, history] = await Promise.all([
+    sessionId ? getSessionTopic(sessionId).catch(() => undefined) : undefined,
+    sessionId ? recentChatForPrompt(4, sessionId).catch(() => [] as string[]) : [],
+    fetchIsOnline().catch(() => false),
+    recentScansForPrompt().catch(() => [] as string[]),
+    sessionId
+      ? recentChatHistoryTurns(6, sessionId).catch(() => [] as LlmHistoryTurn[])
+      : ([] as LlmHistoryTurn[]),
+    WEATHER_RE.test(cleaned) ? ensureCachedWeather().catch(() => null) : null,
+  ]);
 
-  // 1) Intent — grounded facts only (never the final reply)
   const intentHit = await gatherIntentContext(cleaned, {
     topic,
     hasHistory: recentLines.length > 0,
   }).catch(() => null);
-
   if (intentHit?.topic && sessionId) {
-    await setSessionTopic(intentHit.topic, sessionId).catch(() => undefined);
+    void setSessionTopic(intentHit.topic, sessionId).catch(() => undefined);
   }
 
-  await ensureCachedWeather().catch(() => null);
   const live = liveSnapshot();
-  const instant = directLiveAnswer(cleaned, live);
-  if (instant && shouldContinue()) {
-    emitAll(instant, onTextChunk, shouldContinue);
-    end("live-data");
-    return instant;
-  }
-
-  const [scans, history] = await Promise.all([
-    recentScansForPrompt().catch(() => [] as string[]),
-    sessionId
-      ? recentChatHistoryTurns(4, sessionId).catch(() => [] as LlmHistoryTurn[])
-      : Promise.resolve([] as LlmHistoryTurn[]),
-  ]);
-
-  const online = await fetchIsOnline();
   const asked = cleaned.slice(0, 40);
-
-  // 2) Knowledge-base RAG. Live clock/weather/profile always travel separately.
-  const rag = retrieveContext(cleaned, online ? 6 : 4);
-  const latestScan = scans[scans.length - 1];
-  const prior = recentLines
-    .filter((line) => !line.includes(asked))
-    .slice(-2)
-    .map((line) => line.replace(/\s+/g, " ").trim().slice(0, 160))
-    .filter(Boolean);
   const earlierTurns = history.filter(
     (turn, index) =>
-      !(
-        index === history.length - 1 &&
-        turn.role === "user" &&
-        turn.text.startsWith(asked)
-      ),
+      !(index === history.length - 1 && turn.role === "user" && turn.text.startsWith(asked)),
   );
-  const liveLines = [
-    ...live.lines,
-    ...(latestScan ? [latestScan] : []),
-    ...(prior.length
-      ? [`আগের কথা (শুধু ধারাবাহিক প্রশ্নে ব্যবহার করো): ${prior.join(" | ")}`]
-      : []),
+  const focus = crop
+    ? [`প্রশ্নের ফসল: ${crop.nameBn}। শুধু ${crop.nameBn} নিয়ে উত্তর দাও; অন্য ফসলের রোগ বা তথ্য বলবে না।`]
+    : [];
+  const liveLines = [...live.lines, ...relevantScans(scans, cleaned)];
+  const knowledge = [
+    ...(intentHit?.facts ?? []),
+    ...retrieveContext(cleaned, online ? 4 : 3),
   ];
 
-  const knowledge = [...(intentHit?.facts ?? []), ...rag];
+  const feeder = sentenceFeeder(opts.onSpeakable);
+  const show = (text: string) => {
+    if (shouldContinue()) opts.onTextSet?.(text);
+  };
+  const finish = (reply: string, how: string) => {
+    if (!opts.onTextSet && shouldContinue()) onTextChunk(reply);
+    else show(reply);
+    feeder.flush(reply);
+    end(how);
+    return reply;
+  };
 
-  if (online) {
-    onStatus?.("ক্লাউড জেমা উত্তর দিচ্ছে…");
+  // ── Online: Ollama cloud gemma4:31b, streamed ──────────────────────────
+  if (online && hasCloudChatKey()) {
+    onStatus?.("আরণ্য লিখছে…");
     const [market, appFacts] = await Promise.all([
       marketFacts(cleaned).catch(() => [] as string[]),
       import("@/lib/offlineChat/appRag").then((mod) =>
-        mod.gatherAppFacts().catch(() => [] as string[]),
+        mod.gatherAppFacts(cleaned).catch(() => [] as string[]),
       ),
     ]);
-    const cloud = await cloudReply(cleaned, earlierTurns, [
-      ...liveLines,
-      ...knowledge,
-      ...market,
-      ...appFacts,
-    ]).catch(() => "");
-    const cloudText = preferGrounded(
-      cleaned,
-      sanitizeAssistantReply(cloud),
-      live,
-    );
-    if (cloudText && !isUnusableModelText(cloudText, cleaned)) {
-      emitAll(cloudText, onTextChunk, shouldContinue);
-      end("cloud");
-      return cloudText;
-    }
-    const spoken =
-      directLiveAnswer(cleaned, live) ||
-      socialFallback(cleaned) ||
-      spokenFromFacts([...knowledge, ...appFacts]) ||
-      "এই মুহূর্তে ক্লাউড সহকারী উত্তর দিতে পারেনি। একটু পরে আবার বলুন।";
-    emitAll(spoken, onTextChunk, shouldContinue);
-    end("cloud-miss");
-    return spoken;
-  }
+    const facts = [...focus, ...liveLines, ...knowledge, ...market, ...appFacts];
 
-  // On-device Gemma only when the phone is offline.
-  if (!isLlmReady()) {
-    onStatus?.("জেমা মডেল লোড হচ্ছে… একটু অপেক্ষা করুন");
-    const loaded = await ensureLlmLoaded().catch(() => null);
-    if (!loaded || !isLlmReady()) {
-      const spoken =
-        directLiveAnswer(cleaned, live) ||
-        socialFallback(cleaned) ||
-        spokenFromFacts(knowledge) ||
-        LOAD_FAIL_REPLY;
-      emitAll(spoken, onTextChunk, shouldContinue);
-      end("llm-missing");
-      return spoken;
+    for (let attempt = 0; attempt < 2 && shouldContinue(); attempt += 1) {
+      let raw = "";
+      let shown = "";
+      const reply = await streamCloudGemma(
+        cleaned,
+        earlierTurns,
+        facts,
+        (token) => {
+          raw += token;
+          const next = sanitizeAssistantReply(raw, { allowGreeting: true });
+          if (next !== shown) {
+            shown = next;
+            show(next);
+            feeder.feed(next);
+          }
+        },
+        shouldContinue,
+      ).catch(() => "");
+      if (!shouldContinue()) {
+        end("cancelled");
+        return "";
+      }
+      const final = sanitizeAssistantReply(reply, { allowGreeting: true });
+      if (final && !isUnusableModelText(final, cleaned)) {
+        onStatus?.("");
+        return finish(final, attempt ? "cloud-retry" : "cloud");
+      }
+      // Nothing usable streamed (network hiccup, cold model) → one retry.
+      if (shown) show("");
+      onStatus?.("আবার চেষ্টা করছি…");
     }
     onStatus?.("");
+    // Cloud failed twice: on-device Gemma if it exists, else an honest error.
+    if (!isLlmReady() && !(await hasInstalledLlm().catch(() => false))) {
+      end("cloud-fail");
+      throw new ChatUnavailableError(ERR_CLOUD);
+    }
   }
 
+  // ── Offline (or cloud failed): on-device Gemma ─────────────────────────
+  if (!isLlmReady()) {
+    if (!(await hasInstalledLlm().catch(() => false))) {
+      end("no-model");
+      throw new ChatUnavailableError(online ? ERR_CLOUD : ERR_OFFLINE_NO_MODEL);
+    }
+    onStatus?.("অফলাইন মডেল চালু হচ্ছে…");
+    const loaded = await ensureLlmLoaded().catch(() => null);
+    if (!loaded || !isLlmReady()) {
+      end("llm-missing");
+      throw new ChatUnavailableError(ERR_OFFLINE_EMPTY);
+    }
+  }
   if (!shouldContinue()) {
     end("cancelled");
     return "";
   }
 
-  const prompt = buildChatPrompt(
-    cleaned,
-    knowledge,
-    intentHit?.intent,
-    liveLines,
-  );
+  const prompt = buildChatPrompt(cleaned, [...focus, ...knowledge], intentHit?.intent, liveLines);
   let full = "";
-  onStatus?.("জেমা উত্তর লিখছে…");
-
+  onStatus?.("অফলাইন AI লিখছে…");
+  const watch = setInterval(() => {
+    if (!shouldContinue()) void stopLlmReply();
+  }, 250);
   try {
-    await streamLlmReply(prompt, (token) => {
-      full += token;
-    }, {
-      userText: cleaned,
-      history: earlierTurns,
-    });
+    // Small models drift mid-stream; keep the buffered, cleaned result.
+    await streamLlmReply(
+      prompt,
+      (token) => {
+        full += token;
+      },
+      { userText: cleaned, history: earlierTurns },
+    );
   } catch (err) {
     end(err instanceof Error ? err.message : "stream-fail");
+  } finally {
+    clearInterval(watch);
+    onStatus?.("");
   }
-
-  let reply = preferGrounded(cleaned, sanitizeAssistantReply(full), live);
+  if (!shouldContinue()) {
+    end("cancelled");
+    return "";
+  }
+  const reply = sanitizeAssistantReply(full, { allowGreeting: true });
   if (!reply || isUnusableModelText(reply, cleaned)) {
-    reply =
-      directLiveAnswer(cleaned, live) ||
-      socialFallback(cleaned) ||
-      spokenFromFacts(knowledge) ||
-      LOAD_FAIL_REPLY;
+    end("llm-empty");
+    throw new ChatUnavailableError(ERR_OFFLINE_EMPTY);
   }
-  emitAll(reply, onTextChunk, shouldContinue);
-  end(intentHit ? `ok:${intentHit.intent}` : "ok");
-  return reply;
+  return finish(reply, intentHit ? `ok:${intentHit.intent}` : "ok");
 }
-
-async function cloudReply(
-  text: string,
-  history: LlmHistoryTurn[],
-  facts: string[],
-): Promise<string> {
-  const { replyWithCloudGemma } = await import("@/lib/offlineChat/cloudGemma");
-  return replyWithCloudGemma(text, history, facts);
-}
-
-const PRICE_RE = /দাম|মূল্য|বাজার|কত\s*টাকা|price|mon\b|মণ/i;
 
 function cropSlugFromText(text: string): string | undefined {
   if (/ধান|চাল|আমন|বোরো|rice/i.test(text)) return "rice";
@@ -289,95 +335,26 @@ async function marketFacts(text: string): Promise<string[]> {
   const { api } = await import("@/services/api");
   const { store } = await import("@/store");
   const district = store.getState().auth.user?.district?.slug;
-  const result = await store
-    .dispatch(
-      api.endpoints.getMarketPrices.initiate({
-        cropSlug: cropSlugFromText(text),
-        districtSlug: district,
-      }),
-    )
-    .unwrap()
-    .catch(() => null);
+  const request = store.dispatch(
+    api.endpoints.getMarketPrices.initiate({
+      cropSlug: cropSlugFromText(text),
+      districtSlug: district,
+    }),
+  );
+  const result = await Promise.race([
+    request.unwrap().catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)),
+  ]);
+  request.unsubscribe();
   const rows = result?.markets?.slice(0, 4) ?? [];
   if (!rows.length) return [];
   return [
     "অ্যাপের বাজার ডেটা (টাকা/মণ): " +
       rows
-        .map(
-          (m) =>
-            `${m.marketNameBn} (${m.district}) ${m.cropType} ${m.pricePerMon}`,
-        )
+        .map((m) => `${m.marketNameBn} (${m.district}) ${m.cropType} ${m.pricePerMon}`)
         .join("; ") +
       "। এই দামগুলোই বলো।",
   ];
-}
-
-function socialFallback(text: string): string | null {
-  const t = text.trim();
-  if (/^(?:hi|hai|hello|hey|হ্যালো|নমস্কার|হাই)[\s!?.]*$/i.test(t)) {
-    return "হ্যালো। ফসল, রোগ, সার বা আবহাওয়া — কী জানতে চান?";
-  }
-  if (/obosta|অবস্থা|কেমন\s*আছ/i.test(t) && t.length < 40) {
-    return "ভালো আছি। আপনার ফসলে কোনো সমস্যা দেখা দিয়েছে?";
-  }
-  if (/^(?:kire|কিরে|oi|ওই)[\s!?.]*$/i.test(t)) {
-    return "বলুন — কী জানতে চান?";
-  }
-  return null;
-}
-
-/** Keep a model reply unless a pure clock/weather question missed the live numbers. */
-function preferGrounded(
-  question: string,
-  reply: string,
-  live: LiveSnapshot,
-): string {
-  const direct = directLiveAnswer(question, live);
-  if (!direct) return reply;
-  if (!reply) return direct;
-  const temp = live.tempC;
-  const hasTemp =
-    temp == null ||
-    reply.includes(String(temp)) ||
-    reply.includes(temp.toLocaleString("bn-BD"));
-  const hasTime =
-    reply.includes(live.spokenTime.slice(0, 8)) ||
-    /টা/.test(reply);
-  if (/আবহাওয়া|বৃষ্টি|তাপমাত্রা|weather/i.test(question) && !hasTemp) {
-    return direct;
-  }
-  if (/কয়টা|সময়|what\s*time/i.test(question) && !hasTime) return direct;
-  if (/তারিখ|কোন\s*বার|date/i.test(question) && !reply.includes(live.spokenDate.slice(0, 6))) {
-    return direct;
-  }
-  return reply;
-}
-
-function isUnusableModelText(reply: string, question: string): boolean {
-  const compact = reply.replace(/\s+/g, "");
-  const q = question.replace(/\s+/g, "");
-  if (compact.length < 8) return true;
-  if (q.length > 6 && compact.includes(q) && compact.length < q.length + 24) return true;
-  return /নির্দেশনা:|প্রামাণিক তথ্য|কৃষকের প্রশ্ন|start_of_turn|im_start/i.test(reply);
-}
-
-/** When Gemma echoes or fails, still give the farmer the grounded facts. */
-function spokenFromFacts(facts: string[]): string {
-  const lines = facts
-    .map((f) =>
-      f
-        .replace(/^(?:উদ্দেশ্য|নির্দেশ)\s*[:：]\s*/u, "")
-        .replace(/^যাচাইকৃত[^:：]{0,24}[:：]\s*/u, "")
-        .replace(/^অ্যাপের বর্তমান ডেটা\s*[—-]\s*/u, "")
-        .trim(),
-    )
-    .filter(
-      (f) =>
-        f.length > 12 &&
-        !/^(?:উদ্দেশ্য|নির্দেশ|অ্যাপ ডেটা)/.test(f) &&
-        !/সংক্ষিপ্ত অভিবাদন|জিজ্ঞাসা নিন|প্রশ্নের উত্তর দিতে পারছি না/.test(f),
-    );
-  return lines.slice(0, 3).join(" ").replace(/\s+/g, " ").slice(0, 520);
 }
 
 export async function persistTurn(
@@ -392,9 +369,7 @@ export async function persistTurn(
     if (role === "user") {
       const sessTurns = await recentChatForPrompt(2, sessionId).catch(() => []);
       if (sessTurns.length <= 1) {
-        await renameChatSession(sessionId, titleFromUserText(text)).catch(
-          () => undefined,
-        );
+        await renameChatSession(sessionId, titleFromUserText(text)).catch(() => undefined);
       }
     }
     requestSyncSoon();
@@ -405,12 +380,7 @@ export async function persistTurn(
 
 export async function replyToText(
   userTextBn: string,
-  handlers: Pick<
-    ChatTurnHandlers,
-    "onTextChunk" | "onDone" | "onError" | "onStatus"
-  > & {
-    shouldContinue?: () => boolean;
-  },
+  handlers: ChatTurnHandlers & { shouldContinue?: () => boolean },
 ): Promise<void> {
   const cleaned = userTextBn.trim();
   if (!cleaned) {
@@ -427,59 +397,16 @@ export async function replyToText(
       shouldContinue,
       handlers.onStatus,
       sessionId,
+      { onTextSet: handlers.onTextSet },
     );
-    if (reply && (await getChatSession(sessionId))) {
+    // Stopped by the farmer → don't store a reply they never saw.
+    if (reply && shouldContinue() && (await getChatSession(sessionId))) {
       await persistTurn("assistant", reply, sessionId);
     }
   } catch (err) {
-    try {
-      if (shouldContinue()) handlers.onTextChunk(LOAD_FAIL_REPLY);
-      if (await getChatSession(sessionId)) {
-        await persistTurn("assistant", LOAD_FAIL_REPLY, sessionId);
-      }
-    } catch {
-      if (shouldContinue()) handlers.onError?.(err);
-    }
+    // Not saved as an Aronno reply — only shown as a notice.
+    if (shouldContinue()) handlers.onError?.(err);
   } finally {
     handlers.onDone();
   }
-}
-
-export async function startChatTurn(
-  handlers: ChatTurnHandlers,
-): Promise<() => void> {
-  const { cleanSttTranscript, startListening } = await import(
-    "@/lib/offlineVoice/sttEngine"
-  );
-  return startListening(
-    (partial) => handlers.onPartialTranscript?.(partial),
-    async (finalTextBn) => {
-      const cleaned = cleanSttTranscript(finalTextBn).trim();
-      handlers.onFinalTranscript?.(cleaned);
-      try {
-        logMetric("chat.voice.final");
-        if (!cleaned || cleaned.length < 2) {
-          handlers.onDone();
-          return;
-        }
-        const sessionId = await getActiveSessionId();
-        await persistTurn("user", cleaned, sessionId);
-        const reply = await runLlmTurn(
-          cleaned,
-          handlers.onTextChunk,
-          () => true,
-          handlers.onStatus,
-          sessionId,
-        );
-        if (reply && (await getChatSession(sessionId))) {
-          await persistTurn("assistant", reply, sessionId);
-          void streamOffline(reply);
-        }
-      } catch (err) {
-        handlers.onError?.(err);
-      } finally {
-        handlers.onDone();
-      }
-    },
-  );
 }

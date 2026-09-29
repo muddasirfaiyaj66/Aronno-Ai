@@ -23,11 +23,42 @@ function statusBn(value: unknown) {
   return STATUS_BN[key] ?? (key || "অজানা");
 }
 
-function within<T>(work: Promise<T>, ms = 1800): Promise<T | null> {
+/** Account data only matters for questions about it — skip 7 API calls otherwise. */
+const ACCOUNT_RE =
+  /অর্ডার|order|ওয়ালেট|wallet|টাকা|আয়|খরচ|কার্ট|cart|দোকান|shop|পণ্য|product|বিজ্ঞপ্তি|নোটিফিকেশন|notification|পেমেন্ট|payment|বিক্রি|কেনা|ডেলিভারি|delivery/i;
+const PLAN_RE = /পরিকল্পনা|plan|কোন\s*ফসল|কী\s*চাষ|মৌসুম|season/i;
+
+/** A reply should never wait long on app data; the model answers without it. */
+const FACT_BUDGET_MS = 900;
+/** Re-use fetched account data for a minute (a chat is many quick turns). */
+const CACHE_MS = 60_000;
+const cache = new Map<string, { at: number; data: unknown }>();
+
+function within<T>(work: Promise<T>, ms = FACT_BUDGET_MS): Promise<T | null> {
   return Promise.race([
     work.catch(() => null),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
   ]);
+}
+
+/**
+ * One RTK Query read with a short cache. Always unsubscribes, so chat turns
+ * don't pile up cache subscriptions (the old code leaked one per call).
+ */
+async function fetchOnce<T>(name: string, start: () => {
+  unwrap: () => Promise<T>;
+  unsubscribe: () => void;
+}): Promise<T | null> {
+  const hit = cache.get(name);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.data as T;
+  const request = start();
+  try {
+    const data = await request.unwrap();
+    cache.set(name, { at: Date.now(), data });
+    return data;
+  } finally {
+    request.unsubscribe();
+  }
 }
 
 function money(value: unknown) {
@@ -36,7 +67,21 @@ function money(value: unknown) {
   return `${Math.round(n)} টাকা`;
 }
 
-export async function gatherAppFacts(): Promise<string[]> {
+/** Start fetching account data early (chat screen open), so the first reply doesn't wait. */
+export function warmAppFacts(): void {
+  void gatherAppFacts("অর্ডার পরিকল্পনা", 4000).catch(() => undefined);
+}
+
+/**
+ * Facts about this farmer for the prompt. Only pulls account data when the
+ * question is about it, and never waits more than `budgetMs` for the network.
+ */
+export async function gatherAppFacts(
+  question = "",
+  budgetMs = FACT_BUDGET_MS,
+): Promise<string[]> {
+  const wantAccount = ACCOUNT_RE.test(question);
+  const wantPlan = PLAN_RE.test(question);
   const user = store.getState().auth.user;
   const facts: string[] = [];
   if (user) {
@@ -49,26 +94,26 @@ export async function gatherAppFacts(): Promise<string[]> {
   }
 
   const { api } = await import("@/services/api");
+  const e = api.endpoints;
+  const account = <T,>(name: string, start: Parameters<typeof fetchOnce<T>>[1]) =>
+    wantAccount && user ? within(fetchOnce<T>(name, start), budgetMs) : Promise.resolve(null);
 
   const [scans, orders, shopOrders, wallet, cart, notes, shop, products, plan, tools] =
     await Promise.all([
       recentDiagnoses(3).catch(() => []),
-      within(
-        store.dispatch(api.endpoints.getBuyerOrders.initiate()).unwrap(),
-      ),
-      within(
-        store.dispatch(api.endpoints.getShopOrders.initiate()).unwrap(),
-      ),
-      within(store.dispatch(api.endpoints.getWallet.initiate()).unwrap()),
-      within(store.dispatch(api.endpoints.getCart.initiate()).unwrap()),
-      within(
-        store.dispatch(api.endpoints.getNotifications.initiate()).unwrap(),
-      ),
-      within(store.dispatch(api.endpoints.getMyShop.initiate()).unwrap()),
-      within(store.dispatch(api.endpoints.getMyProducts.initiate()).unwrap()),
-      within(
-        store.dispatch(api.endpoints.getLatestCropPlan.initiate()).unwrap(),
-      ),
+      account("orders", () => store.dispatch(e.getBuyerOrders.initiate())),
+      account("shopOrders", () => store.dispatch(e.getShopOrders.initiate())),
+      account("wallet", () => store.dispatch(e.getWallet.initiate())),
+      account("cart", () => store.dispatch(e.getCart.initiate())),
+      account("notes", () => store.dispatch(e.getNotifications.initiate())),
+      account("shop", () => store.dispatch(e.getMyShop.initiate())),
+      account("products", () => store.dispatch(e.getMyProducts.initiate())),
+      wantPlan && user
+        ? within(
+            fetchOnce("plan", () => store.dispatch(e.getLatestCropPlan.initiate())),
+            budgetMs,
+          )
+        : Promise.resolve(null),
       recentTools().catch(() => [] as string[]),
     ]);
 

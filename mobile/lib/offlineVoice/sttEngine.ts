@@ -44,8 +44,8 @@ const SPEECH_ABOVE_FLOOR_DB = 5;
 const MIN_SPEECH_DB = -55;
 const DEAD_MIC_DB = -72;
 const CALIBRATE_MS = 350;
-/** Wait after last loud frame before ending. */
-const SILENCE_MS = 1600;
+/** Wait after last loud frame before ending (shorter = the reply starts sooner). */
+const SILENCE_MS = 1200;
 const MIN_SPEECH_MS = 400;
 const NO_SPEECH_MS = 10000;
 const MAX_UTTERANCE_MS = 24000;

@@ -84,6 +84,10 @@ module.exports = {
           soft: "#E7F5F2",
           strong: "#0F766E",
         },
+        danger: {
+          DEFAULT: "rgb(var(--color-danger) / <alpha-value>)",
+          soft: "rgb(var(--color-danger-soft) / <alpha-value>)",
+        },
         severity: {
           low: "#047857",
           "low-bg": "#D1FAE5",

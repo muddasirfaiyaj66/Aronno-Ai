@@ -14,12 +14,15 @@ import {
   markDiagnosisFailed,
   markDiagnosisSynced,
   markToolSynced,
+  getSyncMeta,
   setSyncMeta,
   upsertChatFromServer,
   upsertDiagnosesFromServer,
 } from "@/lib/offlineDb/queries";
 import type { DiseaseHistoryEntry } from "@/types/history";
 import { logMetric } from "@/lib/offline/metrics";
+
+const CHAT_PULLED_UNTIL = "chat_pulled_until";
 
 let syncing = false;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -136,17 +139,31 @@ export async function runSync(): Promise<{ ok: boolean; message?: string }> {
     await upsertDiagnosesFromServer(diseaseEntries);
 
     try {
-      const chatPull = await store
-        .dispatch(
-          api.endpoints.syncPullChat.initiate({
-            limit: 50,
-          }),
-        )
-        .unwrap();
-      await upsertChatFromServer(chatPull.items ?? []);
-      if (chatPull.nextCursor) {
-        await setSyncMeta("chat_cursor", chatPull.nextCursor);
+      // The server never forgets a chat the farmer deleted on the phone, so
+      // only import turns newer than our last pull. An install that has synced
+      // before starts from "now", so chats deleted earlier stay deleted; a
+      // fresh install still restores the account's history once.
+      let pulledUntil = await getSyncMeta(CHAT_PULLED_UNTIL);
+      if (!pulledUntil && (await getSyncMeta("last_sync_at"))) {
+        pulledUntil = new Date().toISOString();
+        await setSyncMeta(CHAT_PULLED_UNTIL, pulledUntil);
       }
+      const chatPull = await store
+        .dispatch(api.endpoints.syncPullChat.initiate({ limit: 50 }))
+        .unwrap();
+      const since = pulledUntil ? Date.parse(pulledUntil) : 0;
+      const fresh = (chatPull.items ?? []).filter(
+        (t) => Date.parse(t.createdAt) > since,
+      );
+      await upsertChatFromServer(fresh);
+      const newest = fresh.reduce(
+        (max, t) => Math.max(max, Date.parse(t.createdAt) || 0),
+        since,
+      );
+      await setSyncMeta(
+        CHAT_PULLED_UNTIL,
+        new Date(newest || Date.now()).toISOString(),
+      );
     } catch {
       // endpoint may be unavailable on older servers
     }

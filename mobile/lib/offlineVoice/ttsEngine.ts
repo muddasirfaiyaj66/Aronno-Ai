@@ -573,6 +573,117 @@ async function speakWithCloudFemale(
   }
 }
 
+export type SpeechStream = {
+  /** Add the next piece of the answer; audio for it starts preparing now. */
+  push: (text: string) => void;
+  /** Resolves when everything pushed so far has been spoken (or stopped). */
+  done: () => Promise<void>;
+  /** True once at least one piece was pushed. */
+  started: () => boolean;
+};
+
+/**
+ * Speak an answer while it is still being written. Each pushed piece starts
+ * synthesising immediately (female Gemini voice online, Piper offline) while
+ * earlier pieces play, so there is no gap waiting for the full reply.
+ * `stopOfflineSpeech()` cancels everything queued.
+ */
+export function createSpeechStream(handlers?: {
+  onFirstAudio?: () => void;
+}): SpeechStream {
+  const gen = speakGen;
+  let synthChain: Promise<unknown> = Promise.resolve();
+  let playChain: Promise<void> = Promise.resolve();
+  let index = 0;
+  let pushed = false;
+  let announced = false;
+  let cloudOk: boolean | null = null; // decided once, keeps one voice per answer
+  let audioReady: Promise<unknown> | null = null;
+
+  type Clip = { uri: string; cleanup?: () => void } | null;
+
+  const synthesize = async (text: string, i: number): Promise<Clip> => {
+    if (gen !== speakGen) return null;
+    audioReady ??= enablePlaybackAudio().catch(() => undefined);
+    await audioReady;
+    if (cloudOk === null) {
+      // On-device Piper starts in well under a second; the cloud voice needs a
+      // network round trip per clip. Prefer Piper whenever it is installed.
+      const piper =
+        sherpaReady ||
+        (!sherpaDisabled && (await hasOfflineTtsFiles().catch(() => false)));
+      if (piper) {
+        cloudOk = false;
+      } else {
+        const { fetchIsOnline } = await import("@/hooks/useIsOnline");
+        cloudOk = await fetchIsOnline();
+      }
+    }
+    if (cloudOk) {
+      const file = await fetchCloudWav(text, gen, 1000 + i).catch(() => null);
+      if (file) {
+        return {
+          uri: file.uri,
+          cleanup: () => {
+            if (file.exists) file.delete();
+          },
+        };
+      }
+      cloudOk = false; // cloud voice failed once → stay on Piper for this answer
+    }
+    if (!sherpaReady && !sherpaDisabled) await initTTS().catch(() => false);
+    const TTS = sherpaReady ? await getTTS() : null;
+    if (!TTS) return null;
+    const uri = await synthesizeSherpa(TTS, text).catch(() => null);
+    return uri ? { uri } : null;
+  };
+
+  const push = (text: string) => {
+    const prepared = prepareSpeechText(text);
+    if (!prepared || gen !== speakGen) return;
+    pushed = true;
+    // Piper clips stay short; long pieces split on sentence/comma boundaries.
+    for (const piece of speechPlan(prepared)) {
+      const i = index++;
+      // Synthesis runs in order but ahead of playback.
+      const clip = synthChain.then(() => synthesize(piece, i));
+      synthChain = clip.catch(() => null);
+      playChain = playChain.then(async () => {
+        if (gen !== speakGen) return;
+        const ready = await clip.catch(() => null);
+        if (gen !== speakGen) {
+          ready?.cleanup?.();
+          return;
+        }
+        if (!announced) {
+          announced = true;
+          handlers?.onFirstAudio?.();
+        }
+        if (ready) {
+          try {
+            await playFile(ready.uri, gen);
+          } catch {
+            // skip a broken clip
+          } finally {
+            ready.cleanup?.();
+          }
+        } else {
+          await speakBangla(piece).catch(() => undefined);
+        }
+      });
+    }
+  };
+
+  return {
+    push,
+    done: async () => {
+      await playChain.catch(() => undefined);
+      if (gen === speakGen) await stopPlayingSound();
+    },
+    started: () => pushed,
+  };
+}
+
 /** Queue speech so sentence chunks don't overlap. */
 export function streamOffline(text: string): Promise<void> {
   const cleaned = text.replace(/\s+/g, " ").trim();

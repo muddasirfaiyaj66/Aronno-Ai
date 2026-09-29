@@ -85,7 +85,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   return (
     <ThemeContext.Provider value={value}>
-      <View style={[{ flex: 1, backgroundColor: palette.neutral }, paletteVars(palette)]}>
+      {/*
+        key={scheme}: ~60 files style inline with the live `colors` getter, which
+        only reads the new palette when that component re-renders. Remounting on
+        a light/dark switch (rare) repaints every screen in the right colours.
+      */}
+      <View
+        key={scheme}
+        style={[{ flex: 1, backgroundColor: palette.neutral }, paletteVars(palette)]}
+      >
         {children}
       </View>
     </ThemeContext.Provider>

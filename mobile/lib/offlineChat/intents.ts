@@ -7,6 +7,7 @@ import kb from "@/assets/kb/bn_knowledge_base.json";
 import {
   cachedWeather,
   currentUserFirstName,
+  detectCropBn,
   seasonTipBn,
   timeOfDayGreetingBn,
 } from "@/lib/offlineNlu/retrieve";
@@ -401,12 +402,6 @@ export async function gatherIntentContext(
       facts: ["উদ্দেশ্য: আবহাওয়া।", weatherFacts(text)],
     };
   }
-  if (RE.toolsAsk.test(text)) {
-    return {
-      intent: "tools",
-      facts: ["উদ্দেশ্য: কৃষি হাতিয়ার।", toolsFacts(text)],
-    };
-  }
   if (RE.fertilizerAsk.test(text)) {
     const crop = detectCrop(text);
     return {
@@ -419,13 +414,19 @@ export async function gatherIntentContext(
       topic: crop ? { crop } : undefined,
     };
   }
-  if (RE.riceAsk.test(text) && /হলুদ|রোগ|পাতা|পোকা|শুকি/i.test(text)) {
+  if (RE.toolsAsk.test(text)) {
     return {
-      intent: "rice-yellow",
-      facts: [
-        "উদ্দেশ্য: ধানের পাতা হলুদ/রোগ।",
-        "যাচাইকৃত পরামর্শ: নাইট্রোজেন (ইউরিয়া) ঘাটতি বা পানি জমে নিকাশ সমস্যা দেখুন; নালা খুলুন; ইউরিয়া ভাগ করে দিন; পোকা/দাগ হলে কৃষি অফিস। টমেটো-আলু স্ক্যান দিয়ে ধানের রোগ নিশ্চিত হয় না।",
-      ],
+      intent: "tools",
+      facts: ["উদ্দেশ্য: কৃষি হাতিয়ার।", toolsFacts(text)],
+    };
+  }
+  // A crop the knowledge base doesn't cover (ধান, গম, পাট, বেগুন…): no KB
+  // facts — Gemma answers from its own knowledge, about this crop only.
+  const mentioned = detectCropBn(text);
+  if (mentioned && !mentioned.kbPrefix && RE.diseaseAsk.test(text)) {
+    return {
+      intent: `${mentioned.key}-question`,
+      facts: [`উদ্দেশ্য: ${mentioned.nameBn} ফসলের রোগ বা সমস্যা।`],
     };
   }
 
@@ -498,7 +499,8 @@ export async function gatherIntentContext(
   if (crop && RE.diseaseAsk.test(text)) {
     return cropDiseaseFacts(crop, text);
   }
-  if (RE.diseaseAsk.test(text)) {
+  // Symptom guessing across crops only when no crop was named at all.
+  if (RE.diseaseAsk.test(text) && !mentioned) {
     const bySymptom = matchBySymptoms(text);
     if (bySymptom) {
       return {

@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { ComponentProps } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Keyboard, Platform, Pressable, Text, View } from "react-native";
 import { Tabs } from "expo-router";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
@@ -159,9 +159,11 @@ function SideTab({
       <View
         style={{
           height: 32,
-          minWidth: 46,
+          minWidth: 52,
+          borderRadius: 16,
           alignItems: "center",
           justifyContent: "center",
+          backgroundColor: focused ? colors.secondary : "transparent",
         }}
       >
         <Ionicons
@@ -178,7 +180,7 @@ function SideTab({
           marginTop: 2,
           marginBottom: 2,
           width: "100%",
-          color: colors.muted,
+          color: focused ? colors.primary : colors.muted,
           fontFamily: focused
             ? "NotoSansBengali_700Bold"
             : "NotoSansBengali_500Medium",
@@ -192,8 +194,31 @@ function SideTab({
   );
 }
 
-function CenteredTabBar({ state, navigation, insets }: BottomTabBarProps) {
+/** Custom tab bars must implement `tabBarHideOnKeyboard` themselves. */
+function useKeyboardVisible() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setVisible(true),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setVisible(false),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return visible;
+}
+
+function CenteredTabBar({ state, navigation, insets, descriptors }: BottomTabBarProps) {
+  const keyboardVisible = useKeyboardVisible();
   const bottomInset = Math.max(insets.bottom, 8);
+  const focusedOptions = descriptors[state.routes[state.index]?.key]?.options;
+  if (keyboardVisible && focusedOptions?.tabBarHideOnKeyboard) return null;
   const routesByName = Object.fromEntries(
     state.routes.map((r) => [r.name, r]),
   );

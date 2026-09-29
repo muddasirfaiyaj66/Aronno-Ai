@@ -2,39 +2,44 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated,
-  Easing,
   FlatList,
   InteractionManager,
   Keyboard,
-  Modal,
   Platform,
   Pressable,
-  ScrollView,
-  TextInput,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "@/components/ui";
+import {
+  AssistantAvatar,
+  ChatComposer,
+  ChatEmptyState,
+  HistorySheet,
+  MessageBubble,
+  PHASE_COPY,
+  VoiceOrb,
+  type ChatBubble,
+} from "@/components/chat";
 import { colors } from "@/constants/theme";
 import { sanitizeAssistantReply } from "@/lib/offlineChat/sanitize";
-import { replyToText } from "@/lib/offlineChat/chatLoop";
+import { ChatUnavailableError, replyToText } from "@/lib/offlineChat/chatLoop";
 import type {
   LiveConversationHandle,
   LivePhase,
 } from "@/lib/offlineChat/liveConversation";
-import { hasInstalledLlm, isInstalled } from "@/lib/modelManager/modelManager";
-import { catalogByKind } from "@/lib/modelManager/catalog";
+import { hasInstalledLlm } from "@/lib/modelManager/modelManager";
 import {
   clearChatTurns,
   deleteChatSession,
   listChatSessions,
   listChatTurns,
 } from "@/lib/offlineDb/queries";
+import { requestSyncSoon } from "@/lib/offlineDb/syncEngine";
 import type { LocalChatSessionRow } from "@/lib/offlineDb/schema";
 import {
   getActiveSessionId,
@@ -42,20 +47,20 @@ import {
   switchChatSession,
 } from "@/lib/offlineChat/sessionStore";
 import { timeOfDayGreetingBn } from "@/lib/offlineNlu/retrieve";
+import { useIsOnline } from "@/hooks/useIsOnline";
 import { useAppSelector } from "@/store";
 import { userFacingError } from "@/lib/userFacingError";
 
-/** Lift the composer above the soft keyboard (works with edge-to-edge Android). */
+/**
+ * Lift the composer above the soft keyboard (edge-to-edge Android ignores
+ * adjustResize). The tab bar hides while typing, so the full height is right.
+ */
 function useKeyboardLift() {
   const [lift, setLift] = useState(0);
   useEffect(() => {
-    const showEvent =
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent =
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const onShow = Keyboard.addListener(showEvent, (e) => {
-      setLift(e.endCoordinates.height);
-    });
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const onShow = Keyboard.addListener(showEvent, (e) => setLift(e.endCoordinates.height));
     const onHide = Keyboard.addListener(hideEvent, () => setLift(0));
     return () => {
       onShow.remove();
@@ -65,245 +70,20 @@ function useKeyboardLift() {
   return lift;
 }
 
-type Bubble = {
-  id: string;
-  role: "user" | "assistant" | "notice";
-  text: string;
-};
+type Bubble = ChatBubble;
 
-const SUGGESTIONS = [
-  "আজকের আবহাওয়া কেমন?",
-  "ধান চাষে যন্ত্রপাতি কী লাগে?",
-  "টমেটোতে কোন সার দেব?",
-];
+const JUNK_RE = /<\||<start_of_turn|<end_of_turn|এখন ভালো উত্তর তৈরি করতে পারিনি/;
 
-const JUNK_RE =
-  /<\||<start_of_turn|<end_of_turn|এখন ভালো উত্তর তৈরি করতে পারিনি/;
+/** Within this many px of the end counts as "reading the latest". */
+const NEAR_BOTTOM_PX = 120;
 
 function cleanBubbleText(role: Bubble["role"], text: string) {
   if (role !== "assistant") return text;
   return sanitizeAssistantReply(text, { allowGreeting: true });
 }
 
-const PHASE_COPY: Record<
-  Exclude<LivePhase, "idle">,
-  { title: string; hint: string }
-> = {
-  listening: {
-    title: "শুনছি",
-    hint: "স্বাভাবিক গলায় বাংলায় বলুন",
-  },
-  hearing: {
-    title: "শুনছি…",
-    hint: "থামলেই উত্তর দেওয়া হবে",
-  },
-  thinking: {
-    title: "প্রস্তুত হচ্ছে",
-    hint: "একটু অপেক্ষা করুন",
-  },
-  speaking: {
-    title: "বলছি",
-    hint: "শেষ হলে আবার শোনা যাবে",
-  },
-};
-
 function newId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function TypingDots() {
-  const dots = useRef([0, 1, 2].map(() => new Animated.Value(0.25))).current;
-  useEffect(() => {
-    const loops = dots.map((v, i) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(i * 140),
-          Animated.timing(v, {
-            toValue: 1,
-            duration: 280,
-            useNativeDriver: true,
-          }),
-          Animated.timing(v, {
-            toValue: 0.25,
-            duration: 280,
-            useNativeDriver: true,
-          }),
-        ]),
-      ),
-    );
-    loops.forEach((l) => l.start());
-    return () => loops.forEach((l) => l.stop());
-  }, [dots]);
-  return (
-    <View
-      accessible
-      accessibilityLabel="উত্তর লেখা হচ্ছে"
-      className="flex-row items-center gap-1.5 py-1"
-    >
-      {dots.map((v, i) => (
-        <Animated.View
-          key={i}
-          style={{
-            opacity: v,
-            width: 7,
-            height: 7,
-            borderRadius: 4,
-            backgroundColor: colors.primary,
-          }}
-        />
-      ))}
-    </View>
-  );
-}
-
-function VoiceOrb({
-  phase,
-  level,
-}: {
-  phase: LivePhase;
-  level: Animated.Value;
-}) {
-  const pulse = useRef(new Animated.Value(0)).current;
-  const ring = useRef(new Animated.Value(0)).current;
-  const active = phase !== "idle";
-
-  useEffect(() => {
-    if (!active) {
-      pulse.setValue(0);
-      ring.setValue(0);
-      return;
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: phase === "hearing" ? 420 : 900,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0,
-          duration: phase === "hearing" ? 420 : 900,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    const ringLoop = Animated.loop(
-      Animated.timing(ring, {
-        toValue: 1,
-        duration: 1800,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    );
-    loop.start();
-    ringLoop.start();
-    return () => {
-      loop.stop();
-      ringLoop.stop();
-    };
-  }, [active, phase, pulse, ring]);
-
-  const tone =
-    phase === "hearing"
-      ? colors.leaf400
-      : phase === "thinking"
-        ? colors.harvest
-        : phase === "speaking"
-          ? colors.tertiary
-          : colors.primary;
-
-  const breathe = pulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, phase === "hearing" ? 1.18 : 1.08],
-  });
-  const levelScale = level.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.08],
-  });
-  const micScale = Animated.multiply(breathe, levelScale);
-  const haloOpacity = pulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.18, 0.42],
-  });
-  const ringScale = ring.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.55],
-  });
-  const ringOpacity = ring.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.35, 0],
-  });
-
-  const icon: keyof typeof Ionicons.glyphMap =
-    phase === "thinking"
-      ? "hourglass-outline"
-      : phase === "speaking"
-        ? "volume-high"
-        : "mic";
-
-  return (
-    <View
-      accessible
-      accessibilityLabel={
-        phase === "idle" ? "মাইক্রোফোন" : PHASE_COPY[phase as Exclude<LivePhase, "idle">].title
-      }
-      className="h-52 w-52 items-center justify-center"
-    >
-      <Animated.View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          width: 168,
-          height: 168,
-          borderRadius: 84,
-          borderWidth: 2,
-          borderColor: tone,
-          opacity: ringOpacity,
-          transform: [{ scale: ringScale }],
-        }}
-      />
-      <Animated.View
-        style={{
-          position: "absolute",
-          width: 168,
-          height: 168,
-          borderRadius: 84,
-          backgroundColor: tone,
-          opacity: haloOpacity,
-          transform: [{ scale: micScale }],
-        }}
-      />
-      <Animated.View style={{ transform: [{ scale: micScale }] }}>
-        <View
-          style={{
-            width: 112,
-            height: 112,
-            borderRadius: 56,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: colors.forest900,
-          }}
-        >
-          <Ionicons name={icon} size={44} color={colors.white} />
-        </View>
-      </Animated.View>
-    </View>
-  );
-}
-
-function formatSessionDate(iso: string) {
-  try {
-    return new Intl.DateTimeFormat("bn-BD", {
-      day: "numeric",
-      month: "short",
-      hour: "numeric",
-      minute: "2-digit",
-    }).format(new Date(iso));
-  } catch {
-    return iso.slice(0, 10);
-  }
 }
 
 export default function AssistantScreen() {
@@ -317,13 +97,12 @@ export default function AssistantScreen() {
   const [llmLoading, setLlmLoading] = useState(true);
   const [hasModel, setHasModel] = useState(false);
   const [loadHint, setLoadHint] = useState("");
-  const [sttReady, setSttReady] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [liveNotice, setLiveNotice] = useState("");
   const [sessions, setSessions] = useState<LocalChatSessionRow[]>([]);
-  const [activeSessionId, setActiveSessionIdState] = useState<string | null>(
-    null,
-  );
+  const [activeSessionId, setActiveSessionIdState] = useState<string | null>(null);
+  const [showJump, setShowJump] = useState(false);
+  const nearBottomRef = useRef(true);
   const liveRef = useRef<LiveConversationHandle | null>(null);
   const voiceCancelRef = useRef<(() => void) | null>(null);
   /** Bumped on new chat / switch / delete so in-flight replies cannot paint the wrong screen. */
@@ -331,20 +110,23 @@ export default function AssistantScreen() {
   const level = useRef(new Animated.Value(0)).current;
   const user = useAppSelector((s) => s.auth.user);
   const firstName = user?.displayName?.trim().split(/\s+/)[0];
-  const insets = useSafeAreaInsets();
   const keyboardLift = useKeyboardLift();
+  const online = useIsOnline();
 
   const live = livePhase !== "idle";
-  const busy = typing;
   const greet = timeOfDayGreetingBn();
+
+  const scrollToEnd = useCallback((animated = true) => {
+    listRef.current?.scrollToEnd({ animated });
+    nearBottomRef.current = true;
+    setShowJump(false);
+  }, []);
 
   useEffect(() => {
     if (keyboardLift <= 0) return;
-    const t = setTimeout(() => {
-      listRef.current?.scrollToEnd({ animated: true });
-    }, 50);
+    const t = setTimeout(() => scrollToEnd(), 50);
     return () => clearTimeout(t);
-  }, [keyboardLift]);
+  }, [keyboardLift, scrollToEnd]);
 
   const loadSessionBubbles = useCallback(async (sessionId: string) => {
     const turns = await listChatTurns(120, sessionId);
@@ -357,6 +139,7 @@ export default function AssistantScreen() {
           text: cleanBubbleText(t.role, t.textBn),
         })),
     );
+    nearBottomRef.current = true;
   }, []);
 
   const refreshSessions = useCallback(async () => {
@@ -367,18 +150,14 @@ export default function AssistantScreen() {
   const refreshModels = useCallback(async () => {
     setLlmLoading(true);
     try {
-      const installed = await hasInstalledLlm();
-      setHasModel(installed);
+      setHasModel(await hasInstalledLlm());
       const { isLlmReady } = await import("@/lib/modelManager/llmEngine");
       setLlmReady(isLlmReady());
-      const stt = catalogByKind("stt")[0];
-      setSttReady(stt ? await isInstalled(stt) : false);
       // Do not load Gemma here. Tabs stay mounted, so a background load
       // keeps the chatbot running after the farmer leaves this screen.
     } catch {
       setHasModel(false);
       setLlmReady(false);
-      setSttReady(false);
     } finally {
       setLlmLoading(false);
     }
@@ -399,6 +178,10 @@ export default function AssistantScreen() {
             if (!cancelled) setBubbles([]);
           });
           if (!cancelled) await refreshSessions();
+          // Pre-fetch orders/wallet/plan so the first answer about them is instant.
+          void import("@/lib/offlineChat/appRag")
+            .then((m) => m.warmAppFacts())
+            .catch(() => undefined);
         } catch {
           if (!cancelled) setBubbles([]);
         }
@@ -446,19 +229,12 @@ export default function AssistantScreen() {
 
   function setBubbleText(id: string, text: string) {
     setBubbles((prev) =>
-      prev.map((b) =>
-        b.id === id ? { ...b, text: cleanBubbleText(b.role, text) } : b,
-      ),
+      prev.map((b) => (b.id === id ? { ...b, text: cleanBubbleText(b.role, text) } : b)),
     );
   }
 
-  function bumpChatGen() {
-    chatGenRef.current += 1;
-    return chatGenRef.current;
-  }
-
   function abortInFlightUi() {
-    bumpChatGen();
+    chatGenRef.current += 1;
     liveRef.current?.stop();
     liveRef.current = null;
     voiceCancelRef.current?.();
@@ -467,28 +243,36 @@ export default function AssistantScreen() {
     setLiveNotice("");
     setTyping(false);
     setLoadHint("");
+    // A stopped reply leaves an empty bubble behind — drop it.
+    setBubbles((prev) => prev.filter((b) => b.role !== "assistant" || b.text.trim()));
   }
 
   async function sendText(text: string) {
     const cleaned = text.trim();
-    if (!cleaned || busy) return;
+    if (!cleaned || typing) return;
     setDraft("");
     const gen = chatGenRef.current;
     const stillThisChat = () => chatGenRef.current === gen;
     append("user", cleaned);
     const assistantId = append("assistant", "");
     setTyping(true);
+    // Sending always brings the conversation to the latest message.
+    setTimeout(() => scrollToEnd(), 30);
     try {
       await replyToText(cleaned, {
         shouldContinue: stillThisChat,
         onStatus: (msg) => {
-          if (!stillThisChat()) return;
-          setLoadHint(msg || "");
+          if (stillThisChat()) setLoadHint(msg || "");
         },
         onTextChunk: (token) => {
           if (stillThisChat()) appendToBubble(assistantId, token);
         },
+        // Streaming: repaint the bubble at most ~16×/s while Gemma writes.
+        onTextSet: (text) => {
+          if (stillThisChat()) streamToBubble(assistantId, text);
+        },
         onDone: () => {
+          flushStream();
           if (!stillThisChat()) return;
           setTyping(false);
           setLoadHint("");
@@ -501,16 +285,41 @@ export default function AssistantScreen() {
             .catch(() => undefined);
         },
         onError: (err) => {
-          if (!stillThisChat()) return;
-          setBubbleText(assistantId, userFacingError(err, "chat"));
+          if (stillThisChat()) showChatError(assistantId, err);
         },
       });
     } catch (err) {
       if (!stillThisChat()) return;
       setTyping(false);
       setLoadHint("");
-      setBubbleText(assistantId, userFacingError(err, "chat"));
+      showChatError(assistantId, err);
     }
+  }
+
+  /** A failure is a notice, never dressed up as an Aronno reply. */
+  function showChatError(assistantId: string, err: unknown) {
+    const message =
+      err instanceof ChatUnavailableError ? err.message : userFacingError(err, "chat");
+    setBubbles((prev) => [
+      ...prev.filter((b) => b.id !== assistantId),
+      { id: newId("notice"), role: "notice", text: message },
+    ]);
+  }
+
+  const streamRef = useRef<{ id: string; text: string } | null>(null);
+  const streamTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function flushStream() {
+    if (streamTimer.current) clearTimeout(streamTimer.current);
+    streamTimer.current = null;
+    const pending = streamRef.current;
+    streamRef.current = null;
+    if (pending) setBubbleText(pending.id, pending.text);
+  }
+
+  function streamToBubble(id: string, text: string) {
+    streamRef.current = { id, text };
+    if (!streamTimer.current) streamTimer.current = setTimeout(flushStream, 60);
   }
 
   function stopLive() {
@@ -534,9 +343,7 @@ export default function AssistantScreen() {
     setLivePhase("thinking");
     setLoadHint("কণ্ঠ প্রস্তুত হচ্ছে…");
     try {
-      const { startLiveConversation } = await import(
-        "@/lib/offlineChat/liveConversation"
-      );
+      const { startLiveConversation } = await import("@/lib/offlineChat/liveConversation");
       liveRef.current = startLiveConversation({
         greet: false,
         onPhase: (phase) => {
@@ -549,11 +356,7 @@ export default function AssistantScreen() {
           }
         },
         onLevel: (v) =>
-          Animated.timing(level, {
-            toValue: v,
-            duration: 90,
-            useNativeDriver: true,
-          }).start(),
+          Animated.timing(level, { toValue: v, duration: 90, useNativeDriver: true }).start(),
         onUserFinal: (text) => append("user", text),
         onAssistantStart: () => append("assistant", ""),
         onAssistantChunk: appendToBubble,
@@ -583,21 +386,17 @@ export default function AssistantScreen() {
     await refreshSessions();
   }
 
-  async function openHistory() {
-    await refreshSessions();
-    setHistoryOpen(true);
-  }
-
   async function selectSession(id: string) {
     abortInFlightUi();
     await switchChatSession(id);
     setActiveSessionIdState(id);
     await loadSessionBubbles(id);
     setHistoryOpen(false);
+    setTimeout(() => scrollToEnd(false), 60);
   }
 
   function confirmDeleteSession(id: string, title: string) {
-    Alert.alert("আলোচনা মুছবেন?", `"${title}" স্থায়ীভাবে মুছে যাবে।`, [
+    Alert.alert("আলোচনা মুছবেন?", `"${title}" এই ফোন ও আপনার অ্যাকাউন্ট থেকে মুছে যাবে।`, [
       { text: "বাতিল", style: "cancel" },
       {
         text: "মুছুন",
@@ -612,6 +411,7 @@ export default function AssistantScreen() {
               setBubbles([]);
             }
             await refreshSessions();
+            requestSyncSoon();
           })();
         },
       },
@@ -619,7 +419,7 @@ export default function AssistantScreen() {
   }
 
   function confirmClearCurrent() {
-    Alert.alert("বর্তমান আলোচনা মুছবেন?", "এই চ্যাটের সব বার্তা মুছে যাবে।", [
+    Alert.alert("বার্তাগুলো মুছবেন?", "এই আলোচনার সব বার্তা মুছে যাবে।", [
       { text: "বাতিল", style: "cancel" },
       {
         text: "মুছুন",
@@ -627,106 +427,100 @@ export default function AssistantScreen() {
         onPress: () => {
           void (async () => {
             abortInFlightUi();
-            if (activeSessionId) {
-              await clearChatTurns(activeSessionId);
-            }
+            if (activeSessionId) await clearChatTurns(activeSessionId);
             setBubbles([]);
             setHistoryOpen(false);
+            requestSyncSoon();
           })();
         },
       },
     ]);
   }
 
+  function onListScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const distance = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    const near = distance < NEAR_BOTTOM_PX;
+    nearBottomRef.current = near;
+    setShowJump((prev) => (prev === !near ? prev : !near));
+  }
+
   const lastId = bubbles[bubbles.length - 1]?.id;
-  const liveCopy = live
-    ? PHASE_COPY[livePhase as Exclude<LivePhase, "idle">]
-    : null;
+  const liveCopy = live ? PHASE_COPY[livePhase as Exclude<LivePhase, "idle">] : null;
   const lastUser = [...bubbles].reverse().find((b) => b.role === "user" && b.text.trim());
   const lastAssistant = [...bubbles]
     .reverse()
     .find((b) => b.role === "assistant" && b.text.trim());
 
+  const status = loadHint
+    ? { text: loadHint, dot: colors.harvest }
+    : online
+      ? { text: "অনলাইন · সব প্রশ্নের উত্তর", dot: colors.tertiary }
+      : llmReady || hasModel
+        ? { text: "অফলাইন AI চালু", dot: colors.tertiary }
+        : { text: "অফলাইন · জ্ঞানভাণ্ডার থেকে উত্তর", dot: colors.harvest };
+
   return (
     <View className="flex-1 bg-neutral">
       <SafeAreaView className="flex-1" edges={["top"]}>
-        {/* Header — high contrast, clear actions */}
-        <View
-          className="flex-row items-center gap-2 border-b border-border bg-card px-3 py-2.5"
-          accessibilityRole="header"
-        >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="আগের আলোচনা"
-            onPress={() => void openHistory()}
-            hitSlop={6}
-            className="h-11 w-11 items-center justify-center rounded-2xl bg-neutral"
-          >
-            <Ionicons name="menu" size={22} color={colors.ink} />
-          </Pressable>
+        {/* Header */}
+        <View className="flex-row items-center gap-3 px-4 pb-3 pt-2" accessibilityRole="header">
+          <AssistantAvatar size={44} />
           <View className="min-w-0 flex-1">
-            <AppText variant="bodyLg" className="font-bengali-bold text-ink">
-              আরণ্য
+            <AppText variant="subtitle" className="text-ink">
+              আরণ্য সহকারী
             </AppText>
             <View className="mt-0.5 flex-row items-center gap-1.5">
-              <View
-                className="h-2 w-2 rounded-full"
-                style={{
-                  backgroundColor: llmReady ? colors.tertiary : colors.harvest,
-                }}
-              />
-              <AppText variant="caption" className="flex-1" numberOfLines={1}>
-                {loadHint ||
-                  (llmReady ? "জেমা চালু" : hasModel ? "অফলাইন প্রস্তুত" : "সহকারী")}
+              <View className="h-2 w-2 rounded-full" style={{ backgroundColor: status.dot }} />
+              <AppText variant="caption" className="flex-1 text-muted" numberOfLines={1}>
+                {status.text}
               </AppText>
             </View>
           </View>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="আলোচনার ইতিহাস"
+            onPress={() => {
+              void refreshSessions();
+              setHistoryOpen(true);
+            }}
+            className="h-11 w-11 items-center justify-center rounded-full border border-border bg-card"
+          >
+            <Ionicons name="time-outline" size={21} color={colors.ink} />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
             accessibilityLabel="নতুন আলোচনা"
             onPress={() => void newChat()}
-            hitSlop={6}
-            className="h-11 w-11 items-center justify-center rounded-2xl bg-secondary"
+            className="h-11 w-11 items-center justify-center rounded-full bg-primary"
           >
-            <Ionicons name="create-outline" size={20} color={colors.primary} />
+            <Ionicons name="add" size={24} color={colors.white} />
           </Pressable>
         </View>
 
-        {!llmLoading && !llmReady && !hasModel ? (
-          <View
-            className="mx-3 mt-3 flex-row items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3"
+        {!online && !llmLoading && !llmReady && !hasModel ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="অফলাইন মডেল ডাউনলোড করুন"
+            onPress={() => router.push("/(root)/(tabs)/models")}
+            className="mx-4 mb-2 flex-row items-center gap-3 rounded-2xl bg-harvest-soft px-4 py-3"
           >
-            <Ionicons
-              name="information-circle-outline"
-              size={24}
-              color={colors.primary}
-            />
+            <Ionicons name="cloud-download-outline" size={22} color={colors.harvest} />
             <AppText variant="caption" className="flex-1 text-ink">
-              জ্ঞানভাণ্ডার দিয়ে উত্তর দেওয়া হচ্ছে। পূর্ণ উত্তরের জন্য মডেল
-              ম্যানেজার থেকে জেমা ডাউনলোড করুন।
+              ইন্টারনেট ছাড়াও পূর্ণ উত্তর পেতে অফলাইন মডেল ডাউনলোড করুন
             </AppText>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="মডেল ম্যানেজার খুলুন"
-              onPress={() => router.push("/(root)/(tabs)/models")}
-              className="min-h-touch items-center justify-center rounded-xl bg-forest-700 px-3"
-            >
-              <AppText
-                variant="caption"
-                className="font-bengali-bold text-white"
-              >
-                মডেল
-              </AppText>
-            </Pressable>
-          </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.harvest} />
+          </Pressable>
         ) : null}
 
         {live ? (
-          <View className="flex-1 items-center justify-between px-6 pb-6 pt-4">
+          <View className="flex-1 items-center justify-between px-6 pb-6 pt-2">
             <View className="w-full items-center pt-4">
-              <AppText variant="caption" className="mb-2 text-primary">
-                কণ্ঠে আলোচনা
-              </AppText>
+              <View className="mb-3 rounded-full bg-secondary px-3 py-1">
+                <AppText variant="caption" className="font-bengali-semibold text-primary">
+                  কণ্ঠে আলোচনা
+                </AppText>
+              </View>
               <AppText variant="display" className="text-center text-ink">
                 {liveCopy?.title}
               </AppText>
@@ -739,27 +533,19 @@ export default function AssistantScreen() {
 
             <View className="w-full items-center gap-3">
               {lastUser ? (
-                <View className="w-full rounded-2xl bg-forest-700 px-4 py-3">
-                  <AppText
-                    variant="caption"
-                    className="mb-1"
-                    style={{ color: "rgba(255,255,255,0.82)" }}
-                  >
+                <View className="w-full rounded-3xl bg-forest-700 px-4 py-3">
+                  <AppText variant="caption" className="mb-1" style={{ color: "rgba(255,255,255,0.8)" }}>
                     আপনি
                   </AppText>
-                  <AppText
-                    variant="body"
-                    numberOfLines={2}
-                    style={{ color: colors.white }}
-                  >
+                  <AppText variant="body" numberOfLines={2} style={{ color: colors.white }}>
                     {lastUser.text}
                   </AppText>
                 </View>
               ) : null}
               {lastAssistant ? (
-                <View className="w-full rounded-2xl border border-border bg-card px-5 py-4">
+                <View className="w-full rounded-3xl border border-border bg-card px-5 py-4">
                   <AppText variant="caption" className="mb-1 text-muted">
-                    উত্তর
+                    আরণ্য
                   </AppText>
                   <AppText variant="bodyLg" numberOfLines={4}>
                     {lastAssistant.text}
@@ -775,21 +561,17 @@ export default function AssistantScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="কথোপকথন শেষ করুন"
                 onPress={stopLive}
-                className="min-h-touch w-full flex-row items-center justify-center gap-2 rounded-2xl py-3.5"
-                style={{ backgroundColor: colors.forest900 }}
+                className="min-h-touch w-full flex-row items-center justify-center gap-2 rounded-full bg-danger py-3.5"
               >
-                <Ionicons name="stop" size={18} color={colors.white} />
-                <AppText variant="body" className="font-bengali-bold text-white">
+                <Ionicons name="close" size={20} color={colors.white} />
+                <AppText variant="body" className="font-bengali-bold" style={{ color: colors.white }}>
                   শেষ করুন
                 </AppText>
               </Pressable>
             </View>
           </View>
         ) : (
-          <View
-            className="flex-1"
-            style={{ paddingBottom: keyboardLift }}
-          >
+          <View className="flex-1" style={{ paddingBottom: keyboardLift > 0 ? keyboardLift : 8 }}>
             <FlatList
               ref={listRef}
               className="flex-1"
@@ -797,311 +579,81 @@ export default function AssistantScreen() {
               keyExtractor={(b) => b.id}
               contentContainerStyle={{
                 paddingHorizontal: 16,
-                paddingTop: 16,
-                paddingBottom: 12,
-                gap: 12,
+                paddingTop: 8,
+                paddingBottom: 16,
+                gap: 16,
                 flexGrow: 1,
               }}
-              onContentSizeChange={() =>
-                listRef.current?.scrollToEnd({ animated: true })
-              }
+              onScroll={onListScroll}
+              scrollEventThrottle={64}
+              // Follow new text only while the farmer is at the bottom.
+              onContentSizeChange={() => {
+                if (nearBottomRef.current) listRef.current?.scrollToEnd({ animated: true });
+              }}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="interactive"
               showsVerticalScrollIndicator={false}
               accessibilityLabel="আলোচনার বার্তা"
               ListEmptyComponent={
-                <View className="flex-1 items-center justify-center px-5 py-8">
-                  <View
-                    className="mb-4 h-16 w-16 items-center justify-center rounded-3xl"
-                    style={{ backgroundColor: colors.secondary }}
-                  >
-                    <Ionicons name="leaf" size={30} color={colors.primary} />
-                  </View>
-                  <AppText variant="display" className="text-center">
-                    {firstName ? `${greet}, ${firstName}` : greet}
-                  </AppText>
-                  <AppText variant="body" className="mt-2 text-center text-muted">
-                    ফসল, রোগ, সার বা আবহাওয়া — লিখে বা বলে জিজ্ঞাসা করুন
-                  </AppText>
-                  <View className="mt-8 w-full gap-2.5">
-                    {SUGGESTIONS.map((s) => (
-                      <Pressable
-                        key={s}
-                        accessibilityRole="button"
-                        accessibilityLabel={`প্রশ্ন: ${s}`}
-                        onPress={() => void sendText(s)}
-                        className="flex-row items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5"
-                      >
-                        <Ionicons
-                          name="chatbubble-ellipses-outline"
-                          size={18}
-                          color={colors.primary}
-                        />
-                        <AppText variant="body" className="flex-1 text-ink">
-                          {s}
-                        </AppText>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
+                <ChatEmptyState
+                  greeting={firstName ? `${greet}, ${firstName}` : greet}
+                  onPick={(s) => void sendText(s)}
+                />
               }
-              renderItem={({ item }) => {
-                if (item.role === "notice") {
-                  return (
-                    <View
-                      className="self-center rounded-2xl border border-border bg-harvest-soft px-4 py-2.5"
-                      accessibilityRole="text"
-                    >
-                      <AppText
-                        variant="caption"
-                        className="text-center text-ink"
-                      >
-                        {item.text}
-                      </AppText>
-                    </View>
-                  );
-                }
-                if (item.role === "user") {
-                  return (
-                    <View
-                      className="max-w-[85%] self-end rounded-3xl rounded-br-md px-4 py-3"
-                      style={{ backgroundColor: colors.forest700 }}
-                      accessibilityLabel={`আপনি: ${item.text}`}
-                    >
-                      <AppText
-                        variant="body"
-                        className="leading-6"
-                        style={{ color: colors.white }}
-                      >
-                        {item.text}
-                      </AppText>
-                    </View>
-                  );
-                }
-                const waiting =
-                  !item.text && (typing || live) && item.id === lastId;
-                return (
-                  <View
-                    className="w-full flex-row items-start gap-2.5"
-                    accessibilityLabel={
-                      waiting ? "উত্তর লেখা হচ্ছে" : `উত্তর: ${item.text}`
-                    }
-                  >
-                    <View
-                      className="mt-0.5 h-8 w-8 items-center justify-center rounded-full"
-                      style={{ backgroundColor: colors.forest700 }}
-                    >
-                      <Ionicons name="sparkles" size={15} color={colors.white} />
-                    </View>
-                    <View className="min-w-0 flex-1 rounded-3xl rounded-tl-md border border-border bg-card px-4 py-3">
-                      {waiting ? (
-                        <TypingDots />
-                      ) : (
-                        <AppText variant="body" className="leading-7 text-ink">
-                          {item.text || "…"}
-                        </AppText>
-                      )}
-                    </View>
-                  </View>
-                );
-              }}
+              renderItem={({ item }) => (
+                <MessageBubble
+                  item={item}
+                  waiting={!item.text && typing && item.id === lastId}
+                  showActions={!(typing && item.id === lastId)}
+                />
+              )}
             />
 
-            <View
-              className="bg-neutral px-3 pt-1"
-              style={{ paddingBottom: keyboardLift > 0 ? 10 : 12 }}
-            >
-              <View
-                className="flex-row items-end gap-1 rounded-3xl border border-border bg-card px-2 py-1.5"
+            {showJump && bubbles.length > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="সর্বশেষ বার্তায় যান"
+                onPress={() => scrollToEnd()}
+                className="absolute right-4 h-11 w-11 items-center justify-center rounded-full border border-border bg-card"
                 style={{
+                  bottom: (keyboardLift > 0 ? keyboardLift : 8) + 96,
+                  elevation: 4,
                   shadowColor: colors.forest900,
-                  shadowOpacity: 0.06,
-                  shadowRadius: 12,
-                  shadowOffset: { width: 0, height: 4 },
-                  elevation: 2,
+                  shadowOpacity: 0.12,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 3 },
                 }}
               >
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={live ? "কণ্ঠ বন্ধ করুন" : "কণ্ঠ চালু করুন"}
-                  disabled={typing}
-                  onPress={() => void toggleVoiceInput()}
-                  className="mb-0.5 h-11 w-11 items-center justify-center rounded-full"
-                >
-                  <Ionicons
-                    name={live ? "mic" : "mic-outline"}
-                    size={22}
-                    color={live ? colors.primary : colors.ink}
-                  />
-                </Pressable>
-                <TextInput
-                  value={draft}
-                  onChangeText={setDraft}
-                  placeholder="আরণ্যকে জিজ্ঞাসা করুন"
-                  placeholderTextColor={colors.muted}
-                  multiline
-                  editable={!typing}
-                  accessibilityLabel="বার্তা লেখার ঘর"
-                  className="max-h-28 min-h-[40px] flex-1 px-1 py-2 font-bengali text-body text-ink"
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={typing ? "থামান" : "পাঠান"}
-                  disabled={!typing && !draft.trim()}
-                  onPress={() => {
-                    if (typing) abortInFlightUi();
-                    else if (draft.trim()) void sendText(draft);
-                  }}
-                  className="mb-0.5 h-11 w-11 items-center justify-center rounded-full"
-                  style={{
-                    backgroundColor:
-                      typing || draft.trim() ? colors.primary : colors.secondary,
-                  }}
-                >
-                  <Ionicons
-                    name={typing ? "stop" : "arrow-up"}
-                    size={20}
-                    color={typing || draft.trim() ? colors.white : colors.muted}
-                  />
-                </Pressable>
-              </View>
-            </View>
+                <Ionicons name="arrow-down" size={20} color={colors.primary} />
+              </Pressable>
+            ) : null}
+
+            <ChatComposer
+              draft={draft}
+              onChangeDraft={setDraft}
+              typing={typing}
+              onSend={() => void sendText(draft)}
+              onStop={abortInFlightUi}
+              onMic={() => void toggleVoiceInput()}
+              micDisabled={typing}
+            />
           </View>
         )}
       </SafeAreaView>
 
-      {/* History sheet */}
-      <Modal
+      <HistorySheet
         visible={historyOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setHistoryOpen(false)}
-        accessibilityViewIsModal
-      >
-        <View className="flex-1 justify-end">
-          <Pressable
-            className="absolute inset-0 bg-black/40"
-            accessibilityRole="button"
-            accessibilityLabel="বন্ধ করুন"
-            onPress={() => setHistoryOpen(false)}
-          />
-          <View
-            className="rounded-t-3xl bg-card px-4 pt-3"
-            style={{
-              maxHeight: "78%",
-              paddingBottom: Math.max(insets.bottom, 16),
-            }}
-          >
-            <View className="mb-3 items-center">
-              <View className="h-1 w-10 rounded-full bg-border" />
-            </View>
-            <View className="mb-3 flex-row items-center justify-between gap-2">
-              <AppText variant="title" className="flex-1 text-ink">
-                আগের আলোচনা
-              </AppText>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="নতুন আলোচনা"
-                onPress={() => {
-                  setHistoryOpen(false);
-                  void newChat();
-                }}
-                className="min-h-touch flex-row items-center gap-1 rounded-xl bg-forest-700 px-3"
-              >
-                <Ionicons name="add" size={18} color={colors.white} />
-                <AppText
-                  variant="caption"
-                  className="font-bengali-bold text-white"
-                >
-                  নতুন
-                </AppText>
-              </Pressable>
-            </View>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="বর্তমান আলোচনা মুছুন"
-              onPress={confirmClearCurrent}
-              className="mb-3 min-h-touch flex-row items-center justify-center gap-2 rounded-xl border border-[#F5C2C0] bg-[#FEF3F2]"
-            >
-              <Ionicons name="trash-outline" size={18} color="#B42318" />
-              <AppText
-                variant="body"
-                className="font-bengali-semibold text-[#B42318]"
-              >
-                বর্তমান আলোচনা মুছুন
-              </AppText>
-            </Pressable>
-
-            <ScrollView
-              style={{ maxHeight: 420 }}
-              showsVerticalScrollIndicator
-              keyboardShouldPersistTaps="handled"
-            >
-              {sessions.length === 0 ? (
-                <AppText variant="body" className="py-8 text-center text-muted">
-                  এখনো কোনো আগের আলোচনা নেই।
-                </AppText>
-              ) : (
-                sessions.map((item) => {
-                  const active = item.localId === activeSessionId;
-                  return (
-                    <View
-                      key={item.localId}
-                      className={`mb-2 flex-row items-center gap-2 rounded-2xl border px-3 py-3 ${
-                        active
-                          ? "border-primary bg-secondary"
-                          : "border-border bg-neutral"
-                      }`}
-                    >
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: active }}
-                        accessibilityLabel={`${item.titleBn}, ${formatSessionDate(item.updatedAt)}`}
-                        onPress={() => void selectSession(item.localId)}
-                        className="min-h-touch min-w-0 flex-1 justify-center"
-                      >
-                        <AppText
-                          variant="body"
-                          className="font-bengali-semibold text-ink"
-                          numberOfLines={1}
-                        >
-                          {item.titleBn}
-                        </AppText>
-                        <AppText variant="caption" className="text-muted">
-                          {formatSessionDate(item.updatedAt)}
-                          {active ? " · চালু" : ""}
-                        </AppText>
-                      </Pressable>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`${item.titleBn} মুছুন`}
-                        onPress={() =>
-                          confirmDeleteSession(item.localId, item.titleBn)
-                        }
-                        hitSlop={8}
-                        className="min-h-touch min-w-[56px] items-center justify-center rounded-xl bg-[#FEF3F2] px-2"
-                      >
-                        <Ionicons
-                          name="trash-outline"
-                          size={20}
-                          color="#B42318"
-                        />
-                        <AppText
-                          variant="caption"
-                          className="mt-0.5 text-[#B42318]"
-                        >
-                          মুছুন
-                        </AppText>
-                      </Pressable>
-                    </View>
-                  );
-                })
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onClose={() => setHistoryOpen(false)}
+        onSelect={(id) => void selectSession(id)}
+        onDelete={confirmDeleteSession}
+        onNew={() => {
+          setHistoryOpen(false);
+          void newChat();
+        }}
+        onClearCurrent={confirmClearCurrent}
+      />
     </View>
   );
 }

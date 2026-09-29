@@ -142,11 +142,26 @@ export async function renameChatSession(
   );
 }
 
+/** Remember deleted turns so sync removes them server-side and never re-pulls them. */
+async function tombstoneChatTurns(
+  db: Awaited<ReturnType<typeof getOfflineDb>>,
+  where: string,
+  params: string[],
+): Promise<void> {
+  await db.runAsync(
+    `INSERT OR IGNORE INTO deleted_chat_turns (local_id, server_id, deleted_at)
+     SELECT local_id, server_id, ? FROM chat_turns ${where}`,
+    [nowIso(), ...params],
+  );
+}
+
 export async function deleteChatSession(id: string): Promise<void> {
   const db = await getOfflineDb();
+  await tombstoneChatTurns(db, `WHERE conversation_id = ?`, [id]);
   await db.runAsync(`DELETE FROM chat_turns WHERE conversation_id = ?`, [id]);
   await db.runAsync(`DELETE FROM chat_sessions WHERE local_id = ?`, [id]);
 }
+
 
 export async function insertDiagnosis(
   input: Omit<
@@ -304,18 +319,19 @@ export async function listChatTurns(
   conversationId?: string,
 ): Promise<LocalChatTurnRow[]> {
   const db = await getOfflineDb();
+  // Newest `limit` turns, returned oldest-first for display.
   if (conversationId) {
     const rows = await db.getAllAsync<Record<string, unknown>>(
-      `SELECT * FROM chat_turns WHERE conversation_id = ? ORDER BY created_at ASC LIMIT ?`,
+      `SELECT * FROM chat_turns WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?`,
       [conversationId, limit],
     );
-    return rows.map(mapChat);
+    return rows.reverse().map(mapChat);
   }
   const rows = await db.getAllAsync<Record<string, unknown>>(
-    `SELECT * FROM chat_turns ORDER BY created_at ASC LIMIT ?`,
+    `SELECT * FROM chat_turns ORDER BY created_at DESC LIMIT ?`,
     [limit],
   );
-  return rows.map(mapChat);
+  return rows.reverse().map(mapChat);
 }
 
 /**
@@ -634,6 +650,12 @@ export async function upsertChatFromServer(
 ): Promise<void> {
   const db = await getOfflineDb();
   for (const t of turns) {
+    // Deleted on this phone → never resurrect it.
+    const deleted = await db.getFirstAsync<{ local_id: string }>(
+      `SELECT local_id FROM deleted_chat_turns WHERE server_id = ? OR local_id = ?`,
+      [t.id, t.clientLocalId ?? ""],
+    );
+    if (deleted) continue;
     if (t.clientLocalId) {
       const byLocal = await db.getFirstAsync<{ local_id: string }>(
         `SELECT local_id FROM chat_turns WHERE local_id = ?`,
@@ -677,11 +699,13 @@ export async function upsertChatFromServer(
 export async function clearChatTurns(conversationId?: string): Promise<void> {
   const db = await getOfflineDb();
   if (conversationId) {
+    await tombstoneChatTurns(db, `WHERE conversation_id = ?`, [conversationId]);
     await db.runAsync(`DELETE FROM chat_turns WHERE conversation_id = ?`, [
       conversationId,
     ]);
     return;
   }
+  await tombstoneChatTurns(db, "", []);
   await db.runAsync(`DELETE FROM chat_turns`);
 }
 

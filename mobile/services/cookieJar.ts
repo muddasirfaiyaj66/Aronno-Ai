@@ -1,13 +1,12 @@
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
+import {
+  parseSetCookie,
+  splitCombinedSetCookie,
+  type CookieRecord,
+} from "@/services/cookieParse";
 
 const STORE_KEY = "aronno.cookie-jar";
-
-type CookieRecord = {
-  name: string;
-  value: string;
-  expires?: number;
-};
 
 let memory: CookieRecord[] = [];
 
@@ -28,26 +27,6 @@ async function persist(next: CookieRecord[]) {
   await SecureStore.setItemAsync(STORE_KEY, JSON.stringify(next));
 }
 
-function parseSetCookie(header: string): CookieRecord | null {
-  const parts = header.split(";").map((p) => p.trim());
-  const [nv] = parts;
-  const eq = nv.indexOf("=");
-  if (eq < 1) return null;
-  const name = nv.slice(0, eq).trim();
-  const value = nv.slice(eq + 1).trim();
-  let expires: number | undefined;
-  for (const part of parts.slice(1)) {
-    const [k, v] = part.split("=");
-    if (k.toLowerCase() === "max-age" && v) {
-      expires = Date.now() + Number(v) * 1000;
-    }
-    if (k.toLowerCase() === "expires" && v) {
-      expires = Date.parse(v);
-    }
-  }
-  return { name, value, expires };
-}
-
 function collectSetCookie(res: Response): string[] {
   const anyHeaders = res.headers as Headers & { getSetCookie?: () => string[] };
   if (typeof anyHeaders.getSetCookie === "function") {
@@ -55,7 +34,7 @@ function collectSetCookie(res: Response): string[] {
   }
   const raw = res.headers.get("set-cookie");
   if (!raw) return [];
-  return raw.split(/,(?=\s*[^;=]+=)/);
+  return splitCombinedSetCookie(raw);
 }
 
 export async function ingestCookies(res: Response) {

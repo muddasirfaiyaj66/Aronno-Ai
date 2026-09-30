@@ -252,8 +252,8 @@ CORS_ORIGIN=http://localhost:8081,http://localhost:19006,http://localhost:8082,h
 DATABASE_URL=mongodb://localhost:27017/aronno
 JWT_ACCESS_SECRET=PASTE_FIRST_NODE_SECRET_HERE
 JWT_REFRESH_SECRET=PASTE_SECOND_NODE_SECRET_HERE
-JWT_ACCESS_TTL=2h
-JWT_REFRESH_TTL=7d
+JWT_ACCESS_TTL=7d
+JWT_REFRESH_TTL=30d
 COOKIE_SECURE=false
 SUPERADMIN_EMAIL=
 SUPERADMIN_PASSWORD=
@@ -287,7 +287,7 @@ CALL_SERVICE_SECRET=
 | `SUPERADMIN_*` | First boot creates this **already verified** superadmin from `backend/.env`. Do not commit those values. After login they can create admins; admins can create more admins. |
 | `SSLCOMMERZ_*` | Store id and password from SSLCommerz. Keep `SSLCOMMERZ_IS_LIVE=false` on the sandbox. |
 | `API_PUBLIC_URL` | Public `https` origin of **this API**, with no `/api` and no trailing slash. SSLCommerz calls `{API_PUBLIC_URL}/api/marketplace/payments/sslcommerz/...`. It is not the website URL. `localhost` cannot complete online payment. |
-| `JWT_ACCESS_TTL` | Listed as `2h` in `.env.example`. The running API signs `aronno_access` for 2 hours in code. |
+| `JWT_ACCESS_TTL` | Documented as `7d`. The API signs `aronno_access` for 7 days in code. `aronno_refresh` lasts 30 days and rotates. |
 | `CALL_SERVICE_URL` | Public base URL of the call VM, no trailing slash. Empty means video rooms stay off. |
 | `CALL_SERVICE_SECRET` | Shared secret the API sends as `Authorization: Bearer` to the call VM. Same value as `call/.env`. Do not commit it. On the hosted API, set this and `CALL_SERVICE_URL` in the Vercel project environment or `videoReady` stays false. |
 
@@ -551,8 +551,8 @@ flowchart LR
   Auth --> SMTP
 ```
 
-- Access cookie `aronno_access` — 2 hours, HttpOnly. The phone sends `Cookie` and `X-CSRF-Token`. User JWTs are not bearer tokens.
-- Refresh cookie `aronno_refresh` — 7 days, rotated
+- Access cookie `aronno_access` — 7 days, HttpOnly. The phone sends `Cookie` and `X-CSRF-Token`. User JWTs are not bearer tokens.
+- Refresh cookie `aronno_refresh` — 30 days, rotated. A retry within 60 seconds does not log the user out.
 - CSRF cookie `aronno_csrf` — readable; sent as `X-CSRF-Token` on POST/PATCH
 - Redux stores `{ user, isAuthenticated }` only — **never** the JWT string
 - Video media uses a separate call VM. The API opens rooms with `CALL_SERVICE_SECRET`. See [section 17](#17-video-consult).
@@ -765,7 +765,7 @@ Public POSTs do not need CSRF. Logged-in POSTs/PATCHes need cookie + `X-CSRF-Tok
 | Video stays off on the hosted API | Set `CALL_SERVICE_URL` and `CALL_SERVICE_SECRET` in the Vercel API project environment. Empty values leave `videoReady` false |
 | Phone says the video service is not on | Set `EXPO_PUBLIC_CALL_URL` to the public call host and restart the app |
 | Call screen asks for a new build (Bangla) | The installed APK has no LiveKit native module. From `mobile/`: `pnpm exec expo run:android`. Do not commit `.env` |
-| Join is refused | Status must be `ringing` or `in_call`, the access cookie must still be valid (2 hours), and `ARONNO_API_URL` on the VM must reach this API |
+| Join is refused | Status must be `ringing` or `in_call`, the access cookie must still be valid (7 days), and `ARONNO_API_URL` on the VM must reach this API |
 
 ---
 

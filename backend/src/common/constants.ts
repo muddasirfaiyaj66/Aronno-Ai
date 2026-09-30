@@ -6,8 +6,11 @@ export const COOKIE = {
 
 export const COOKIE_PATH = '/api';
 
-export const ACCESS_TTL_SECONDS = 2 * 60 * 60;
-export const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60;
+export const ACCESS_TTL_SECONDS = 7 * 24 * 60 * 60;
+/** Longer than the access cookie so a 401 can still mint a new 7-day session. */
+export const REFRESH_TTL_SECONDS = 30 * 24 * 60 * 60;
+/** A second refresh with the token just rotated is a retry, not theft. */
+export const REFRESH_REUSE_GRACE_MS = 60_000;
 
 export const LOCKOUT_THRESHOLD = 5;
 export const LOCKOUT_MINUTES = 15;

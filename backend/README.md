@@ -6,7 +6,7 @@ Nest.js 11 API for the Aronno phone app and website. Cookies-only JWT auth, Pris
 
 - Nest.js 11, Prisma 6, MongoDB
 - Argon2id passwords, Google ID-token (OAuth 2.1)
-- httpOnly cookies: `aronno_access` (2 hours), `aronno_refresh` (7d), `aronno_csrf` (not HttpOnly)
+- httpOnly cookies: `aronno_access` (7 days), `aronno_refresh` (30 days), `aronno_csrf` (not HttpOnly)
 - Zod on every DTO, Helmet, CORS credentials, `@nestjs/throttler`
 
 ## Setup

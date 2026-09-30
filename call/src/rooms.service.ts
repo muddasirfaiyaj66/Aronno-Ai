@@ -1,4 +1,3 @@
-import { timingSafeEqual } from 'node:crypto';
 import {
   Injectable,
   OnModuleInit,
@@ -6,6 +5,7 @@ import {
   BadRequestException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { assertConsultId, assertServiceSecret, readJoinCheck } from './access';
 import {
   AccessToken,
   RoomServiceClient,
@@ -137,17 +137,11 @@ export class RoomsService implements OnModuleInit {
   }
 
   private assertSecret(authorization: string | undefined) {
-    const expected = process.env.CALL_SERVICE_SECRET ?? '';
-    const got = authorization?.replace(/^Bearer\s+/i, '') ?? '';
-    const a = Buffer.from(expected);
-    const b = Buffer.from(got);
-    if (!expected || a.length !== b.length || !timingSafeEqual(a, b)) {
-      throw new UnauthorizedException();
-    }
+    assertServiceSecret(authorization, process.env.CALL_SERVICE_SECRET ?? '');
   }
 
   private assertId(id: string) {
-    if (!/^[a-f0-9]{24}$/i.test(id)) throw new BadRequestException('Invalid consult');
+    assertConsultId(id);
   }
 
   private async checkParticipant(consultId: string, cookieHeader: string | undefined) {
@@ -168,18 +162,8 @@ export class RoomsService implements OnModuleInit {
     } catch {
       throw new ServiceUnavailableException('API did not respond');
     }
-    const body = (await res.json().catch(() => null)) as
-      | { success: true; data: { userId: string; displayName: string } }
-      | { success: false; error?: { message?: string } }
-      | null;
-    if (res.ok && body && 'success' in body && body.success && body.data?.userId) {
-      return body.data;
-    }
-    if (res.status >= 500) throw new ServiceUnavailableException('API did not respond');
-    if (res.status === 401 || res.status === 403) {
-      throw new UnauthorizedException('Join check rejected');
-    }
-    throw new BadRequestException('Join check failed');
+    const body = await res.json().catch(() => null);
+    return readJoinCheck(res.status, body);
   }
 
   private async notify(consultId: string, status: 'in_call' | 'ended') {

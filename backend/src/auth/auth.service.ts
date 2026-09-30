@@ -11,6 +11,7 @@ import {
   ACCESS_TTL_SECONDS,
   LOCKOUT_MINUTES,
   LOCKOUT_THRESHOLD,
+  REFRESH_REUSE_GRACE_MS,
   REFRESH_TTL_SECONDS,
 } from '../common/constants';
 import { clearAuthCookies, setAuthCookies } from '../common/cookies';
@@ -537,23 +538,25 @@ export class AuthService {
       where: { tokenHash },
       include: { user: { include: { role: true } } },
     });
-    if (!stored) throw Errors.unauthorized();
+    if (!stored || !stored.user.isActive || stored.expiresAt < new Date()) {
+      throw Errors.unauthorized();
+    }
 
     if (stored.revokedAt) {
-      await this.prisma.refreshToken.updateMany({
-        where: { familyId: stored.familyId, revokedAt: null },
+      const rotatedAgo = Date.now() - stored.revokedAt.getTime();
+      if (rotatedAgo > REFRESH_REUSE_GRACE_MS) {
+        await this.prisma.refreshToken.updateMany({
+          where: { familyId: stored.familyId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+        throw Errors.unauthorized();
+      }
+    } else {
+      await this.prisma.refreshToken.update({
+        where: { id: stored.id },
         data: { revokedAt: new Date() },
       });
-      throw Errors.unauthorized();
     }
-    if (stored.expiresAt < new Date() || !stored.user.isActive) {
-      throw Errors.unauthorized();
-    }
-
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
-      data: { revokedAt: new Date() },
-    });
 
     await this.issueSession(
       stored.userId,

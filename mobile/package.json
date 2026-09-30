@@ -11,6 +11,7 @@
     "ios": "expo run:ios",
     "web": "node --max-old-space-size=8192 ./node_modules/expo/bin/cli start --web",
     "lint": "expo lint",
+    "test": "node --experimental-strip-types --test services/cookieParse.spec.ts types/consult.spec.ts",
     "dev:phone": "bash ./scripts/dev-phone.sh"
   },
   "dependencies": {

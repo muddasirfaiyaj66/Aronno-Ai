@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "test": "node --experimental-strip-types --test src/store.spec.ts src/access.spec.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

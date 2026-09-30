@@ -80,8 +80,8 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
             └───────────┘
 ```
 
-- Access token: `aronno_access` (2 hours, HttpOnly cookie). The phone sends `Cookie` and `X-CSRF-Token`. User JWTs are not bearer tokens.
-- Refresh token: `aronno_refresh` (7 days, rotated; reuse detection)
+- Access token: `aronno_access` (7 days, HttpOnly cookie). The phone sends `Cookie` and `X-CSRF-Token`. User JWTs are not bearer tokens.
+- Refresh token: `aronno_refresh` (30 days, rotated; reuse after 60 seconds revokes the session)
 - CSRF: `aronno_csrf` + `X-CSRF-Token` on mutating requests
 - Redux holds `{ user, isAuthenticated }` only — **never** the JWT string
 
@@ -114,7 +114,7 @@ The phone and the Nest.js API share the consult record. The call service stores 
              └─────────────────────────┘
 ```
 
-- The Expo app talks to the Nest.js API for consults, advice, PDF, login, presence, and notifications. In production that API is the Vercel deployment. Locally it is `http://localhost:3000/api`. Auth is the `aronno_access` cookie (2 hours), not a bearer token.
+- The Expo app talks to the Nest.js API for consults, advice, PDF, login, presence, and notifications. In production that API is the Vercel deployment. Locally it is `http://localhost:3000/api`. Auth is the `aronno_access` cookie (7 days), not a bearer token.
 - `call/` signs LiveKit join tokens. The phone joins media through `EXPO_PUBLIC_CALL_URL`. The API opens and closes rooms with `CALL_SERVICE_URL` and `Authorization: Bearer` using `CALL_SERVICE_SECRET`.
 - On join and leave, the call service sends the user's cookie to `POST /api/internal/consults/:id/join-check` with the Bearer secret. It posts `call-status` (`in_call` or `ended`) when LiveKit reports a participant join, the room finishes, or the last participant leaves. If `ARONNO_API_URL` is empty, the call service uses `https://aronno-api.vercel.app/api`.
 - LiveKit Server (`livekit/livekit-server:v1.13.7`), the call service, and Caddy 2 run with Docker Compose and `network_mode: host`. Caddy sends `/v1/*` to `127.0.0.1:4000` and everything else to LiveKit HTTP on `127.0.0.1:7880`. The call service uses that same localhost URL when `LIVEKIT_HTTP_URL` is empty.

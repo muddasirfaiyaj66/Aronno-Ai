@@ -10,7 +10,7 @@ import {
 import { useColors } from "@/context/theme";
 import { parseNumberInput } from "@/utils/number";
 import type { LandUnit } from "@/types/treatment";
-import type { CropSeason, FarmGoal, LandType } from "@/types/planning";
+import type { FarmGoal, LandType } from "@/types/planning";
 
 /** Common Bangladeshi field crops the farmer can tap instead of typing. */
 export const CROP_CHOICES = [
@@ -31,12 +31,6 @@ export const CROP_CHOICES = [
   "তরমুজ",
 ];
 
-const SEASONS: { id: CropSeason; label: string }[] = [
-  { id: "rabi", label: "রবি" },
-  { id: "kharif1", label: "খরিফ-১" },
-  { id: "kharif2", label: "খরিফ-২" },
-];
-
 const LAND_TYPES: { id: LandType; label: string }[] = [
   { id: "high", label: "উঁচু" },
   { id: "medium", label: "মাঝারি" },
@@ -54,7 +48,7 @@ export type FarmDraft = {
   landSize: string;
   landUnit: LandUnit;
   landType?: LandType;
-  pastCrops: { nameBn: string; season?: CropSeason }[];
+  pastCrops: { nameBn: string }[];
   wantedCrops: string[];
   goal?: FarmGoal;
 };
@@ -114,6 +108,17 @@ export function FarmAdviceForm({
           ))}
         </View>
         <View className="flex-row items-center gap-3">
+          {step > 0 ? (
+            <Pressable
+              onPress={() => setStep((s) => s - 1)}
+              accessibilityRole="button"
+              accessibilityLabel="আগের ধাপে যান"
+              hitSlop={8}
+              className="h-11 w-11 items-center justify-center rounded-full bg-neutral"
+            >
+              <Ionicons name="chevron-back" size={22} color={c.ink} />
+            </Pressable>
+          ) : null}
           <View className="h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
             <Ionicons name={STEPS[step].icon} size={22} color={c.primary} />
           </View>
@@ -163,36 +168,6 @@ export function FarmAdviceForm({
             selected={draft.pastCrops.map((p) => p.nameBn)}
             onToggle={togglePast}
           />
-          {draft.pastCrops.length ? (
-            <View className="gap-2">
-              <AppText variant="body" className="font-bengali-bold text-ink">
-                কোন মৌসুমে? (ঐচ্ছিক)
-              </AppText>
-              {draft.pastCrops.map((p, idx) => (
-                <View
-                  key={p.nameBn}
-                  className="flex-row flex-wrap items-center gap-2 rounded-2xl bg-neutral px-3 py-2"
-                >
-                  <AppText variant="body" className="mr-auto font-bengali-bold text-ink">
-                    {p.nameBn}
-                  </AppText>
-                  {SEASONS.map((s) => (
-                    <Chip
-                      key={s.id}
-                      small
-                      label={s.label}
-                      selected={p.season === s.id}
-                      onPress={() => {
-                        const next = [...draft.pastCrops];
-                        next[idx] = { ...p, season: p.season === s.id ? undefined : s.id };
-                        set({ pastCrops: next });
-                      }}
-                    />
-                  ))}
-                </View>
-              ))}
-            </View>
-          ) : null}
         </View>
       ) : null}
 

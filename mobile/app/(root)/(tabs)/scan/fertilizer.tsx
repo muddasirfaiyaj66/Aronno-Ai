@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
   AppText,
+  ScreenHeader,
   IconPickerRow,
   LandSizeInput,
   ListenButton,
@@ -24,7 +25,10 @@ import type {
   SoilMoisture,
 } from "@/types/fertilizer";
 import type { DiseaseHistoryEntry } from "@/types/history";
-import { useGetHistoryQuery, useRecommendFertilizerMutation } from "@/services/api";
+import {
+  useGetHistoryQuery,
+  useRecommendFertilizerMutation,
+} from "@/services/api";
 import { listLocalHistory } from "@/lib/offlineDb/queries";
 import { useIsOnline } from "@/hooks/useIsOnline";
 import { userFacingError } from "@/lib/userFacingError";
@@ -135,7 +139,9 @@ function ChipRow<T extends string | number>({
             accessibilityState={{ selected }}
             accessibilityLabel={option.label}
             className={`min-h-touch items-center justify-center rounded-full border px-4 ${
-              selected ? "border-primary bg-forest-700" : "border-border bg-card"
+              selected
+                ? "border-primary bg-forest-700"
+                : "border-border bg-card"
             }`}
           >
             <AppText
@@ -209,7 +215,15 @@ export default function FertilizerRecommendationScreen() {
     !!soilMoisture;
 
   const submit = async () => {
-    if (!crop || !stage || !soilColor || !soilMoisture || !hasDisease || !landOk || !ageOk) {
+    if (
+      !crop ||
+      !stage ||
+      !soilColor ||
+      !soilMoisture ||
+      !hasDisease ||
+      !landOk ||
+      !ageOk
+    ) {
       return;
     }
     setAiError(null);
@@ -236,19 +250,21 @@ export default function FertilizerRecommendationScreen() {
     } catch (err) {
       setShowResult(false);
       setAiError(
-        userFacingError(err, "generic", "সার সুপারিশ করা যায়নি। আবার চেষ্টা করুন।"),
+        userFacingError(
+          err,
+          "generic",
+          "সার সুপারিশ করা যায়নি। আবার চেষ্টা করুন।",
+        ),
       );
     }
   };
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-neutral-200 bg-card px-5 py-4">
-        <AppText variant="title">সার সুপারিশ</AppText>
-        <AppText variant="caption" className="mt-1">
-          জমির পরিমাণ, ফসলের বয়স ও রোগের তথ্য দিয়ে মাত্রা ঠিক করুন
-        </AppText>
-      </View>
+      <ScreenHeader
+        title="সার সুপারিশ"
+        subtitle="জমির পরিমাণ, ফসলের বয়স ও রোগের তথ্য দিয়ে মাত্রা ঠিক করুন"
+      />
 
       <ScrollView
         className="flex-1"
@@ -282,7 +298,10 @@ export default function FertilizerRecommendationScreen() {
             ফসল কত দিনের? (রোপণ/বোনার পর)
           </AppText>
           <ChipRow
-            options={AGE_PRESETS.map((d) => ({ id: d, label: `${toBnDigits(d)} দিন` }))}
+            options={AGE_PRESETS.map((d) => ({
+              id: d,
+              label: `${toBnDigits(d)} দিন`,
+            }))}
             value={ageOk ? ageNum : null}
             onChange={(d) => setCropAgeDays(toBnDigits(d))}
           />
@@ -338,15 +357,24 @@ export default function FertilizerRecommendationScreen() {
             latestDiagnosis ? (
               <View className="gap-3 rounded-2xl border border-border bg-card p-4">
                 <View className="flex-row items-center gap-3">
-                  <Ionicons name="time-outline" size={20} color={colors.primary} />
+                  <Ionicons
+                    name="time-outline"
+                    size={20}
+                    color={colors.primary}
+                  />
                   <View className="flex-1">
                     <AppText variant="caption" className="text-muted">
                       আপনার সর্বশেষ স্ক্যান
                     </AppText>
-                    <AppText variant="body" className="font-bengali-bold text-ink">
+                    <AppText
+                      variant="body"
+                      className="font-bengali-bold text-ink"
+                    >
                       {latestDiagnosis.diseaseNameBn}
                     </AppText>
-                    <AppText variant="caption">{latestDiagnosis.dateBn}</AppText>
+                    <AppText variant="caption">
+                      {latestDiagnosis.dateBn}
+                    </AppText>
                   </View>
                 </View>
                 <ChipRow
@@ -361,13 +389,19 @@ export default function FertilizerRecommendationScreen() {
             ) : (
               <View className="gap-3 rounded-2xl border border-border bg-card p-4">
                 <AppText variant="body" className="text-ink">
-                  সাম্প্রতিক কোনো স্ক্যান পাওয়া যায়নি। রোগটি নিশ্চিত হতে পাতার ছবি
-                  স্ক্যান করতে পারেন।
+                  সাম্প্রতিক কোনো স্ক্যান পাওয়া যায়নি। রোগটি নিশ্চিত হতে পাতার
+                  ছবি স্ক্যান করতে পারেন।
                 </AppText>
                 <SecondaryButton
                   label="পাতা স্ক্যান করুন"
                   onPress={() => router.push("/(root)/(tabs)/scan")}
-                  icon={<Ionicons name="scan-outline" size={20} color={colors.ink} />}
+                  icon={
+                    <Ionicons
+                      name="scan-outline"
+                      size={20}
+                      color={colors.ink}
+                    />
+                  }
                 />
               </View>
             )
@@ -418,7 +452,9 @@ export default function FertilizerRecommendationScreen() {
           onPress={submit}
           disabled={!canSubmit}
           loading={isLoading}
-          icon={<Ionicons name="flask-outline" size={20} color={colors.white} />}
+          icon={
+            <Ionicons name="flask-outline" size={20} color={colors.white} />
+          }
         />
 
         {aiError ? (
@@ -475,9 +511,16 @@ export default function FertilizerRecommendationScreen() {
 
         {showResult && advice?.reasonBn ? (
           <View className="flex-row items-start gap-3 rounded-2xl bg-secondary px-4 py-3">
-            <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
+            <Ionicons
+              name="information-circle-outline"
+              size={20}
+              color={colors.primary}
+            />
             <View className="flex-1">
-              <AppText variant="caption" className="font-bengali-bold text-primary">
+              <AppText
+                variant="caption"
+                className="font-bengali-bold text-primary"
+              >
                 কেন এই সুপারিশ
               </AppText>
               <AppText variant="body" className="mt-0.5 leading-6 text-ink">

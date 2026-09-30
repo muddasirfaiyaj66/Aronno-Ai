@@ -271,19 +271,41 @@ export function cleanSttTranscript(raw: string): string {
   return s;
 }
 
+/** Cloud STT gives up after this, so offline sherpa can still answer. */
+const CLOUD_STT_TIMEOUT_MS = 15_000;
+
+function cloudWithTimeout(uri: string): Promise<string> {
+  return Promise.race([
+    transcribeWithCloud(uri).catch(() => ""),
+    new Promise<string>((r) => setTimeout(() => r(""), CLOUD_STT_TIMEOUT_MS)),
+  ]);
+}
+
+/**
+ * Online: Gemini (via backend) first — it understands everyday Bangla far
+ * better than the small on-device model, which often returns a stray letter
+ * or two. Offline, or when the cloud gives nothing: sherpa.
+ */
 async function transcribeUri(uri: string): Promise<string> {
   const end = markStart("stt.recognize");
   try {
+    const online = await fetchIsOnline().catch(() => false);
+    if (online) {
+      const cloud = cleanSttTranscript(await cloudWithTimeout(uri));
+      if (cloud.length >= 2) {
+        end(`cloud:${cloud.slice(0, 40)}`);
+        return cloud;
+      }
+    }
     if (ready) {
       const offline = cleanSttTranscript(await transcribeWithSherpa(uri));
-      if (offline && offline.length >= 1) {
+      if (offline.length >= 2) {
         end(`offline:${offline.slice(0, 40)}`);
         return offline;
       }
     }
-    const cloud = cleanSttTranscript(await transcribeWithCloud(uri));
-    end(cloud ? `cloud:${cloud.slice(0, 40)}` : "empty");
-    return cloud;
+    end("empty");
+    return "";
   } catch (err) {
     end(err instanceof Error ? err.message : "fail");
     return "";

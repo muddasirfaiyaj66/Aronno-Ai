@@ -10,6 +10,7 @@ import {
   ListenButton,
   PrimaryButton,
   RetryCard,
+  ScreenHeader,
   SeverityBadge,
   StructuredCard,
 } from "@/components/ui";
@@ -102,19 +103,21 @@ export default function ReportPreviewScreen() {
   if (!plan) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-neutral px-6">
-        <AIGeneratingShimmer label="রিপোর্ট তৈরি হচ্ছে" lines={4} className="w-full" />
+        <AIGeneratingShimmer
+          label="রিপোর্ট তৈরি হচ্ছে"
+          lines={4}
+          className="w-full"
+        />
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
-      <View className="border-b border-neutral-200 bg-card px-5 py-4">
-        <AppText variant="title">রিপোর্ট প্রিভিউ</AppText>
-        <AppText variant="caption" className="mt-1">
-          {plan.cropNameBn} · {dateLabel}
-        </AppText>
-      </View>
+      <ScreenHeader
+        title="রিপোর্ট প্রিভিউ"
+        subtitle={`${plan.cropNameBn} · ${dateLabel}`}
+      />
 
       <ScrollView
         className="flex-1"
@@ -125,7 +128,10 @@ export default function ReportPreviewScreen() {
           icon={<Ionicons name="leaf" size={22} color={colors.primary} />}
         >
           <View className="gap-2">
-            <AppText variant="bodyLg" className="font-bengali-bold text-primary">
+            <AppText
+              variant="bodyLg"
+              className="font-bengali-bold text-primary"
+            >
               {params.diseaseNameBn ?? plan.diseaseNameBn}
             </AppText>
             {params.diseaseNameEn ? (
@@ -164,7 +170,10 @@ export default function ReportPreviewScreen() {
                 size={16}
                 color={colors.primary}
               />
-              <AppText variant="caption" className="font-bengali-bold text-primary">
+              <AppText
+                variant="caption"
+                className="font-bengali-bold text-primary"
+              >
                 {plan.followUpLabelBn}
               </AppText>
             </View>
@@ -200,7 +209,11 @@ export default function ReportPreviewScreen() {
             label="PDF ডাউনলোড করুন"
             onPress={handleDownload}
             icon={
-              <Ionicons name="download-outline" size={20} color={colors.white} />
+              <Ionicons
+                name="download-outline"
+                size={20}
+                color={colors.white}
+              />
             }
           />
         )}

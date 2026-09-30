@@ -1,21 +1,34 @@
 import { Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { AppText } from "./AppText";
 import { colors } from "@/constants/theme";
 
 export type ScreenHeaderProps = {
   title: string;
   subtitle?: string;
+  /** Defaults to going back when there is a previous screen. */
   onBack?: () => void;
+  /** Tab home screens have nowhere to go back to. */
+  hideBack?: boolean;
 };
 
-export function ScreenHeader({ title, subtitle, onBack }: ScreenHeaderProps) {
+export function ScreenHeader({
+  title,
+  subtitle,
+  onBack,
+  hideBack,
+}: ScreenHeaderProps) {
+  const router = useRouter();
+  const goBack =
+    onBack ??
+    (!hideBack && router.canGoBack() ? () => router.back() : undefined);
   return (
     <View className="border-b border-border bg-card px-5 pb-3.5 pt-2">
       <View className="flex-row items-center gap-3">
-        {onBack ? (
+        {goBack && !hideBack ? (
           <Pressable
-            onPress={onBack}
+            onPress={goBack}
             accessibilityRole="button"
             accessibilityLabel="ফিরে যান"
             className="h-11 w-11 items-center justify-center rounded-full bg-neutral"
@@ -29,7 +42,11 @@ export function ScreenHeader({ title, subtitle, onBack }: ScreenHeaderProps) {
             {title}
           </AppText>
           {subtitle ? (
-            <AppText variant="caption" className="mt-0.5 leading-5" numberOfLines={2}>
+            <AppText
+              variant="caption"
+              className="mt-0.5 leading-5"
+              numberOfLines={2}
+            >
               {subtitle}
             </AppText>
           ) : null}

@@ -11,6 +11,7 @@ export default function CaptureLauncherScreen() {
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       <ScreenHeader
+        hideBack
         title={t("স্ক্যান", "Scan")}
         subtitle={t(
           "পাতার ছবি, বাংলা কণ্ঠ, অথবা লেখা",

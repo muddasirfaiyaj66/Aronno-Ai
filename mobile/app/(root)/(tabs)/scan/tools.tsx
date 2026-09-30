@@ -24,7 +24,7 @@ export default function ToolIdentificationScreen() {
           subtitle="কাছাকাছি ও অনলাইনে খুঁজে দেব"
           onPress={() =>
             router.push({
-              pathname: "/(root)/(tabs)/scan/photo",
+              pathname: "/(root)/camera",
               params: { flow: "tool" },
             })
           }

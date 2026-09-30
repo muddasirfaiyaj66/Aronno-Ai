@@ -21,7 +21,7 @@ export default function ReceiptScanScreen() {
           subtitle="পুরো লেখা ফ্রেমে আনুন, সমতল জায়গায় রাখুন"
           onPress={() =>
             router.push({
-              pathname: "/(root)/(tabs)/scan/photo",
+              pathname: "/(root)/camera",
               params: { flow: "receipt" },
             })
           }

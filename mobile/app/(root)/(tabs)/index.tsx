@@ -100,7 +100,7 @@ export default function HomeScreen() {
             marketBody={t("কাছের বাজারে দাম", "Prices near your field")}
             onScan={() =>
               router.push({
-                pathname: "/(root)/(tabs)/scan/photo",
+                pathname: "/(root)/camera",
                 params: { flow: "disease" },
               })
             }
@@ -132,7 +132,7 @@ export default function HomeScreen() {
               subtitle={t("রোগ শনাক্ত করুন", "Identify the disease")}
               onPress={() =>
                 router.push({
-                  pathname: "/(root)/(tabs)/scan/photo",
+                  pathname: "/(root)/camera",
                   params: { flow: "disease" },
                 })
               }

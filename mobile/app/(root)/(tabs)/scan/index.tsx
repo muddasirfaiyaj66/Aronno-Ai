@@ -30,7 +30,7 @@ export default function CaptureLauncherScreen() {
           subtitle={t("ক্যামেরা দিয়ে রোগ শনাক্ত করুন", "Identify disease with the camera")}
           onPress={() =>
             router.push({
-              pathname: "/(root)/(tabs)/scan/photo",
+              pathname: "/(root)/camera",
               params: { flow: "disease" },
             })
           }

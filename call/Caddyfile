@@ -1,3 +1,10 @@
+# UDP 443 is the embedded TURN port. HTTP/3 would bind that socket.
+{
+	servers {
+		protocols h1 h2
+	}
+}
+
 {$CALL_HOST} {
 	handle /v1/* {
 		reverse_proxy 127.0.0.1:4000

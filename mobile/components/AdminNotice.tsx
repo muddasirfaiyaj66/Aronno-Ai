@@ -1,10 +1,17 @@
+import { useEffect } from "react";
 import { Modal, Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, type Href } from "expo-router";
 import { AppText } from "@/components/ui/AppText";
 import { useColors } from "@/context/theme";
+import {
+  consultIdFromPath,
+  isIncomingCall,
+  setPopupRing,
+  stopCallRing,
+} from "@/lib/notifications/alert";
 import { dismissNotification, useInbox, type AppNotification } from "@/lib/notifications/inbox";
-import { useDismissNotificationMutation } from "@/services/api";
+import { useDismissNotificationMutation, useGetConsultQuery } from "@/services/api";
 
 const RANK = { emergency: 0, important: 1, normal: 2 } as const;
 
@@ -24,29 +31,57 @@ export function AdminNotice() {
   const { items } = useInbox();
   const [dismiss] = useDismissNotificationMutation();
   const notice = nextNotice(items);
+  const incoming = !!notice && isIncomingCall(notice);
+  const callId = incoming ? consultIdFromPath(notice.pathname) : "";
+  const fresh = !!notice && Date.now() - Date.parse(notice.createdAt) < 90_000;
+  const { data: consult, isError: consultMissing } = useGetConsultQuery(callId, {
+    skip: !callId,
+    pollingInterval: callId ? 3000 : 0,
+  });
+  const callStillRinging =
+    incoming && !consultMissing && (consult?.status === "ringing" || (!consult && fresh));
+
+  useEffect(() => {
+    const id = notice?.id ?? "";
+    if (incoming && ((consult?.status && consult.status !== "ringing") || consultMissing)) {
+      stopCallRing();
+      return;
+    }
+    setPopupRing(callStillRinging, id);
+    return () => {
+      if (callStillRinging) setPopupRing(false, id);
+    };
+  }, [callStillRinging, notice?.id, incoming, consult?.status, consultMissing]);
+
   if (!notice) return null;
 
   const emergency = notice.priority === "emergency";
   const important = notice.priority === "important";
   const band = emergency ? "#9F1239" : important ? "#B45309" : colors.forest700;
-  const label = emergency ? "জরুরি বার্তা" : important ? "গুরুত্বপূর্ণ" : "আরণ্য থেকে";
-  const icon = emergency ? "alert-circle" : important ? "megaphone" : "notifications";
+  const label = incoming ? "কল" : emergency ? "জরুরি বার্তা" : important ? "গুরুত্বপূর্ণ" : "আরণ্য থেকে";
+  const icon = incoming ? "call" : emergency ? "alert-circle" : important ? "megaphone" : "notifications";
 
-  const close = () => {
+  const close = (silence: boolean) => {
+    if (silence && incoming) stopCallRing();
     dismissNotification(notice.id);
     void dismiss(notice.id);
   };
 
   const open = () => {
+    if (incoming && callId) {
+      close(false);
+      router.push({ pathname: "/(root)/consult/call", params: { consultId: callId } });
+      return;
+    }
     const path = notice.pathname;
-    close();
+    close(false);
     if (path) router.push(path as Href);
   };
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={close} statusBarTranslucent>
+    <Modal visible transparent animationType="fade" onRequestClose={() => close(true)} statusBarTranslucent>
       <Pressable
-        onPress={close}
+        onPress={() => close(true)}
         accessibilityRole="button"
         accessibilityLabel="বন্ধ করুন"
         style={{
@@ -66,7 +101,7 @@ export function AdminNotice() {
         >
           <View style={{ backgroundColor: band, paddingHorizontal: 22, paddingTop: 22, paddingBottom: 18 }}>
             <Pressable
-              onPress={close}
+              onPress={() => close(true)}
               accessibilityRole="button"
               accessibilityLabel="বন্ধ করুন"
               hitSlop={10}
@@ -97,7 +132,7 @@ export function AdminNotice() {
               {notice.body}
             </AppText>
             <Pressable
-              onPress={notice.pathname ? open : close}
+              onPress={incoming || notice.pathname ? open : () => close(true)}
               accessibilityRole="button"
               style={{
                 marginTop: 18,
@@ -108,7 +143,7 @@ export function AdminNotice() {
               }}
             >
               <AppText variant="body" style={{ color: "#FFFFFF" }}>
-                {notice.pathname ? "দেখুন" : "বুঝেছি"}
+                {incoming ? "কল ধরুন" : notice.pathname ? "দেখুন" : "বুঝেছি"}
               </AppText>
             </Pressable>
           </View>

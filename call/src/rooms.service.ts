@@ -151,24 +151,35 @@ export class RoomsService implements OnModuleInit {
   }
 
   private async checkParticipant(consultId: string, cookieHeader: string | undefined) {
-    if (!cookieHeader) throw new UnauthorizedException();
+    if (!cookieHeader?.includes('aronno_access=')) {
+      throw new UnauthorizedException('Missing session');
+    }
     const base = (process.env.ARONNO_API_URL ?? 'https://aronno-api.vercel.app/api').replace(/\/$/, '');
     const secret = process.env.CALL_SERVICE_SECRET ?? '';
-    const res = await fetch(`${base}/internal/consults/${consultId}/join-check`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${secret}`,
-        cookie: cookieHeader,
-      },
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${base}/internal/consults/${consultId}/join-check`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${secret}`,
+          cookie: cookieHeader,
+        },
+      });
+    } catch {
+      throw new ServiceUnavailableException('API did not respond');
+    }
     const body = (await res.json().catch(() => null)) as
       | { success: true; data: { userId: string; displayName: string } }
       | { success: false; error?: { message?: string } }
       | null;
-    if (!res.ok || !body || !('success' in body) || !body.success) {
-      throw new UnauthorizedException();
+    if (res.ok && body && 'success' in body && body.success && body.data?.userId) {
+      return body.data;
     }
-    return body.data;
+    if (res.status >= 500) throw new ServiceUnavailableException('API did not respond');
+    if (res.status === 401 || res.status === 403) {
+      throw new UnauthorizedException('Join check rejected');
+    }
+    throw new BadRequestException('Join check failed');
   }
 
   private async notify(consultId: string, status: 'in_call' | 'ended') {

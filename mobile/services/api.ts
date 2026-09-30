@@ -1063,6 +1063,11 @@ export const api = createApi({
       transformResponse: (r) => unwrap(r),
       invalidatesTags: ["Consult"],
     }),
+    deleteConsult: builder.mutation<{ ok: true }, string>({
+      query: (id) => ({ url: `/consults/${id}`, method: "DELETE" }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["Consult"],
+    }),
     saveConsultAdvice: builder.mutation<
       ConsultItem,
       { id: string; summaryBn: string; steps: string; medicines: ConsultMedicine[] }
@@ -1182,6 +1187,7 @@ export const {
   useRingConsultMutation,
   useAcceptConsultMutation,
   useCancelConsultMutation,
+  useDeleteConsultMutation,
   useSaveConsultAdviceMutation,
   useConsultPdfMutation,
 } = api;

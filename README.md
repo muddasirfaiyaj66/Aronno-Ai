@@ -4,9 +4,10 @@
 
 | Folder | Responsibility | Primary stack |
 |--------|----------------|---------------|
-| [`backend/`](backend/) | REST API, auth, persistence, payments, AI & weather adapters | Nest.js 11 · Prisma 6 · MongoDB |
+| [`backend/`](backend/) | REST API, auth, persistence, payments, AI & weather adapters, consults | Nest.js 11 · Prisma 6 · MongoDB |
 | [`mobile/`](mobile/) | Farmer-facing Android / iOS UI | Expo SDK 54 · React Native · Redux Toolkit + RTK Query |
 | [`web/`](web/) | Bangla public site and English admin monitor | Next.js 15 |
+| [`call/`](call/) | Video-consult rooms and LiveKit tokens | Nest.js 11 · LiveKit · Docker Compose · Caddy |
 
 **Clone → configure → run → APK → ERD:** see **[SETUP.md](SETUP.md)** (written for non-developers as well as engineers).
 
@@ -16,12 +17,13 @@
 
 1. [Overview](#overview)
 2. [Architecture](#architecture)
-3. [Completed features & technology map](#completed-features--technology-map)
-4. [Technology stack](#technology-stack)
-5. [Quick start](#quick-start)
-6. [Demo accounts](#demo-accounts)
-7. [Documentation](#documentation)
-8. [License](#license)
+3. [Farmer–specialist video consult](#farmer-specialist-video-consult)
+4. [Completed features & technology map](#completed-features--technology-map)
+5. [Technology stack](#technology-stack)
+6. [Quick start](#quick-start)
+7. [Demo accounts](#demo-accounts)
+8. [Documentation](#documentation)
+9. [License](#license)
 
 ---
 
@@ -35,6 +37,7 @@ Aronno helps farmers and agri stakeholders in Bangladesh:
 - Plan crops with a **6-month weather outlook** across **64 districts**
 - Browse **market prices**, open a **shop**, and check out with cash, card, or mobile banking
 - Chat with an on-device / online **Bangla assistant** (text + voice when models are installed)
+- Request a **video consult** from an approved agronomist or extension officer, then keep their written advice as a Bangla PDF
 - Use a Bangla-first UI with on-device **listen** (text-to-speech)
 
 Product scope changes (market overhaul, heat map, etc.): **[docs/product_corrections.md](docs/product_corrections.md)**.
@@ -64,6 +67,7 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
 ┌─────────────────▼───────────────────┐
 │  Nest.js API (backend/)             │
 │  Auth · RBAC · Marketplace          │
+│  Consults · advice · Bangla PDF     │
 │  Prices and SSLCommerz checks       │
 │  Gemini Flash-Lite · Open-Meteo     │
 │  Nodemailer (OTP / password reset)  │
@@ -76,10 +80,74 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
             └───────────┘
 ```
 
-- Access token: `aronno_access` (15 min, HttpOnly cookie)
+- Access token: `aronno_access` (2 hours, HttpOnly cookie). The phone sends `Cookie` and `X-CSRF-Token`. User JWTs are not bearer tokens.
 - Refresh token: `aronno_refresh` (7 days, rotated; reuse detection)
 - CSRF: `aronno_csrf` + `X-CSRF-Token` on mutating requests
 - Redux holds `{ user, isAuthenticated }` only — **never** the JWT string
+
+Video consult media does not go through this API. See [Farmer–specialist video consult](#farmer-specialist-video-consult).
+
+---
+
+## Farmer–specialist video consult
+
+The phone and the Nest.js API share the consult record. The call service stores a separate room row for that consult id. Media stays on LiveKit. The LiveKit API secret never leaves the VM.
+
+### Architecture
+
+```
+┌──────────────────────────────────────────────┐
+│  Expo SDK ~54 app (package app.aronno.mobile)│
+│  Cookie + X-CSRF-Token → Nest API            │
+│  Cookie only → call service (join / leave)   │
+└────────────┬────────────────────┬────────────┘
+             │ consults, advice,  │ EXPO_PUBLIC_CALL_URL
+             │ PDF, login,        │
+             │ presence, notices  │
+┌────────────▼────────────┐  ┌────▼────────────────────────────┐
+│  Nest.js API            │  │  Azure VM (Docker Compose)      │
+│  Vercel in production   │  │  Caddy · call/ · LiveKit        │
+│  MongoDB via Prisma     │  │  LiveKit HTTP 127.0.0.1:7880    │
+└────────────┬────────────┘  └────▲────────────────────────────┘
+             │ CALL_SERVICE_URL        │ join-check, call-status
+             │ Bearer CALL_SERVICE_SECRET
+             └─────────────────────────┘
+```
+
+- The Expo app talks to the Nest.js API for consults, advice, PDF, login, presence, and notifications. In production that API is the Vercel deployment. Locally it is `http://localhost:3000/api`. Auth is the `aronno_access` cookie (2 hours), not a bearer token.
+- `call/` signs LiveKit join tokens. The phone joins media through `EXPO_PUBLIC_CALL_URL`. The API opens and closes rooms with `CALL_SERVICE_URL` and `Authorization: Bearer` using `CALL_SERVICE_SECRET`.
+- On join and leave, the call service sends the user's cookie to `POST /api/internal/consults/:id/join-check` with the Bearer secret. It posts `call-status` (`in_call` or `ended`) when LiveKit reports a participant join, the room finishes, or the last participant leaves. If `ARONNO_API_URL` is empty, the call service uses `https://aronno-api.vercel.app/api`.
+- LiveKit Server (`livekit/livekit-server:v1.13.7`), the call service, and Caddy 2 run with Docker Compose and `network_mode: host`. Caddy sends `/v1/*` to `127.0.0.1:4000` and everything else to LiveKit HTTP on `127.0.0.1:7880`. The call service uses that same localhost URL when `LIVEKIT_HTTP_URL` is empty.
+- `call/scripts/azure-vm.sh` is for an Azure for Students subscription. It does not deploy in Southeast Asia. It tries `eastasia`, `malaysiawest`, `indiasouthcentral`, `indonesiacentral`, and `centralindia`, with `Standard_B2s` first (`Standard_B2s` is capacity-restricted in `centralindia`). The script's default resource group and VM name are `aronno-call`. It does not pin a hostname or a region after the VM is created. Point a DuckDNS name at the public IP and set `CALL_HOST` to that name.
+- NSG ports opened by the script: TCP 80, 443, and 7881; UDP 443; UDP 50000–60000 (RTP). LiveKit HTTP is port 7880 and is not opened on the NSG. RTC uses TCP 7881 and UDP 50000–60000.
+- Room name `consult-{consultId}`, empty timeout 5 minutes, maximum 2 participants. The join token TTL is 2 hours. The call service returns 720p (`1280×720`) and max bitrate `1500000`. The phone publishes at 30 fps with simulcast off.
+- Without `CALL_MONGODB_URI`, room rows stay in memory on the call process and disappear on restart.
+- The Next.js admin site reviews specialist documents. It does not join the video room.
+
+If `CALL_SERVICE_URL` or `CALL_SERVICE_SECRET` is missing, including on the Vercel project environment, the API does not open a room and `videoReady` stays false.
+
+### Flow
+
+1. **Who can be a specialist.** Only an active user whose profession is `agronomist` (কৃষিবিদ) or `extension_officer` (সম্প্রসারণ কর্মকর্তা). From the profile they upload a certificate and a national ID. The phone sends the images to Cloudinary and stores the HTTPS URLs. Review status is `none`, `pending`, `approved`, or `rejected`. Submitting documents sets `pending` and clears approval.
+2. **Admin review.** Staff use the website at `/admin/specialists`. Approve, or reject with a note of at least 4 characters. Approval and rejection each send an in-app popup. Changing profession away from those two slugs clears approval.
+3. **Presence.** While an approved specialist has the app in the foreground, the app posts presence about every 15 seconds. They are listed as online when `specialistOnline` is true and `specialistLastSeenAt` is within 45 seconds. Backgrounding or leaving the app posts offline. Farmers see approved specialists, online first.
+4. **Request.** The farmer sends one consult to one specialist: problem text, and an optional diagnosis that belongs to that farmer. A second consult is rejected when the same pair already has one in `requested`, `accepted`, `ringing`, or `in_call` that the farmer has not removed. The specialist gets an in-app popup. The API also sends an email, or writes it to the API log when SMTP is not set. Statuses are `requested`, `accepted`, `ringing`, `in_call`, `ended`, `completed`, and `cancelled`.
+5. **Accept, then ring.** Accept sets `accepted` and does not open a room. The specialist rings next. Ring asks the call service to create the LiveKit room and sets `ringing`. A consult that is already `in_call` stays `in_call`. The farmer gets an incoming-call popup and answers on the call screen. Join is allowed only while the status is `ringing` or `in_call`. On a loaded consult, `videoReady` is true only when the call service is configured and the status is one of those two. The ring response sets `videoReady` from whether the room open call succeeded.
+6. **During the call.** LiveKit notifies the call service. A participant join sets `in_call`. The room finishing, or the last participant leaving, sets `ended` and closes the call-service room record. Either person can cancel unless the consult is already `completed` or `cancelled`. Cancel closes the room.
+7. **Advice and PDF.** The specialist can save advice once the status is no longer `requested` and is not `cancelled`. The phone shows the form when the status is `accepted` or `ended`. Saving advice sets `completed` and closes the room. The PDF (`pdf-lib`, Bangla font fetched at generation time) exists only after that advice is stored. Either participant can download it.
+8. **Remove from my list.** `DELETE /api/consults/:id` sets `farmerDeletedAt` or `specialistDeletedAt` for the caller only. The API refuses this while the status is `ringing` or `in_call`. The other person's row stays.
+
+### Notifications and the native video build
+
+In-app notifications play the device default notification sound once and vibrate. An incoming call (a consult notice with emergency priority) repeats until it is answered, dismissed, or the consult is no longer `ringing`. Android loops the system ringtone, then the notification sound, through MediaPlayer, so it follows media volume. iOS tries system UI sounds, then vibration. Playback uses `expo-av` while the app is in the foreground (`staysActiveInBackground` is false). The app does not send OS lock-screen notifications.
+
+Video needs a development build that includes `@livekit/react-native` and `@livekit/react-native-webrtc`. An older debug APK without `WebRTCModule` shows the Bangla screen `ভিডিও কলের জন্য নতুন অ্যাপ বিল্ড দরকার।` From `mobile/`:
+
+```bash
+pnpm exec expo run:android
+```
+
+Do not commit `.env` files. Full variable names and VM commands are in [SETUP.md](SETUP.md#17-video-consult).
 
 ---
 
@@ -156,6 +224,16 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
 | Disease outbreak heat map | Done | Public `GET /market/heatmap` | App map (Esri tiles) and website `/heatmap` (Leaflet + OpenStreetMap) |
 | Live alerts | Done | Heat radius, weather, scans, orders, admin broadcasts | In-app notifications |
 
+### Video consult
+
+| Capability | Status | Backend | Mobile / client |
+|------------|--------|---------|-----------------|
+| Specialist documents | Done | `POST /users/me/specialist-docs`; status `none` / `pending` / `approved` / `rejected` | Profile upload via Cloudinary (agronomist or extension officer) |
+| Admin approve / reject | Done | `PATCH /admin/users/:id/specialist`; reject requires a note; in-app popup | Website `/admin/specialists` |
+| Presence | Done | Online if the heartbeat is fresh within 45 seconds | Foreground heartbeat about every 15 seconds |
+| Consult, advice, PDF | Done | Nest consult module, `pdf-lib` | Consult screens |
+| Video room | Done when configured | API calls `call/` with `CALL_SERVICE_SECRET` | `@livekit/react-native` in a dev build; `EXPO_PUBLIC_CALL_URL` |
+
 ### Home, UX & platform
 
 | Capability | Status | Backend | Mobile / client |
@@ -200,6 +278,17 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
 | PDF | `pdf-lib`, `@pdf-lib/fontkit`, Noto Sans Bengali |
 | Payments | SSLCommerz (sandbox until `SSLCOMMERZ_IS_LIVE=true`) |
 | Testing | Jest, Supertest |
+| Video consult | Consult module; opens rooms on `CALL_SERVICE_URL` |
+
+### Call service (`call/`)
+
+| Concern | Package / service |
+|---------|-------------------|
+| Framework | Nest.js 11 |
+| Media | LiveKit Server 1.13.7 (`livekit-server-sdk` for tokens and rooms) |
+| Edge | Caddy 2, Docker Compose, host networking |
+| Room index | MongoDB when `CALL_MONGODB_URI` is set; otherwise process memory |
+| Phone SDK | `@livekit/react-native`, `@livekit/react-native-webrtc`, `livekit-client` |
 
 ### Website (`web/`)
 
@@ -207,6 +296,7 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
 |---------|-------------------|
 | Framework | Next.js 15 (App Router) |
 | Admin UI | English monitor, collapsible sidebar, light and dark themes stored in the browser |
+| Specialist review | `/admin/specialists` — certificate and national ID |
 | Public pages | Bangla landing, `/heatmap`, `/market` |
 
 ### Mobile (`mobile/`)
@@ -220,6 +310,7 @@ AI analysis uses Google’s free **gemini-3.5-flash-lite** family when online. W
 | Auth storage | `expo-secure-store` (cookie jar) |
 | Google auth | `expo-auth-session`, `expo-crypto`, `expo-web-browser` |
 | Camera / media | `expo-camera`, `expo-image-picker`, `expo-image`, `expo-av` |
+| Video consult | `@livekit/react-native`, `@livekit/react-native-webrtc` (dev build, not Expo Go) |
 | Location | `expo-location` |
 | Bangla TTS | `expo-speech` |
 | Fonts | `@expo-google-fonts/noto-sans-bengali`, `@expo-google-fonts/noto-sans` |
@@ -270,7 +361,7 @@ pnpm install
 pnpm start
 ```
 
-Configure Cloudinary (`EXPO_PUBLIC_CLOUDINARY_*`) and `EXPO_PUBLIC_API_URL` before using the camera. The website runs from `web/` on port **3001** (`ARONNO_API_ORIGIN=http://localhost:3000`). Full environment reference: [SETUP.md](SETUP.md).
+Configure Cloudinary (`EXPO_PUBLIC_CLOUDINARY_*`) and `EXPO_PUBLIC_API_URL` before using the camera. The website runs from `web/` on port **3001** (`ARONNO_API_ORIGIN=http://localhost:3000`). Video consult also needs the call VM and `CALL_SERVICE_URL`, `CALL_SERVICE_SECRET`, and `EXPO_PUBLIC_CALL_URL` — names only, in [SETUP.md](SETUP.md#17-video-consult). Full environment reference: [SETUP.md](SETUP.md).
 
 ---
 
@@ -289,7 +380,7 @@ After superadmin login, create more admins from the phone (**আমি → অ�
 
 | Document | Contents |
 |----------|----------|
-| [SETUP.md](SETUP.md) | Environment variables, SMTP, Cloudinary, Gemini, APK / EAS build, ERD, API tester notes |
+| [SETUP.md](SETUP.md) | Environment variables, SMTP, Cloudinary, Gemini, video consult VM, APK / EAS build, ERD, API tester notes |
 | [docs/offline_ai/README.md](docs/offline_ai/README.md) | **Offline AI:** setup, usage, code map, system prompts, token optimization, model catalog |
 | [docs/product_corrections.md](docs/product_corrections.md) | Product feedback tracker — what shipped vs next (market, heat map, OCR, …) |
 | [docs/hardware_soil_sensor.md](docs/hardware_soil_sensor.md) | **Soil probe:** BLE + Wi‑Fi protocol, JSON payload, app test modes |

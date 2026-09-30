@@ -9,6 +9,7 @@ This document is written so someone who is **not a developer** can clone the pro
 | `backend/` | Nest.js API (the server). Runs on `http://localhost:3000/api` |
 | `mobile/` | Expo / React Native app (the farmer-facing phone UI) |
 | `web/` | Next.js public site and English admin monitor. Runs on `http://localhost:3001` |
+| `call/` | Video consult service. Runs on an Azure VM with LiveKit and Caddy |
 
 ---
 
@@ -30,6 +31,7 @@ This document is written so someone who is **not a developer** can clone the pro
 14. [Database relations and ERD](#14-database-relations-and-erd)
 15. [API reference (for testers)](#15-api-reference-for-testers)
 16. [Troubleshooting](#16-troubleshooting)
+17. [Video consult](#17-video-consult)
 
 ---
 
@@ -44,6 +46,7 @@ This document is written so someone who is **not a developer** can clone the pro
 - See **market prices** and the disease **heat map**, post a **listing**, and buy from a shop
 - Pay **cash on delivery**, or by **card / mobile banking** when SSLCommerz is configured
 - Open the **website** for the public heat map and market, and an English admin monitor
+- Request a **video consult** from an approved agronomist or extension officer when the call VM is configured ([section 17](#17-video-consult))
 
 **Honest status:** the screens and APIs are connected. Disease, treatment, tools, receipts, and crop-plan wording call **gemini-3.5-flash-lite** (free). If the key is missing or Gemini fails, the API returns `AI_UNAVAILABLE` — it does **not** invent mock answers. Crop plans use the **Open-Meteo** seasonal forecast (no key); fertilizer advice and cost estimates are local rules. TTS is still a stub. Photos **are** uploaded for real: the phone sends them to **Cloudinary**, then the API stores the HTTPS URL.
 
@@ -87,7 +90,7 @@ git clone https://github.com/muddasirfaiyaj66/Aronno-Ai.git
 cd Aronno-Ai
 ```
 
-You now have `backend/` and `mobile/`.
+You now have `backend/`, `mobile/`, `web/`, and `call/`.
 
 ---
 
@@ -249,7 +252,7 @@ CORS_ORIGIN=http://localhost:8081,http://localhost:19006,http://localhost:8082,h
 DATABASE_URL=mongodb://localhost:27017/aronno
 JWT_ACCESS_SECRET=PASTE_FIRST_NODE_SECRET_HERE
 JWT_REFRESH_SECRET=PASTE_SECOND_NODE_SECRET_HERE
-JWT_ACCESS_TTL=15m
+JWT_ACCESS_TTL=2h
 JWT_REFRESH_TTL=7d
 COOKIE_SECURE=false
 SUPERADMIN_EMAIL=
@@ -273,6 +276,8 @@ SSLCOMMERZ_STORE_ID=
 SSLCOMMERZ_STORE_PASSWORD=
 SSLCOMMERZ_IS_LIVE=false
 API_PUBLIC_URL=
+CALL_SERVICE_URL=
+CALL_SERVICE_SECRET=
 ```
 
 | Key | Meaning |
@@ -282,6 +287,9 @@ API_PUBLIC_URL=
 | `SUPERADMIN_*` | First boot creates this **already verified** superadmin from `backend/.env`. Do not commit those values. After login they can create admins; admins can create more admins. |
 | `SSLCOMMERZ_*` | Store id and password from SSLCommerz. Keep `SSLCOMMERZ_IS_LIVE=false` on the sandbox. |
 | `API_PUBLIC_URL` | Public `https` origin of **this API**, with no `/api` and no trailing slash. SSLCommerz calls `{API_PUBLIC_URL}/api/marketplace/payments/sslcommerz/...`. It is not the website URL. `localhost` cannot complete online payment. |
+| `JWT_ACCESS_TTL` | Listed as `2h` in `.env.example`. The running API signs `aronno_access` for 2 hours in code. |
+| `CALL_SERVICE_URL` | Public base URL of the call VM, no trailing slash. Empty means video rooms stay off. |
+| `CALL_SERVICE_SECRET` | Shared secret the API sends as `Authorization: Bearer` to the call VM. Same value as `call/.env`. Do not commit it. On the hosted API, set this and `CALL_SERVICE_URL` in the Vercel project environment or `videoReady` stays false. |
 
 Password rules for **new** farmer accounts: at least 10 characters, with upper, lower, number, and a symbol (example: `FarmHelp_2026!`).
 
@@ -299,6 +307,7 @@ EXPO_PUBLIC_API_URL=http://localhost:3000/api
 EXPO_PUBLIC_GOOGLE_CLIENT_ID=
 EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloud_name
 EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET=your_unsigned_preset
+EXPO_PUBLIC_CALL_URL=
 ```
 
 | Where the app runs | `EXPO_PUBLIC_API_URL` |
@@ -309,7 +318,9 @@ EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET=your_unsigned_preset
 
 Find the PC IP on Windows: `ipconfig` → **IPv4 Address**. Add that origin to `CORS_ORIGIN` on the backend (for example `http://192.168.0.15:8081`).
 
-Restart Expo after any `.env` change (`Ctrl+C`, then `pnpm start` again).
+`EXPO_PUBLIC_CALL_URL` is the public call host the phone uses to join media, with no trailing slash (the same host as `CALL_HOST` on the VM, with `https://`). Leave it empty until that host exists. No LiveKit secret belongs in the app.
+
+Restart Expo after any `.env` change (`Ctrl+C`, then `pnpm start` again). Do not commit `mobile/.env`. Video also needs a native rebuild — [section 17](#17-video-consult).
 
 ---
 
@@ -458,7 +469,7 @@ npx expo prebuild -p android
 npx expo run:android
 ```
 
-This installs a debug build on a plugged-in device or emulator. It is heavier than Expo Go.
+This installs a debug build on a plugged-in device or emulator. It is heavier than Expo Go. Video consult needs that native build (`pnpm exec expo run:android` from `mobile/`), because Expo Go does not include LiveKit. See [section 17](#17-video-consult).
 
 ### 11.5 iOS
 
@@ -488,12 +499,13 @@ iOS installable builds need a Mac and an Apple Developer account. This repo is d
 | Payments | Cash on delivery. Card and bKash / Nagad / Rocket go through SSLCommerz; the API accepts a payment only after SSLCommerz validation matches the order amount in BDT |
 | Delivery | Same city as the shop starts at 60 BDT, another city at 120 BDT. Change both from the website admin **Delivery** page |
 | Wallet | Profile shows spent, earned, and available. A shop owner can request a bank, bKash, or Nagad payout (minimum 100 BDT). An admin marks it paid after sending the money |
-| Website | Bangla landing, heat map, and market. English monitor for overview, users, alerts, market, reports, delivery, and payouts |
+| Website | Bangla landing, heat map, and market. English monitor for overview, users, alerts, market, reports, delivery, payouts, and specialist documents |
+| Video consult | Request, accept, advice, and PDF run on the API. Ring and join need the call VM plus `CALL_SERVICE_URL` and `CALL_SERVICE_SECRET` on that API (including Vercel). See [section 17](#17-video-consult) |
 | Images | Phone → Cloudinary → `{ imageUrl }` JSON to API |
 
 ### Still mocked or local
 
-TTS (WAV stub) and PDF generation stay mocked. Cost estimates and fertilizer advice are local rules (not Gemini). Crop plans use Open-Meteo data; Gemini writes the per-month priorities, with a rule-based fallback. If Gemini is down or `GEMINI_API_KEY` is empty, disease / treatment / tools / receipts return `AI_UNAVAILABLE` instead of fake data. Online payment stays unavailable until `API_PUBLIC_URL` is a public `https` API origin and the SSLCommerz store credentials are set. Payout requests do not call bKash or a bank.
+Server TTS (WAV stub) stays mocked. A consult PDF is generated with pdf-lib after advice is saved. Cost estimates and fertilizer advice are local rules (not Gemini). Crop plans use Open-Meteo data; Gemini writes the per-month priorities, with a rule-based fallback. If Gemini is down or `GEMINI_API_KEY` is empty, disease / treatment / tools / receipts return `AI_UNAVAILABLE` instead of fake data. Online payment stays unavailable until `API_PUBLIC_URL` is a public `https` API origin and the SSLCommerz store credentials are set. Payout requests do not call bKash or a bank.
 
 ### Intentionally not on Vercel disk
 
@@ -539,10 +551,11 @@ flowchart LR
   Auth --> SMTP
 ```
 
-- Access cookie `aronno_access` — 15 minutes, HttpOnly
+- Access cookie `aronno_access` — 2 hours, HttpOnly. The phone sends `Cookie` and `X-CSRF-Token`. User JWTs are not bearer tokens.
 - Refresh cookie `aronno_refresh` — 7 days, rotated
 - CSRF cookie `aronno_csrf` — readable; sent as `X-CSRF-Token` on POST/PATCH
 - Redux stores `{ user, isAuthenticated }` only — **never** the JWT string
+- Video media uses a separate call VM. The API opens rooms with `CALL_SERVICE_SECRET`. See [section 17](#17-video-consult).
 
 ---
 
@@ -561,7 +574,7 @@ MongoDB via **Prisma**. Independent facts live in their own collections (3NF-sty
 
 ### 14.2 Identity
 
-- `User` → Role, Profession?, District?
+- `User` → Role, Profession?, District? Specialist fields on the same user: `specialistApproved`, `specialistReviewStatus` (`none` / `pending` / `approved` / `rejected`), certificate and NID URLs, `specialistOnline`, `specialistLastSeenAt`
 - `OAuthAccount` → User (Google)
 - `RefreshToken` → User (hashed token, family rotation)
 - `EmailToken` → User (`verification` or `password_reset`)
@@ -594,6 +607,11 @@ MongoDB via **Prisma**. Independent facts live in their own collections (3NF-sty
 - `SellerReport` → Shop
 - `Notification` → User
 - `AdminBroadcast` — staff alerts by place
+
+### 14.5 Video consult
+
+- `Consult` → farmer User, specialist User?, Diagnosis? Status: `requested`, `accepted`, `ringing`, `in_call`, `ended`, `completed`, `cancelled`. Soft-delete columns: `farmerDeletedAt`, `specialistDeletedAt` (each side hides only their own copy).
+- `ConsultAdvice` → Consult (1:1). Bangla summary, steps, and medicines. The PDF is built from this row; it is not stored as a file.
 
 Legacy collections from retired features (`LoanPurpose`, `LoanApplication`, `YieldEstimate`, `HeatMapStat`) stay in the schema only so existing rows remain readable; no API or screen uses them.
 
@@ -710,6 +728,21 @@ Public POSTs do not need CSRF. Logged-in POSTs/PATCHes need cookie + `X-CSRF-Tok
 | GET | `/admin/overview` | ADMIN+ | Monitor totals |
 | GET | `/admin/notifications` | ADMIN+ | |
 | POST | `/admin/notifications` | ADMIN+ | Broadcast |
+| GET | `/consults/specialists` | cookie | Approved agronomists and extension officers, online first |
+| POST | `/consults/presence` | cookie | Specialist heartbeat (`{ online }`) |
+| POST | `/consults` | cookie | `{ specialistId, problemText, diagnosisId? }` |
+| GET | `/consults` | cookie | Caller's list (farmer or specialist) |
+| GET | `/consults/:id` | cookie | `videoReady` when the call service is configured and status is `ringing` or `in_call` |
+| POST | `/consults/:id/accept` | cookie | Specialist. Does not open a room |
+| POST | `/consults/:id/ring` | cookie | Opens the LiveKit room and sets `ringing` |
+| POST | `/consults/:id/cancel` | cookie | Either party, unless `completed` or `cancelled` |
+| PUT | `/consults/:id/advice` | cookie | Specialist. Refused while `requested` or `cancelled`. Sets `completed` |
+| POST | `/consults/:id/pdf` | cookie | Bangla PDF after advice exists |
+| DELETE | `/consults/:id` | cookie | Soft-delete the caller's copy. Refused while `ringing` or `in_call` |
+| POST | `/users/me/specialist-docs` | cookie | `{ certificateUrl, nidUrl }` HTTPS. Sets review to `pending` |
+| PATCH | `/admin/users/:id/specialist` | ADMIN+ | `{ decision: "approve" \| "reject", note? }`. Reject needs a note (min 4 characters) |
+| POST | `/internal/consults/:id/join-check` | call service | Bearer `CALL_SERVICE_SECRET` plus the user cookie. Not a farmer-facing route |
+| POST | `/internal/consults/:id/call-status` | call service | Bearer `CALL_SERVICE_SECRET`. Body `{ status: "in_call" \| "ended" }` |
 
 ---
 
@@ -729,6 +762,85 @@ Public POSTs do not need CSRF. Logged-in POSTs/PATCHes need cookie + `X-CSRF-Tok
 | CSRF / 403 after login | Restart API and app so cookies match; do not mix `localhost` and `127.0.0.1` |
 | Online payment never finishes | `API_PUBLIC_URL` must be the public `https` API origin. A local API can still take cash on delivery |
 | Website admin is blank | Start the API, set `ARONNO_API_ORIGIN`, and sign in with an admin account |
+| Video stays off on the hosted API | Set `CALL_SERVICE_URL` and `CALL_SERVICE_SECRET` in the Vercel API project environment. Empty values leave `videoReady` false |
+| Phone says the video service is not on | Set `EXPO_PUBLIC_CALL_URL` to the public call host and restart the app |
+| Call screen asks for a new build (Bangla) | The installed APK has no LiveKit native module. From `mobile/`: `pnpm exec expo run:android`. Do not commit `.env` |
+| Join is refused | Status must be `ringing` or `in_call`, the access cookie must still be valid (2 hours), and `ARONNO_API_URL` on the VM must reach this API |
+
+---
+
+## 17. Video consult
+
+Operate this only after the API in [section 8](#8-start-mongodb-and-the-api) is up. The phone does not talk to LiveKit’s API secret. That secret stays in `call/.env` on the VM.
+
+### 17.1 What each part does
+
+| Piece | Role |
+|-------|------|
+| Expo app (`app.aronno.mobile`, SDK 54) | Consults, advice, PDF, login, presence, and notifications go to the Nest API with `Cookie` and `X-CSRF-Token`. Media join uses `EXPO_PUBLIC_CALL_URL` and the cookie only. |
+| Nest API on Vercel | Creates the consult, accepts, rings, writes advice, builds the PDF. Opens and closes rooms with `CALL_SERVICE_URL` and `Authorization: Bearer` plus `CALL_SERVICE_SECRET`. |
+| `call/` on the Azure VM | `join-check` confirms the user. `call-status` sets `in_call` or `ended`. Creates room `consult-{consultId}` (empty timeout 5 minutes, max 2 people) and signs a 2-hour LiveKit token. |
+| LiveKit + Caddy | Docker Compose, host network. Caddy serves the DuckDNS host: `/v1/*` to the call service on port 4000, other traffic to LiveKit HTTP at `127.0.0.1:7880`. |
+| Website `/admin/specialists` | Approves or rejects the certificate and national ID. Reject needs a note. |
+
+The call service returns 720p (`1280×720`) and max bitrate `1500000`. The phone publishes at 30 fps with simulcast off.
+
+### 17.2 Who can appear, and the call sequence
+
+1. The profile upload is shown only for profession `agronomist` or `extension_officer`. Images go to Cloudinary. Status moves `none` → `pending`. An admin approves or rejects on the website. Both results send an in-app popup. Only `approved` accounts are listed.
+2. An approved specialist with the app in the foreground sends a heartbeat about every 15 seconds. Farmers see them online when that heartbeat is newer than 45 seconds. Background or leaving the app marks them offline. Online specialists are listed first.
+3. The farmer sends one consult (problem text, optional diagnosis they own). A second one is rejected when that pair already has a consult in `requested`, `accepted`, `ringing`, or `in_call` that the farmer has not removed. Accept does not open a room. Ring opens the LiveKit room and sets `ringing` (a consult already `in_call` stays `in_call`). The farmer gets an incoming-call popup and answers. Join works only for `ringing` or `in_call`. `videoReady` on a loaded consult needs the call service configured and one of those two statuses.
+4. The specialist can save advice once the consult is no longer `requested` and is not `cancelled`. The phone shows the form for `accepted` or `ended`. Saving it sets `completed`. The PDF is available to both people after advice exists. Each side can hide their own copy with DELETE, except while `ringing` or `in_call`.
+5. Notification sounds and vibration play in the foreground (`expo-av`). An incoming call repeats until answered, dismissed, or no longer ringing. Android uses media volume. There is no lock-screen push.
+
+### 17.3 Environment names
+
+Copy `call/.env.example` to `call/.env` on the VM. Do not commit `call/.env`, `backend/.env`, `mobile/.env`, or `livekit.generated.yaml`.
+
+| Where | Names | Notes |
+|-------|--------|--------|
+| Vercel API project, and `backend/.env` | `CALL_SERVICE_URL`, `CALL_SERVICE_SECRET` | Both required or video stays off on that API |
+| `mobile/.env` | `EXPO_PUBLIC_CALL_URL` | Public `https` origin of the call host. No secret |
+| `call/.env` | `CALL_SERVICE_SECRET` | Same value as the API |
+| `call/.env` | `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | VM only. Rendered into `livekit.generated.yaml` |
+| `call/.env` | `LIVEKIT_URL` | Public `wss://` URL phones receive in the join token |
+| `call/.env` | `LIVEKIT_HTTP_URL` | Empty defaults to `http://127.0.0.1:7880` |
+| `call/.env` | `ARONNO_API_URL` | Nest API base including `/api`. Empty defaults to `https://aronno-api.vercel.app/api` |
+| `call/.env` | `CALL_HOST` | DuckDNS hostname Caddy serves |
+| `call/.env` | `PORT` | Empty defaults to `4000` |
+| `call/.env` | `CALL_MONGODB_URI` | Optional. Without it, open rooms are kept in memory and are lost on restart |
+
+Generate `CALL_SERVICE_SECRET` the same way as the JWT secrets in [section 5](#5-generate-jwt-secrets-with-nodejs). Put the placeholder shape in git only (`CALL_SERVICE_SECRET=`).
+
+### 17.4 Azure VM and Compose
+
+`call/scripts/azure-vm.sh` expects `az login` on an Azure for Students subscription. It will not deploy in Southeast Asia. It walks allowed regions (`eastasia`, `malaysiawest`, `indiasouthcentral`, `indonesiacentral`, `centralindia`) and 2-vCPU sizes, starting with `Standard_B2s`. The script notes that `Standard_B2s` is capacity-restricted in `centralindia`. Default resource group and VM name are `aronno-call`. The script does not record which region actually accepted the VM.
+
+It opens TCP 80, 443, and 7881, UDP 443, and UDP 50000–60000. After it prints the public IP, point a DuckDNS hostname at that IP.
+
+On the VM, from `call/` (Docker, Compose v2, and `gettext-base` for `envsubst`):
+
+```bash
+sh scripts/render-livekit.sh
+sudo docker compose up -d --build
+```
+
+`render-livekit.sh` writes `livekit.generated.yaml` from `livekit.yaml.template`. Compose starts the call service, `livekit/livekit-server:v1.13.7`, and Caddy 2. The template keeps `use_external_ip`, TCP 7881, and UDP 50000–60000, and enables embedded TURN/UDP on port 443 using `CALL_HOST`. Caddy serves HTTP/1 and HTTP/2 only, so it does not bind UDP 443.
+
+### 17.5 Phone build
+
+Expo Go and an older debug APK do not include `@livekit/react-native` or `@livekit/react-native-webrtc`. That APK shows `ভিডিও কলের জন্য নতুন অ্যাপ বিল্ড দরকার।`
+
+```bash
+cd mobile
+pnpm exec expo run:android
+```
+
+Set `EXPO_PUBLIC_CALL_URL` before that build if the binary should ship with the call host. Do not commit the `.env` file. EAS secrets, if you use them, are names and values in Expo’s project settings — not in git.
+
+### 17.6 Hosted API
+
+The Vercel project that runs the Nest API still needs `CALL_SERVICE_URL` and `CALL_SERVICE_SECRET` in its environment. If either is missing there, the hosted API leaves video off even when the VM is healthy and a local `.env` is filled in.
 
 ---
 
@@ -758,6 +870,9 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 # APK
 cd mobile
 eas build -p android --profile preview
+
+# Video dev build (from mobile/)
+pnpm exec expo run:android
 ```
 
 Questions about the data model: start from `backend/prisma/schema.prisma`. Questions about screens: start from `mobile/app/`.

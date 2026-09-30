@@ -21,6 +21,13 @@ Checkout offers cash on delivery, card, and mobile banking. The API prices the c
 
 Offline AI **does not run in Expo Go**. Use a development build.
 
+Video consult also needs a development build. Set `EXPO_PUBLIC_CALL_URL` in `mobile/.env` (do not commit that file). An APK built before `@livekit/react-native` and `@livekit/react-native-webrtc` were linked shows the Bangla screen that a new build is required (`ভিডিও কলের জন্য নতুন অ্যাপ বিল্ড দরকার।`).
+
+```bash
+cd mobile
+pnpm exec expo run:android
+```
+
 ## Quick start
 
 ```bash

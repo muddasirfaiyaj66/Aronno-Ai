@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -16,10 +16,12 @@ import { colors } from "@/constants/theme";
 import { useAppSelector } from "@/store";
 import { saveAndSharePdf } from "@/lib/reportPdf";
 import {
+  getApiError,
   useAcceptConsultMutation,
   useRingConsultMutation,
   useCancelConsultMutation,
   useConsultPdfMutation,
+  useDeleteConsultMutation,
   useGetConsultQuery,
   useSaveConsultAdviceMutation,
 } from "@/services/api";
@@ -33,7 +35,7 @@ export default function ConsultDetail() {
   const consultId = typeof id === "string" ? id : "";
   const router = useRouter();
   const me = useAppSelector((s) => s.auth.user);
-  const { data } = useGetConsultQuery(consultId, {
+  const { data, isError, error: loadError } = useGetConsultQuery(consultId, {
     skip: !consultId,
     pollingInterval: 4000,
   });
@@ -42,6 +44,7 @@ export default function ConsultDetail() {
   const [cancel, { isLoading: cancelling }] = useCancelConsultMutation();
   const [saveAdvice, { isLoading: saving }] = useSaveConsultAdviceMutation();
   const [pdf, { isLoading: savingPdf }] = useConsultPdfMutation();
+  const [removeConsult, { isLoading: deleting }] = useDeleteConsultMutation();
   const [summary, setSummary] = useState("");
   const [steps, setSteps] = useState("");
   const [medicines, setMedicines] = useState<ConsultMedicine[]>([emptyMedicine()]);
@@ -51,8 +54,14 @@ export default function ConsultDetail() {
     return (
       <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
         <ScreenHeader title="পরামর্শ" onBack={() => router.back()} />
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color={colors.primary} />
+        <View className="flex-1 items-center justify-center px-8">
+          {isError ? (
+            <AppText variant="body" className="text-center">
+              {getApiError(loadError).message ?? "এই পরামর্শ আর আপনার তালিকায় নেই।"}
+            </AppText>
+          ) : (
+            <ActivityIndicator color={colors.primary} />
+          )}
         </View>
       </SafeAreaView>
     );
@@ -72,13 +81,17 @@ export default function ConsultDetail() {
   async function onCall() {
     setError("");
     try {
-      await ring(consultId).unwrap();
+      const result = await ring(consultId).unwrap();
+      if (result.videoReady === false) {
+        setError("ভিডিও রুম খোলা যায়নি।");
+        return;
+      }
       router.push({
         pathname: "/(root)/consult/call",
         params: { consultId },
       } as never);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "কল শুরু করা যায়নি।");
+      setError(getApiError(err).message ?? "কল শুরু করা যায়নি।");
     }
   }
 
@@ -113,6 +126,31 @@ export default function ConsultDetail() {
       filename: file.filename,
       htmlFallback: `<p>${data?.advice?.summaryBn ?? ""}</p>`,
     });
+  }
+
+  const liveCall = data.status === "ringing" || data.status === "in_call";
+  const peerName = mine ? data.farmer.displayName : data.specialist?.displayName ?? "বিশেষজ্ঞ";
+
+  function confirmDelete() {
+    if (liveCall) {
+      Alert.alert("এখন মুছা যাবে না", "কল শেষ হলে তারপর তালিকা থেকে মুছতে পারবেন।");
+      return;
+    }
+    Alert.alert("মিটিং মুছবেন?", "এটি শুধু আপনার তালিকা থেকে সরবে। অপর পক্ষ এখনো দেখতে পাবেন।", [
+      { text: "না", style: "cancel" },
+      {
+        text: "মুছুন",
+        style: "destructive",
+        onPress: () => {
+          void removeConsult(consultId)
+            .unwrap()
+            .then(() => router.back())
+            .catch((err: unknown) => {
+              setError(getApiError(err).message ?? "মুছা যায়নি।");
+            });
+        },
+      },
+    ]);
   }
 
   function patchMedicine(index: number, patch: Partial<ConsultMedicine>) {
@@ -156,33 +194,49 @@ export default function ConsultDetail() {
           <PrimaryButton label="অনুরোধ গ্রহণ করুন" loading={accepting} onPress={() => void onAccept()} />
         ) : null}
 
-        {canCall ? (
-          <PrimaryButton
-            label={data.status === "in_call" ? "কলে ফিরে যান" : "কৃষককে কল করুন"}
-            icon={<Ionicons name="call" size={22} color={colors.white} />}
-            loading={ringing}
-            onPress={() => void onCall()}
-          />
-        ) : null}
-
-        {canAnswer ? (
-          <PrimaryButton
-            label="কল ধরুন"
-            icon={<Ionicons name="call" size={22} color={colors.white} />}
-            onPress={() =>
-              router.push({
-                pathname: "/(root)/consult/call",
-                params: { consultId },
-              } as never)
-            }
-          />
-        ) : null}
-
-        {data.farmer.id === me?.id && data.status === "accepted" ? (
-          <View className="rounded-3xl border border-border bg-secondary px-4 py-3">
-            <AppText variant="body">
-              বিশেষজ্ঞ অনুরোধ নিয়েছেন। কল এলে এখানে ধরতে পারবেন।
-            </AppText>
+        {canCall || canAnswer || data.status === "accepted" || liveCall ? (
+          <View className="items-center gap-4 rounded-3xl border border-border bg-card px-4 py-6">
+            <View className="h-20 w-20 items-center justify-center rounded-full bg-secondary">
+              <Ionicons name={liveCall ? "call" : "person"} size={32} color={colors.primary} />
+            </View>
+            <View className="items-center gap-1">
+              <AppText variant="title" className="text-center">
+                {peerName}
+              </AppText>
+              <AppText variant="caption" className="text-center">
+                {data.status === "ringing"
+                  ? mine
+                    ? "কৃষককে কল করা হচ্ছে"
+                    : "কল আসছে"
+                  : data.status === "in_call"
+                    ? "কলে আছেন"
+                    : mine
+                      ? "গ্রহণ হয়েছে। এখন কল করতে পারেন।"
+                      : "বিশেষজ্ঞ অনুরোধ নিয়েছেন। কল এলে এখানে ধরতে পারবেন।"}
+              </AppText>
+            </View>
+            {canCall ? (
+              <PrimaryButton
+                label={data.status === "in_call" ? "কলে ফিরে যান" : "কৃষককে কল করুন"}
+                icon={<Ionicons name="call" size={22} color={colors.white} />}
+                loading={ringing}
+                onPress={() => void onCall()}
+                className="w-full"
+              />
+            ) : null}
+            {canAnswer ? (
+              <PrimaryButton
+                label="কল ধরুন"
+                icon={<Ionicons name="call" size={22} color={colors.white} />}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(root)/consult/call",
+                    params: { consultId },
+                  } as never)
+                }
+                className="w-full"
+              />
+            ) : null}
           </View>
         ) : null}
         {data.farmer.id === me?.id && data.status === "requested" ? (
@@ -326,6 +380,31 @@ export default function ConsultDetail() {
             )}
           </Pressable>
         ) : null}
+        {liveCall ? (
+          <AppText variant="caption" className="text-center">
+            কল শেষ হলে তালিকা থেকে মুছতে পারবেন।
+          </AppText>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="তালিকা থেকে মুছুন"
+            disabled={deleting}
+            onPress={confirmDelete}
+            className="min-h-touch-lg flex-row items-center justify-center gap-2 rounded-2xl border border-border bg-card active:opacity-80"
+            style={{ opacity: deleting ? 0.5 : 1 }}
+          >
+            {deleting ? (
+              <ActivityIndicator color={colors.danger} />
+            ) : (
+              <>
+                <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                <AppText variant="body" className="font-bengali-semibold text-danger">
+                  তালিকা থেকে মুছুন
+                </AppText>
+              </>
+            )}
+          </Pressable>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

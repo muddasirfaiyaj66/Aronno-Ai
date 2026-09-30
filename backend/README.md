@@ -6,7 +6,7 @@ Nest.js 11 API for the Aronno phone app and website. Cookies-only JWT auth, Pris
 
 - Nest.js 11, Prisma 6, MongoDB
 - Argon2id passwords, Google ID-token (OAuth 2.1)
-- httpOnly cookies: `aronno_access` (15m), `aronno_refresh` (7d), `aronno_csrf` (not HttpOnly)
+- httpOnly cookies: `aronno_access` (2 hours), `aronno_refresh` (7d), `aronno_csrf` (not HttpOnly)
 - Zod on every DTO, Helmet, CORS credentials, `@nestjs/throttler`
 
 ## Setup
@@ -29,7 +29,7 @@ API base: `http://localhost:3000/api`
 
 ## Auth
 
-Tokens are **never** accepted as `Authorization: Bearer`. The client must send cookies and `X-CSRF-Token` on mutating routes (except `/auth/register`, `/auth/login`, `/auth/google`).
+User tokens are **never** accepted as `Authorization: Bearer`. The client must send cookies and `X-CSRF-Token` on mutating routes (except `/auth/register`, `/auth/login`, `/auth/google`). The video call service is the exception: it uses `CALL_SERVICE_SECRET` as a Bearer secret on `/internal/consults/*`, and this API uses the same secret when it calls the call VM. That secret is not a user JWT.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
@@ -45,7 +45,9 @@ Tokens are **never** accepted as `Authorization: Bearer`. The client must send c
 | GET | `/admin/users` | ADMIN+ | List users |
 | POST | `/admin/users` | ADMIN+ | Create a verified ADMIN |
 
-Feature routes (cookie auth unless noted): `/diagnoses`, `/treatment-plans`, `/cost-estimates`, `/history`, `/reports`, `/tts`, `/tools`, `/receipts`, `/fertilizer`, `/crop-plans`, `/weather`, `/notifications`.
+Feature routes (cookie auth unless noted): `/diagnoses`, `/treatment-plans`, `/cost-estimates`, `/history`, `/reports`, `/tts`, `/tools`, `/receipts`, `/fertilizer`, `/crop-plans`, `/weather`, `/notifications`, `/consults`.
+
+`POST /users/me/specialist-docs` stores the certificate and NID URLs and sets specialist review to `pending`. `PATCH /admin/users/:id/specialist` approves or rejects (`note` required on reject). Copy `CALL_SERVICE_URL` and `CALL_SERVICE_SECRET` from `.env.example`. On Vercel, set both in the API project environment or video rooms stay off. Details: the root [README](../README.md#farmer-specialist-video-consult) and [SETUP.md](../SETUP.md#17-video-consult).
 
 Public reads: `GET /market/prices`, `GET /market/heatmap`, `GET /marketplace/products`, `GET /marketplace/shops`.
 

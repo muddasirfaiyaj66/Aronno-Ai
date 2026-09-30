@@ -16,6 +16,15 @@ import { buildConsultPdf } from './consult-pdf';
 const SPECIALIST_PROFESSIONS = ['agronomist', 'extension_officer'] as const;
 const ONLINE_MS = 45_000;
 
+/** Mongo omits unset optional fields, and Prisma `null` does not match those documents. */
+const notFarmerDeleted = {
+  OR: [{ farmerDeletedAt: null }, { farmerDeletedAt: { isSet: false } }],
+} satisfies Prisma.ConsultWhereInput;
+
+const notSpecialistDeleted = {
+  OR: [{ specialistDeletedAt: null }, { specialistDeletedAt: { isSet: false } }],
+} satisfies Prisma.ConsultWhereInput;
+
 const consultInclude = {
   farmer: { select: { id: true, displayName: true, email: true } },
   specialist: { select: { id: true, displayName: true, email: true } },
@@ -101,6 +110,7 @@ export class ConsultService {
         farmerId: user.id,
         specialistId: input.specialistId,
         status: { in: ['requested', 'accepted', 'ringing', 'in_call'] },
+        ...notFarmerDeleted,
       },
     });
     if (open) throw Errors.conflict('এই বিশেষজ্ঞের কাছে আগের অনুরোধ এখনো খোলা আছে।');
@@ -131,7 +141,7 @@ export class ConsultService {
     const specialist = await this.isApprovedSpecialist(user.id);
     if (specialist) {
       const items = await this.prisma.consult.findMany({
-        where: { specialistId: user.id },
+        where: { specialistId: user.id, ...notSpecialistDeleted },
         include: consultInclude,
         orderBy: { createdAt: 'desc' },
         take: 50,
@@ -139,7 +149,7 @@ export class ConsultService {
       return { viewer: 'specialist' as const, items: items.map((row) => this.toDto(row)) };
     }
     const items = await this.prisma.consult.findMany({
-      where: { farmerId: user.id },
+      where: { farmerId: user.id, ...notFarmerDeleted },
       include: consultInclude,
       orderBy: { createdAt: 'desc' },
       take: 50,
@@ -149,8 +159,36 @@ export class ConsultService {
 
   async get(user: AuthUser, id: string) {
     const row = await this.findRow(id);
-    if (row.farmerId === user.id || row.specialistId === user.id) return this.toDto(row);
+    if (row.farmerId === user.id) {
+      if (row.farmerDeletedAt) throw Errors.notFound();
+      return this.toDto(row);
+    }
+    if (row.specialistId === user.id) {
+      if (row.specialistDeletedAt) throw Errors.notFound();
+      return this.toDto(row);
+    }
     throw Errors.forbidden();
+  }
+
+  /**
+   * Hides the consult from the caller's own list. The other person still sees it.
+   * A live ring or call must end first so this does not leave a room open.
+   */
+  async remove(user: AuthUser, id: string) {
+    const row = await this.findRow(id);
+    const farmer = row.farmerId === user.id;
+    const specialist = row.specialistId === user.id;
+    if (!farmer && !specialist) throw Errors.forbidden();
+    if (farmer && row.farmerDeletedAt) return { ok: true as const };
+    if (!farmer && specialist && row.specialistDeletedAt) return { ok: true as const };
+    if (row.status === 'ringing' || row.status === 'in_call') {
+      throw Errors.conflict('কল চলাকালীন মিটিং মুছা যাবে না। কল শেষ হলে আবার চেষ্টা করুন।');
+    }
+    await this.prisma.consult.update({
+      where: { id },
+      data: farmer ? { farmerDeletedAt: new Date() } : { specialistDeletedAt: new Date() },
+    });
+    return { ok: true as const };
   }
 
   async accept(user: AuthUser, id: string) {
@@ -186,12 +224,13 @@ export class ConsultService {
     if (row.status !== 'accepted' && row.status !== 'ringing' && row.status !== 'in_call') {
       throw Errors.conflict('আগে অনুরোধটি গ্রহণ করুন।');
     }
+    const videoReady = await this.calls.openRoom(id);
+    if (!videoReady) throw Errors.videoUnavailable();
     const updated = await this.prisma.consult.update({
       where: { id },
       data: { status: row.status === 'in_call' ? 'in_call' : 'ringing' },
       include: consultInclude,
     });
-    const videoReady = await this.calls.openRoom(id);
     if (row.status !== 'in_call') {
       void this.notifications.send({
         userId: row.farmerId,

@@ -898,8 +898,10 @@ model Consult {
   diagnosisId  String?       @db.ObjectId
   status       ConsultStatus @default(requested)
   problemText  String
-  acceptedAt   DateTime?
-  endedAt      DateTime?
+  acceptedAt          DateTime?
+  endedAt             DateTime?
+  farmerDeletedAt     DateTime?
+  specialistDeletedAt DateTime?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 

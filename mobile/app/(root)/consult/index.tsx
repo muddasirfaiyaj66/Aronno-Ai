@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Image, Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { Alert, Image, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -9,16 +9,24 @@ import {
   PrimaryButton,
   ScreenHeader,
 } from "@/components/ui";
+import {
+  ConsultMessageMic,
+  type ConsultMicNotice,
+} from "@/components/consult/ConsultMessageMic";
 import { ConsultStatusChip } from "@/components/consult/ConsultStatusChip";
 import { colors } from "@/constants/theme";
 import { useAppSelector } from "@/store";
 import {
+  getApiError,
   useCreateConsultMutation,
+  useDeleteConsultMutation,
   useGetHistoryQuery,
   useListConsultsQuery,
   useListSpecialistsQuery,
 } from "@/services/api";
-import type { SpecialistCard } from "@/types/consult";
+import type { ConsultStatus, SpecialistCard } from "@/types/consult";
+
+const DELETABLE: ConsultStatus[] = ["requested", "accepted", "ended", "completed", "cancelled"];
 
 const SPECIALISTS = new Set(["agronomist", "extension_officer"]);
 
@@ -36,9 +44,11 @@ export default function ConsultHome() {
   });
   const { data: history } = useGetHistoryQuery(undefined, { skip: specialist });
   const [create, { isLoading }] = useCreateConsultMutation();
+  const [removeConsult] = useDeleteConsultMutation();
   const [picked, setPicked] = useState<SpecialistCard | null>(null);
   const [problem, setProblem] = useState("");
   const [error, setError] = useState("");
+  const [micNotice, setMicNotice] = useState<ConsultMicNotice | null>(null);
   const latestDisease = history?.find((entry) => entry.kind === "disease");
   const items = data?.items ?? [];
   const incoming = items.find(
@@ -50,6 +60,7 @@ export default function ConsultHome() {
   async function submit() {
     if (!picked) return;
     setError("");
+    setMicNotice((current) => (current?.kind === "error" ? null : current));
     try {
       const created = await create({
         specialistId: picked.id,
@@ -62,10 +73,11 @@ export default function ConsultHome() {
             : undefined,
       }).unwrap();
       setProblem("");
+      setMicNotice(null);
       setPicked(null);
       router.push(`/(root)/consult/${created.id}` as never);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "অনুরোধ পাঠানো যায়নি।");
+      setError(getApiError(err).message || "অনুরোধ পাঠানো যায়নি।");
     }
   }
 
@@ -95,20 +107,22 @@ export default function ConsultHome() {
           />
         }
       >
-        {!specialist && incoming ? (
+        {incoming ? (
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push(`/(root)/consult/${incoming.id}` as never)}
             className="gap-2 rounded-3xl bg-primary px-4 py-4"
           >
             <AppText variant="caption" className="font-bengali-semibold" style={{ color: colors.white }}>
-              কল আসছে
+              {specialist ? (incoming.status === "in_call" ? "কলে আছেন" : "কল করা হচ্ছে") : "কল আসছে"}
             </AppText>
             <AppText variant="bodyLg" className="font-bengali-bold" style={{ color: colors.white }}>
-              {incoming.specialist?.displayName ?? "বিশেষজ্ঞ"} কল করছেন
+              {specialist
+                ? incoming.farmer.displayName
+                : `${incoming.specialist?.displayName ?? "বিশেষজ্ঞ"} কল করছেন`}
             </AppText>
             <AppText variant="caption" style={{ color: colors.white }}>
-              ধরতে চাপুন
+              {specialist ? "খুলতে চাপুন" : "ধরতে চাপুন"}
             </AppText>
           </Pressable>
         ) : null}
@@ -137,22 +151,50 @@ export default function ConsultHome() {
                 <FieldInput
                   label="বার্তা"
                   value={problem}
-                  onChangeText={setProblem}
+                  onChangeText={(text) => {
+                    setProblem(text);
+                    setMicNotice((current) => (current?.kind === "error" ? null : current));
+                  }}
                   multiline
                   textAlignVertical="top"
                   placeholder="ফসলের সমস্যা সংক্ষেপে লিখুন"
                   className="min-h-28 py-3"
-                  error={error || undefined}
+                  error={error || (micNotice?.kind === "error" ? micNotice.text : undefined)}
                   hint={
-                    latestDisease?.kind === "disease"
-                      ? `শেষ স্ক্যান যুক্ত হবে: ${latestDisease.diseaseNameBn}`
-                      : undefined
+                    [
+                      micNotice && micNotice.kind !== "error" ? micNotice.text : null,
+                      latestDisease?.kind === "disease"
+                        ? `শেষ স্ক্যান যুক্ত হবে: ${latestDisease.diseaseNameBn}`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || undefined
+                  }
+                  trailing={
+                    <ConsultMessageMic
+                      disabled={isLoading}
+                      onTranscript={(spoken) => {
+                        setProblem((prev) => {
+                          const base = prev.trim();
+                          return base ? `${base} ${spoken}` : spoken;
+                        });
+                        setError("");
+                      }}
+                      onNotice={(notice) => {
+                        setMicNotice(notice);
+                        if (notice && notice.kind !== "error") setError("");
+                      }}
+                    />
                   }
                 />
                 <PrimaryButton
                   label="অনুরোধ পাঠান"
                   loading={isLoading}
-                  disabled={problem.trim().length < 4}
+                  disabled={
+                    problem.trim().length < 4 ||
+                    micNotice?.kind === "recording" ||
+                    micNotice?.kind === "transcribing"
+                  }
                   onPress={() => void submit()}
                 />
               </View>
@@ -164,25 +206,44 @@ export default function ConsultHome() {
           {specialist ? "আপনার অনুরোধ" : "পাঠানো অনুরোধ"}
         </AppText>
         {items.map((item) => (
-          <Pressable
+          <View
             key={item.id}
-            accessibilityRole="button"
-            onPress={() => router.push(`/(root)/consult/${item.id}` as never)}
-            className="rounded-3xl border border-border bg-card p-4 active:opacity-80"
+            className="rounded-3xl border border-border bg-card p-4"
           >
             <View className="flex-row items-center justify-between gap-3">
               <ConsultStatusChip status={item.status} />
-              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+              {DELETABLE.includes(item.status) ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="তালিকা থেকে মুছুন"
+                  hitSlop={8}
+                  onPress={() =>
+                    confirmDeleteConsult(() => removeConsult(item.id).unwrap())
+                  }
+                  className="h-9 w-9 items-center justify-center rounded-full bg-danger-soft"
+                >
+                  <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                </Pressable>
+              ) : null}
             </View>
-            <AppText variant="body" numberOfLines={3} className="mt-3">
-              {item.problemText}
-            </AppText>
-            <AppText variant="caption" className="mt-2">
-              {specialist
-                ? item.farmer.displayName
-                : item.specialist?.displayName ?? "বিশেষজ্ঞ"}
-            </AppText>
-          </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push(`/(root)/consult/${item.id}` as never)}
+              className="active:opacity-80"
+            >
+              <AppText variant="body" numberOfLines={3} className="mt-3">
+                {item.problemText}
+              </AppText>
+              <View className="mt-2 flex-row items-center justify-between gap-3">
+                <AppText variant="caption" className="flex-1">
+                  {specialist
+                    ? item.farmer.displayName
+                    : item.specialist?.displayName ?? "বিশেষজ্ঞ"}
+                </AppText>
+                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+              </View>
+            </Pressable>
+          </View>
         ))}
         {!isFetching && items.length === 0 ? (
           <View className="items-center rounded-3xl border border-border bg-card px-6 py-10">
@@ -194,6 +255,21 @@ export default function ConsultHome() {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function confirmDeleteConsult(run: () => Promise<unknown>) {
+  Alert.alert("মিটিং মুছবেন?", "এটি শুধু আপনার তালিকা থেকে সরবে। অপর পক্ষ এখনো দেখতে পাবেন।", [
+    { text: "না", style: "cancel" },
+    {
+      text: "মুছুন",
+      style: "destructive",
+      onPress: () => {
+        void run().catch((err: unknown) => {
+          Alert.alert("মুছা যায়নি", getApiError(err).message ?? "আবার চেষ্টা করুন।");
+        });
+      },
+    },
+  ]);
 }
 
 function SpecialistList({

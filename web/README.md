@@ -4,6 +4,8 @@ Next.js site for the public Bangla pages and the English admin monitor. The brow
 
 The public pages stay in Bangla. The monitor is English. Staff can collapse the sidebar and switch light and dark; both choices are stored in the browser (`aronno.admin.sidebar`, `aronno.admin.theme`).
 
+Staff review agronomist and extension-officer documents at `/admin/specialists` before those accounts appear in the app consult list. Reject requires a note. The website does not join the video call.
+
 ## Run locally
 
 1. Start the backend on port **3000** (`backend`).
@@ -48,5 +50,6 @@ Online checkout is configured on the **API**, not here. `API_PUBLIC_URL` in `bac
 | `/admin/payouts` | Mark seller payout requests paid or rejected |
 | `/admin/delivery` | Same-city and other-city delivery fees |
 | `/admin/users` | List, activate, and change role |
+| `/admin/specialists` | Review certificate and national ID. Approve, or reject with a note |
 | `/admin/notifications` | Broadcast an alert |
 | `/admin/create` | Create an admin user |

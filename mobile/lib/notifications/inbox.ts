@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSyncExternalStore } from "react";
+import { isIncomingCall, playNotificationCue } from "@/lib/notifications/alert";
 
 const KEY = "aronno.notifications";
 
@@ -72,18 +73,38 @@ function commit(items: AppNotification[]) {
   void AsyncStorage.setItem(KEY, JSON.stringify(items)).catch(() => undefined);
 }
 
+const FRESH_MS = 90_000;
+
+function isFresh(item: AppNotification) {
+  const at = Date.parse(item.createdAt);
+  return Number.isFinite(at) && Date.now() - at < FRESH_MS;
+}
+
+/** Sound + vibration for notifications that just arrived. Calls ring separately. */
+function alertArrivals(prev: AppNotification[], next: AppNotification[]) {
+  const seen = new Set(prev.map((item) => item.id));
+  const fresh = next.some(
+    (item) => !seen.has(item.id) && !item.dismissed && !item.read && isFresh(item) && !isIncomingCall(item),
+  );
+  if (fresh) void playNotificationCue();
+}
+
 /** Server list replaces the inbox. Read state comes from the server. */
 export function replaceInbox(incoming: AppNotification[]) {
+  const prev = snapshot.items;
   const items = [...incoming].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   commit(items);
+  alertArrivals(prev, items);
 }
 
 /** A live push from the server. The server copy wins, including read state. */
 export function upsertFromServer(item: AppNotification) {
+  const prev = snapshot.items;
   const items = [item, ...snapshot.items.filter((row) => row.id !== item.id)].sort((a, b) =>
     a.createdAt < b.createdAt ? 1 : -1,
   );
   commit(items);
+  alertArrivals(prev, items);
 }
 
 /** Replace the inbox with the current set of alerts, keeping read state. */

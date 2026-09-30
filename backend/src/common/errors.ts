@@ -68,6 +68,12 @@ export const Errors = {
       'আবহাওয়ার তথ্য পাওয়া যায়নি। কিছুক্ষণ পর চেষ্টা করুন।',
       HttpStatus.SERVICE_UNAVAILABLE,
     ),
+  videoUnavailable: () =>
+    new ApiError(
+      'VIDEO_UNAVAILABLE',
+      'ভিডিও রুম খোলা যায়নি।',
+      HttpStatus.SERVICE_UNAVAILABLE,
+    ),
   unverified: () =>
     new ApiError(
       'EMAIL_UNVERIFIED',

@@ -44,6 +44,16 @@ import { hasCloudChatKey, streamCloudReply } from "@/lib/offlineChat/cloudChat";
 import { hasGeminiKey } from "@/lib/offlineChat/cloudGemini";
 import { fetchIsOnline } from "@/hooks/useIsOnline";
 
+
+/** Waits at most `ms` for optional context, then answers without it. */
+const CONTEXT_WAIT_MS = 2500;
+function capWait<T>(work: Promise<T>, fallback: T, ms = CONTEXT_WAIT_MS): Promise<T> {
+  return Promise.race([
+    work,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 export { sanitizeAssistantReply } from "@/lib/offlineChat/sanitize";
 export { buildWelcomeBn };
 
@@ -181,7 +191,9 @@ export async function runLlmTurn(
     sessionId
       ? recentChatHistoryTurns(6, sessionId).catch(() => [] as LlmHistoryTurn[])
       : ([] as LlmHistoryTurn[]),
-    WEATHER_RE.test(cleaned) ? ensureCachedWeather().catch(() => null) : null,
+    WEATHER_RE.test(cleaned)
+      ? capWait(ensureCachedWeather().catch(() => null), null)
+      : null,
   ]);
 
   const intentHit = await gatherIntentContext(cleaned, {
@@ -222,10 +234,14 @@ export async function runLlmTurn(
   // ── Online: Ollama cloud gemma4:31b, streamed ──────────────────────────
   if (online && hasCloudChatKey()) {
     onStatus?.("আরণ্য লিখছে…");
+    // App facts are nice-to-have: on slow mobile data never hold the reply.
     const [market, appFacts] = await Promise.all([
-      marketFacts(cleaned).catch(() => [] as string[]),
-      import("@/lib/offlineChat/appRag").then((mod) =>
-        mod.gatherAppFacts(cleaned).catch(() => [] as string[]),
+      capWait(marketFacts(cleaned).catch(() => [] as string[]), [] as string[]),
+      capWait(
+        import("@/lib/offlineChat/appRag").then((mod) =>
+          mod.gatherAppFacts(cleaned).catch(() => [] as string[]),
+        ),
+        [] as string[],
       ),
     ]);
     const facts = [...focus, ...liveLines, ...knowledge, ...market, ...appFacts];

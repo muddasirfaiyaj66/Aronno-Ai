@@ -487,12 +487,20 @@ function cloudSpeechChunks(text: string): string[] {
   return chunks;
 }
 
+/**
+ * The free Gemini voice allows only a few clips a day. Once it refuses,
+ * skip it for a while so every sentence doesn't wait on a failing call.
+ */
+const CLOUD_TTS_COOLDOWN_MS = 30 * 60_000;
+let cloudTtsBlockedUntil = 0;
+
 async function fetchCloudAudio(text: string): Promise<string | null> {
+  if (Date.now() < cloudTtsBlockedUntil) return null;
   const clip = text.slice(0, CLOUD_TTS_CHARS);
   const { synthesizeGeminiFemale } = await import(
     "@/lib/offlineVoice/geminiTts"
   );
-  const direct = await synthesizeGeminiFemale(clip);
+  const direct = await synthesizeGeminiFemale(clip).catch(() => null);
   if (direct && direct.length > 80) return direct;
 
   const { api } = await import("@/services/api");
@@ -500,11 +508,14 @@ async function fetchCloudAudio(text: string): Promise<string | null> {
   const result = await Promise.race([
     store
       .dispatch(api.endpoints.speak.initiate({ textBn: clip }))
-      .unwrap(),
+      .unwrap()
+      .catch(() => null),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), 12000)),
   ]);
   const audio = result?.audioBase64;
-  return audio && audio.length > 80 ? audio : null;
+  if (audio && audio.length > 80) return audio;
+  cloudTtsBlockedUntil = Date.now() + CLOUD_TTS_COOLDOWN_MS;
+  return null;
 }
 
 async function fetchCloudWav(text: string, gen: number, index: number) {

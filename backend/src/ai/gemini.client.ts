@@ -64,6 +64,8 @@ export class GeminiClient {
       audioBuffer?: Buffer;
       audioMime?: string;
       jsonMode?: boolean;
+      /** Longer structured answers (e.g. farm advice) need more room. */
+      maxOutputTokens?: number;
     },
   ): Promise<T> {
     if (!this.isEnabled()) throw Errors.aiUnavailable();
@@ -95,7 +97,7 @@ export class GeminiClient {
           contents: [{ role: 'user', parts }],
           generationConfig: {
             temperature: 0.2,
-            maxOutputTokens: 2048,
+            maxOutputTokens: opts?.maxOutputTokens ?? 2048,
             ...(jsonMode ? { responseMimeType: 'application/json' } : {}),
           },
         }),

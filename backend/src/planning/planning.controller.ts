@@ -27,6 +27,16 @@ import {
   inMonthBn,
   slugForCropBn,
 } from './crop-calendar';
+import {
+  adviseSchema,
+  buildAdvicePrompt,
+  fillTopCrops,
+  parseAiAdvice,
+  ruleAdvice,
+  withCosts,
+  type AdviseInput,
+  type FarmAdvice,
+} from './farm-advice';
 
 const generateSchema = z
   .object({
@@ -119,6 +129,80 @@ export class PlanningController {
       include: { months: { orderBy: { sortOrder: 'asc' } } },
     });
     return row ? this.dto(row) : null;
+  }
+
+  /**
+   * Farmer-specific advice: their land, last year's crops and wanted crops,
+   * checked against the 6-month outlook for their area.
+   */
+  @Post('advise')
+  async advise(
+    @CurrentUser() user: AuthUser,
+    @Body(new ZodPipe(adviseSchema)) body: AdviseInput,
+  ): Promise<FarmAdvice & { id: string; createdAt: Date }> {
+    const point = await this.locations.forUser(user.id, body.lat, body.lon);
+    const outlook = await this.weather.sixMonthPlan(point);
+
+    let advice: Omit<
+      FarmAdvice,
+      'months' | 'locationBn' | 'outlookSource' | 'generatedBy'
+    >;
+    let generatedBy: FarmAdvice['generatedBy'] = 'ai';
+    try {
+      const raw = await this.gemini.generateJson<unknown>(
+        buildAdvicePrompt(body, point.locationBn, outlook),
+        { maxOutputTokens: 4096 },
+      );
+      const ai = parseAiAdvice(raw, body);
+      advice = {
+        ...ai,
+        topCrops: fillTopCrops(ai.topCrops, ruleAdvice(body, outlook).topCrops),
+      };
+    } catch {
+      advice = ruleAdvice(body, outlook);
+      generatedBy = 'rules';
+    }
+
+    const result: FarmAdvice = {
+      ...advice,
+      topCrops: withCosts(advice.topCrops, body),
+      months: outlook.months.map((m) => ({
+        month: m.monthBn,
+        weatherIcon: m.weatherIcon,
+        recommendedCropBn: m.recommendedCropBn,
+        tempC: m.tempC,
+        precipMm: m.precipMm,
+      })),
+      locationBn: point.locationBn,
+      outlookSource: outlook.source,
+      generatedBy,
+    };
+    // Keep the farm answers for prefill; GPS stays out of storage.
+    const input = { ...body, lat: undefined, lon: undefined };
+    const row = await this.prisma.cropAdvice.create({
+      data: {
+        userId: user.id,
+        input,
+        result,
+        outlookSource: outlook.source,
+      },
+    });
+    return { ...result, id: row.id, createdAt: row.createdAt };
+  }
+
+  @Get('advice/latest')
+  async latestAdvice(@CurrentUser() user: AuthUser) {
+    const row = await this.prisma.cropAdvice.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!row) return null;
+    return {
+      ...(row.result as unknown as FarmAdvice),
+      input: row.input,
+      id: row.id,
+      createdAt: row.createdAt,
+    };
   }
 
   /**

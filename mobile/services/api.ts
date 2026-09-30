@@ -20,7 +20,7 @@ import type { HistoryEntry, HistoryEntryKind } from "@/types/history";
 import type { ToolResult } from "@/types/tools";
 import type { ReceiptReviewItem, ReceiptSummary } from "@/types/receipt";
 import type { FertilizerAdvice } from "@/types/fertilizer";
-import type { CropPlan } from "@/types/planning";
+import type { CropPlan, FarmAdvice, FarmAdviceInput } from "@/types/planning";
 import type { HeatmapResponse, MarketListing, MarketPriceEntry, ShopData } from "@/types/market";
 import type { CurrentWeather } from "@/types/weather";
 import type { AppNotification } from "@/lib/notifications/inbox";
@@ -159,6 +159,7 @@ export const api = createApi({
     "Receipt",
     "Fertilizer",
     "CropPlan",
+    "CropAdvice",
     "Market",
     "Report",
     "AdminUsers",
@@ -529,6 +530,16 @@ export const api = createApi({
       query: () => "/crop-plans/latest",
       transformResponse: (r) => unwrap(r),
       providesTags: ["CropPlan"],
+    }),
+    adviseCrops: builder.mutation<FarmAdvice, FarmAdviceInput>({
+      query: (body) => ({ url: "/crop-plans/advise", method: "POST", body }),
+      transformResponse: (r) => unwrap(r),
+      invalidatesTags: ["CropAdvice"],
+    }),
+    getLatestCropAdvice: builder.query<FarmAdvice | null, void>({
+      query: () => "/crop-plans/advice/latest",
+      transformResponse: (r) => unwrap(r),
+      providesTags: ["CropAdvice"],
     }),
     getWeather: builder.query<CurrentWeather, { lat?: number; lon?: number } | void>({
       query: (arg) => {
@@ -1118,6 +1129,8 @@ export const {
   useRecommendFertilizerMutation,
   useGenerateCropPlanMutation,
   useGetLatestCropPlanQuery,
+  useAdviseCropsMutation,
+  useGetLatestCropAdviceQuery,
   useGetWeatherQuery,
   useGetMarketPricesQuery,
   useGetMarketListingsQuery,

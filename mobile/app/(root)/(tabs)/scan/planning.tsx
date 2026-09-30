@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,8 +11,10 @@ import {
   PrimaryButton,
   RetryCard,
   ScreenHeader,
+  SegmentedTabs,
   StructuredCard,
 } from "@/components/ui";
+import { FarmAdvisor } from "@/components/planning/FarmAdvisor";
 import { CostEstimatorPanel } from "@/components/cost/CostEstimatorPanel";
 import { CultivationCostCard } from "@/components/cost/CultivationCostCard";
 import { colors } from "@/constants/theme";
@@ -27,7 +29,16 @@ import type { CropType } from "@/types/treatment";
 const toBn = (n: number) =>
   new Intl.NumberFormat("bn-BD", { maximumFractionDigits: 1 }).format(n);
 
+type PlanTab = "farm" | "weather";
+
+const PLAN_TABS: { id: PlanTab; label: string }[] = [
+  { id: "farm", label: "আমার জমির পরামর্শ" },
+  { id: "weather", label: "আবহাওয়া পরিকল্পনা" },
+];
+
 export default function CropPlanningScreen() {
+  const [tab, setTab] = useState<PlanTab>("farm");
+  const scrollRef = useRef<ScrollView>(null);
   const { data: latest, isLoading, isError, refetch } = useGetLatestCropPlanQuery();
   const [generate, { isLoading: generating, data: generated }] =
     useGenerateCropPlanMutation();
@@ -57,17 +68,25 @@ export default function CropPlanningScreen() {
   return (
     <SafeAreaView className="flex-1 bg-neutral" edges={["top"]}>
       <ScreenHeader
-        title="আবহাওয়া–ফসল পরিকল্পনা"
-        subtitle="আগামী ৬ মাসের পূর্বাভাস অনুযায়ী চাষের পরামর্শ"
+        title="ফসল পরিকল্পনা"
+        subtitle="আগামী ৬ মাসের আবহাওয়া অনুযায়ী চাষের পরামর্শ"
       />
 
       <ScrollView
+        ref={scrollRef}
         className="flex-1"
         contentContainerClassName="gap-5 px-5 py-5 pb-16"
         showsVerticalScrollIndicator
         keyboardShouldPersistTaps="handled"
       >
-        {planError ? (
+        <SegmentedTabs options={PLAN_TABS} value={tab} onChange={setTab} />
+
+        {tab === "farm" ? (
+          <FarmAdvisor
+            coords={location.coords}
+            onScrollTop={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+          />
+        ) : planError ? (
           <RetryCard message={planError} onRetry={requestPlan} />
         ) : isError ? (
           <RetryCard

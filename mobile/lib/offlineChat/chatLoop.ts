@@ -40,7 +40,8 @@ import {
   titleFromUserText,
 } from "@/lib/offlineChat/sessionStore";
 import { sanitizeAssistantReply } from "@/lib/offlineChat/sanitize";
-import { hasCloudChatKey, streamCloudGemma } from "@/lib/offlineChat/cloudGemma";
+import { hasCloudChatKey, streamCloudReply } from "@/lib/offlineChat/cloudChat";
+import { hasGeminiKey } from "@/lib/offlineChat/cloudGemini";
 import { fetchIsOnline } from "@/hooks/useIsOnline";
 
 export { sanitizeAssistantReply } from "@/lib/offlineChat/sanitize";
@@ -229,10 +230,12 @@ export async function runLlmTurn(
     ]);
     const facts = [...focus, ...liveLines, ...knowledge, ...market, ...appFacts];
 
-    for (let attempt = 0; attempt < 2 && shouldContinue(); attempt += 1) {
+    // Gemini already walks every free model; Ollama gets one retry.
+    const attempts = hasGeminiKey() ? 1 : 2;
+    for (let attempt = 0; attempt < attempts && shouldContinue(); attempt += 1) {
       let raw = "";
       let shown = "";
-      const reply = await streamCloudGemma(
+      const reply = await streamCloudReply(
         cleaned,
         earlierTurns,
         facts,

@@ -16,7 +16,12 @@ type InteractionBody = {
 };
 
 function ttsKey(): string {
-  return process.env.EXPO_PUBLIC_GEMINI_TTS_API_KEY?.trim() ?? "";
+  // A separate voice key keeps chat and voice on separate free limits.
+  return (
+    process.env.EXPO_PUBLIC_GEMINI_TTS_API_KEY?.trim() ||
+    process.env.EXPO_PUBLIC_GEMINI_API_KEY?.trim() ||
+    ""
+  );
 }
 
 function audioBase64(body: InteractionBody): string | null {

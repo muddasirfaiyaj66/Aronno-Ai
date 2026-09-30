@@ -1,5 +1,6 @@
 /**
- * Online chat from the phone. Ollama cloud model gemma4:31b-cloud.
+ * Online chat through Ollama cloud (gemma4:31b-cloud). Used only when no
+ * Gemini key is set — see cloudChat.ts.
  * ollama.com expects the name without the "-cloud" suffix.
  * Offline turns stay on llama.rn. The Nest API keeps using Gemini.
  *
@@ -9,6 +10,7 @@
  * and this needs no new native module.
  */
 import type { LlmHistoryTurn } from "@/lib/modelManager/llmEngine";
+import { buildSystemPrompt, recentHistory } from "@/lib/offlineChat/cloudPrompt";
 
 const HOST = (
   process.env.EXPO_PUBLIC_OLLAMA_HOST ?? "https://ollama.com"
@@ -28,7 +30,7 @@ function modelName(): string {
   return REQUESTED;
 }
 
-export function hasCloudChatKey(): boolean {
+export function hasOllamaKey(): boolean {
   return (process.env.EXPO_PUBLIC_OLLAMA_API_KEY?.trim().length ?? 0) > 8;
 }
 
@@ -37,32 +39,11 @@ function buildMessages(
   history: LlmHistoryTurn[],
   facts: string[],
 ) {
-  const grounding = Array.from(
-    new Set(facts.map((f) => f.trim()).filter(Boolean)),
-  ).slice(0, 24);
-
   return [
-    {
-      role: "system",
-      content: [
-        "তুমি আরণ্য — বাংলাদেশের কৃষকদের কৃষি সহকারী। উষ্ণ ও সম্মানজনক ভঙ্গিতে কথা বলো: কৃষককে «আপনি» বলো, সহজ প্রমিত বাংলা ব্যবহার করো।",
-        "বাংলা হরফে উত্তর দাও। সাধারণ প্রশ্নে ২–৪টি ছোট বাক্য; চাষ, রোগ বা সারের প্রশ্নে নির্দিষ্ট পদক্ষেপসহ সর্বোচ্চ ৬টি বাক্য। প্রথম বাক্যেই মূল উত্তর দাও। প্রতিটি বাক্য দাঁড়ি (।) দিয়ে শেষ করো।",
-        "প্রশ্ন আবার লিখবে না। মার্কডাউন, তারকাচিহ্ন, শিরোনাম বা বুলেট ব্যবহার করবে না — উত্তরটি জোরে পড়ে শোনানো হবে।",
-        "অভিবাদনে «নমস্কার» বা nomoskar কখনো বলবে না। হ্যালো বলতে পারো, অথবা সরাসরি কথা শুরু করো।",
-        "নিজের শরীর, ক্লান্তি বা ব্যক্তিগত গল্প বানাবে না। কৃষক চিন্তিত হলে এক বাক্যে সহানুভূতি জানিয়ে তারপর পরামর্শ দাও।",
-        "বাংলিশ বোঝো: Hi/Hai = হ্যালো, Ki obosta = কেমন আছ, Kire/কিরে = ডাক, Oi = হেই। এগুলো নাম বা খাবার নয়।",
-        "রোগ বা পোকার প্রশ্নে নিশ্চিত না হলে সম্ভাব্য কারণ বলো এবং অ্যাপে পাতার ছবি স্ক্যান করতে বলো।",
-        grounding.length
-          ? "নিচের «প্রসঙ্গ» ফোনের ঘড়ি, আবহাওয়া, প্রোফাইল, স্ক্যান, অর্ডার, ওয়ালেট, বাজার ও জ্ঞানভাণ্ডার থেকে নেওয়া — এটাই সত্য তথ্য। সময়, আবহাওয়া, দাম, অর্ডার বা টাকার প্রশ্নে সেই সংখ্যা হুবহু বলো। অন্য প্রশ্নে তালিকাটি আউড়ে বলবে না। প্রসঙ্গে না থাকলে ওষুধের মাত্রা, দাম বা অর্ডার বানাবে না। «উদ্দেশ্য» ও «নির্দেশ» লাইন কৃষককে দেখাবে না।"
-          : "ওষুধের মাত্রা নিশ্চিত না হলে বলবে না।",
-        grounding.length ? `প্রসঙ্গ:\n- ${grounding.join("\n- ")}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    },
-    ...history.slice(-6).map((t) => ({
+    { role: "system", content: buildSystemPrompt(facts) },
+    ...recentHistory(history).map((t) => ({
       role: t.role === "assistant" ? "assistant" : "user",
-      content: t.text.slice(0, 500),
+      content: t.text,
     })),
     { role: "user", content: userText.slice(0, 800) },
   ];
